@@ -31,6 +31,17 @@
 
 namespace XFiles {
 
+Audio::Mixer::SoundType Movie::getSoundType(const Common::String &file) {
+	// XFiles.exe gives each file type a sound type (table at 0x65c380) and
+	// sets the volume from the matching preference (0x469fb0): .amv sound
+	// effects, .mus and .mmv music, everything else (.dmv, the videos) dialogue.
+	if (file.hasSuffixIgnoreCase(".amv"))
+		return Audio::Mixer::kSFXSoundType;
+	if (file.hasSuffixIgnoreCase(".mus") || file.hasSuffixIgnoreCase(".mmv"))
+		return Audio::Mixer::kMusicSoundType;
+	return Audio::Mixer::kSpeechSoundType;
+}
+
 Movie::Movie() : _decoder(nullptr), _assetId(0), _startMs(0), _endMs(0), _loop(false), _ended(false) {
 	_format = g_system->getScreenFormat();
 }
@@ -47,6 +58,7 @@ bool Movie::open(const DiscFiles &files, const VCAsset &asset) {
 		if (!stream)
 			continue;
 		_decoder = new Video::QuickTimeDecoder();
+		_decoder->setSoundType(getSoundType(f.file));
 		if (!_decoder->loadStream(stream)) {
 			warning("Movie: cannot decode %s (asset #%u)", f.file.c_str(), asset.id);
 			delete _decoder;
@@ -126,6 +138,16 @@ void Movie::stop() {
 
 int Movie::getCurFrame() const {
 	return _decoder ? _decoder->getCurFrame() : -1;
+}
+
+void Movie::setVolume(byte volume) {
+	if (_decoder)
+		_decoder->setVolume(volume);
+}
+
+void Movie::setBalance(int8 balance) {
+	if (_decoder)
+		_decoder->setBalance(balance);
 }
 
 uint16 Movie::getWidth() const {

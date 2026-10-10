@@ -22,6 +22,7 @@
 #ifndef XFILES_MOVIE_H
 #define XFILES_MOVIE_H
 
+#include "audio/mixer.h"
 #include "common/ustr.h"
 #include "graphics/pixelformat.h"
 #include "graphics/surface.h"
@@ -66,6 +67,11 @@ public:
 	bool hasEnded() const { return _ended; }
 	int getCurFrame() const;
 
+	/** Volume of the soundtrack, 0-255 (Audio::Mixer::kMaxChannelVolume). */
+	void setVolume(byte volume);
+	/** Balance of the soundtrack, -127 (left) to 127 (right). */
+	void setBalance(int8 balance);
+
 	uint16 getWidth() const;
 	uint16 getHeight() const;
 
@@ -79,6 +85,7 @@ public:
 	const Graphics::Surface &getFrame() const { return _frame; }
 
 private:
+	static Audio::Mixer::SoundType getSoundType(const Common::String &file);
 	void copyFrame(const Graphics::Surface *frame);
 
 	Video::QuickTimeDecoder *_decoder;

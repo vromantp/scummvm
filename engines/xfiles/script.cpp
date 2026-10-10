@@ -50,14 +50,6 @@ enum StatementOp {
 	kStatModulo = 7
 };
 
-enum AssetMode {
-	kModePreload = 0,
-	kModePlayOnce = 1,
-	kModePlayLoop = 2,
-	kModeStop = 3,
-	kModeUnload = 4
-};
-
 static const char *const kModeNames[] = { "preload", "play_once", "play_loop", "stop", "unload" };
 
 /** Offset of the VCTriggerList field in each class that owns triggers (VCAssetRef: see VCAsset::triggers). */

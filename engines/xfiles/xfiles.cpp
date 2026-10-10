@@ -70,12 +70,13 @@ static const int kMenuNewTop = 80, kMenuNewBottom = 118;
 static const int kMenuQuitTop = 385, kMenuQuitBottom = 420;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
-	_gameDescription(gameDesc), _data(nullptr), _script(nullptr), _video(nullptr), _viewId(0) {
+	_gameDescription(gameDesc), _data(nullptr), _script(nullptr), _video(nullptr), _viewId(0), _soundView(0) {
 	g_engine = this;
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 }
 
 XFilesEngine::~XFilesEngine() {
+	stopAllSounds();
 	closeView();
 	for (Common::HashMap<uint32, Movie *>::iterator it = _iconMovies.begin(); it != _iconMovies.end(); ++it)
 		delete it->_value;
@@ -112,6 +113,7 @@ Common::Error XFilesEngine::run() {
 	delete cursor;
 	CursorMan.showMouse(true);
 	_captions.loadFonts();
+	syncSoundSettings();
 
 	_video = new Movie();
 	if (playIntro() && runMenu())
@@ -234,6 +236,7 @@ void XFilesEngine::runGame() {
 	while (!shouldQuit()) {
 		Input input = pollInput();
 		updateTimers();
+		updateSounds();
 		_captions.update(g_system->getMillis());
 		if (!_script->getVideoQueue().empty()) {
 			playQueuedVideo(input);
@@ -256,6 +259,8 @@ void XFilesEngine::callFunction(const VCAction &action, const Common::Array<int3
 		startVideoText(action, args);
 	else if (action.function == "RegPreferences")
 		registerPreferences(action);
+	else if (action.function == "StopEnvSounds")
+		stopAllSounds(); // XFiles.exe 0x4cc9c0: stops every playing asset without a picture
 }
 
 void XFilesEngine::registerPreferences(const VCAction &action) {
@@ -284,7 +289,123 @@ void XFilesEngine::startVideoText(const VCAction &action, const Common::Array<in
 	_captions.startCard(Captions::formatCard(location, args[1], args[2], args[3] == 1), g_system->getMillis());
 }
 
+// -- Sound --------------------------------------------------------------------
+
 void XFilesEngine::playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) {
+	if (mode == kModeStop) {
+		stopSound(id);
+		return;
+	}
+	// Overlays and backgrounds come from the view's asset list; this only
+	// handles sounds
+	VCAsset asset;
+	if (!_data->getAsset(id, asset) || asset.files.empty() || !asset.files[0].file.hasPrefix("XS:"))
+		return;
+	stopSound(id);
+	Sound sound;
+	sound.movie = new Movie();
+	sound.positional = positional;
+	sound.x = x;
+	sound.y = y;
+	if (!sound.movie->open(_discFiles, asset)) {
+		delete sound.movie;
+		return;
+	}
+	debugC(1, kDebugScript, "-- sound #%u %s%s", id, asset.files[0].file.c_str(), mode == kModePlayLoop ? ", looped" : "");
+	if (positional)
+		placeSound(sound);
+	sound.movie->play(mode == kModePlayLoop);
+	_sounds[id] = sound;
+}
+
+void XFilesEngine::stopSound(uint32 id) {
+	if (!_sounds.contains(id))
+		return;
+	delete _sounds[id].movie;
+	_sounds.erase(id);
+}
+
+void XFilesEngine::stopAllSounds() {
+	for (Common::HashMap<uint32, Sound>::iterator it = _sounds.begin(); it != _sounds.end(); ++it)
+		delete it->_value.movie;
+	_sounds.clear();
+}
+
+void XFilesEngine::updateSounds() {
+	// 3D sounds are placed again when the player moves
+	bool moved = _script->getView() != _soundView;
+	_soundView = _script->getView();
+	Common::Array<uint32> ended;
+	for (Common::HashMap<uint32, Sound>::iterator it = _sounds.begin(); it != _sounds.end(); ++it) {
+		if (moved && it->_value.positional)
+			placeSound(it->_value);
+		it->_value.movie->update();
+		if (it->_value.movie->hasEnded())
+			ended.push_back(it->_key);
+	}
+	for (uint i = 0; i < ended.size(); i++)
+		stopSound(ended[i]);
+}
+
+/** Unit vector of a view facing (1 North ... 8 NorthWest); North is +y, East +x. */
+static bool getFacingVector(uint32 facing, int &x, int &y) {
+	static const int kVectors[8][2] = {
+		{ 0, 1 }, { 1, 1 }, { 1, 0 }, { 1, -1 }, { 0, -1 }, { -1, -1 }, { -1, 0 }, { -1, 1 }
+	};
+	if (facing < 1 || facing > 8)
+		return false;
+	x = kVectors[facing - 1][0];
+	y = kVectors[facing - 1][1];
+	return true;
+}
+
+void XFilesEngine::placeSound(Sound &sound) {
+	// XFiles.exe 0x4a8be0. Without the 3D sound preference the sound plays
+	// at the volume of its type, as any other.
+	VCViewPoint viewPoint;
+	if (!getPreference(kPref3DSound) || !_data->getViewPoint(_script->getViewPoint(), viewPoint)) {
+		sound.movie->setVolume(Audio::Mixer::kMaxChannelVolume);
+		sound.movie->setBalance(0);
+		return;
+	}
+
+	// Volume: 100 within 3 units of the viewpoint, 90 up to 5, then 5 less
+	// per unit, 10 up to 21 and 5 beyond
+	double dx = sound.x - viewPoint.x, dy = sound.y - viewPoint.y;
+	double distance = sqrt(dx * dx + dy * dy);
+	int volume;
+	if (distance < 3)
+		volume = 100;
+	else if (distance <= 5)
+		volume = 90;
+	else if (distance <= 21)
+		volume = 85 - 5 * (int)ceil(distance - 6);
+	else
+		volume = 5;
+	sound.movie->setVolume(volume * Audio::Mixer::kMaxChannelVolume / 100);
+	if (volume < 11)
+		return; // The original leaves the balance alone
+
+	// Balance: the angle between the view's facing and the sound, 0 straight
+	// ahead or behind and 85% to the side. The original takes the facing from
+	// the neighbouring viewpoints (0x46d7a0); the view's direction gives the
+	// same vector for views that face a compass direction.
+	VCView view;
+	int fx, fy;
+	if (!_data->getView(_script->getView(), view) || !getFacingVector(view.facing, fx, fy) || (dx == 0 && dy == 0)) {
+		sound.movie->setBalance(0);
+		return;
+	}
+	double angle = acos((fx * dx + fy * dy) / (sqrt((double)(fx * fx + fy * fy)) * distance)) * 2 / M_PI;
+	if (angle > 1)
+		angle = 2 - angle;
+	int balance = (int)(angle * 100);
+	if (fx * dy - dx * fy > 0)
+		balance = -balance; // To the left
+	balance = CLIP((int)(balance * 0.85), -100, 100);
+	sound.movie->setBalance(balance * 127 / 100);
+	debugC(1, kDebugScript, "-- sound #%u at (%d, %d), viewpoint (%d, %d) facing %u: volume %d, balance %d",
+		sound.movie->getAssetId(), sound.x, sound.y, viewPoint.x, viewPoint.y, view.facing, volume, balance);
 }
 
 void XFilesEngine::drawCaptions(const Movie &movie, const Common::Point &pos) {

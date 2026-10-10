@@ -130,6 +130,19 @@ private:
 	bool getPreference(uint index) const;
 	Common::Rect getIconRect(uint index) const;
 
+	/** A playing sound asset (XS): environments, effects, music. */
+	struct Sound {
+		Movie *movie;
+		bool positional;  ///< Played by a 3D Sound action
+		int16 x, y;       ///< On the viewpoint grid
+	};
+
+	void stopSound(uint32 id);
+	void stopAllSounds();
+	void updateSounds();
+	/** Volume and balance of a 3D sound for the current view. */
+	void placeSound(Sound &sound);
+
 	const ADGameDescription *_gameDescription;
 	VCData *_data;
 	DiscFiles _discFiles;
@@ -147,6 +160,8 @@ private:
 	Common::Array<uint32> _shownIcons;
 	Common::HashMap<uint32, Movie *> _iconMovies;
 	Common::HashMap<uint, TimerState> _timerStates;
+	Common::HashMap<uint32, Sound> _sounds;
+	uint32 _soundView;                    ///< The view the 3D sounds were placed for
 };
 
 extern XFilesEngine *g_engine;

@@ -30,6 +30,15 @@
 
 namespace XFiles {
 
+/** Mode of an asset action (and of ScriptHooks::playAsset). */
+enum AssetMode {
+	kModePreload = 0,
+	kModePlayOnce = 1,
+	kModePlayLoop = 2,
+	kModeStop = 3,
+	kModeUnload = 4
+};
+
 /**
  * What the engine does for the script beyond the interpreter: C++ functions
  * and media that do not block the script (sounds, overlays).
