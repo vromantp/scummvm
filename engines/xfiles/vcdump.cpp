@@ -62,14 +62,12 @@ static Common::String utf8(const Common::U32String &str) {
 	return str.encode(Common::kUtf8);
 }
 
-/** Text of a VCName, or "None" like the Python tools. */
-static Common::String nameOrNone(const VCData &data, uint32 id) {
+Common::String nameOrNone(const VCData &data, uint32 id) {
 	Common::U32String name;
 	return data.getName(id, name) ? utf8(name) : Common::String("None");
 }
 
-/** Python's repr() of a string. */
-static Common::String pythonRepr(const Common::U32String &str) {
+Common::String pythonRepr(const Common::U32String &str) {
 	bool hasSingle = false, hasDouble = false;
 	for (uint i = 0; i < str.size(); i++) {
 		hasSingle |= str[i] == '\'';
@@ -181,13 +179,13 @@ static Common::String describeExpression(const VCData &data, const VCExpression 
 	return describeOperand(data, e.lhs, event) + " " + op + " " + describeOperand(data, e.rhs, event);
 }
 
-Common::String describeAction(const VCData &data, uint32 id, int event) {
+Common::String describeAction(const VCData &data, uint32 id, int event, bool withCondition) {
 	VCAction a;
 	if (!data.getAction(id, a))
 		return Common::String::format("<bad action #%u>", id);
 
 	Common::String text;
-	if (a.conditional)
+	if (a.conditional && withCondition)
 		text = "if " + describeExpression(data, a.condition, tableName(kConditionOps, a.condition.op), event) + ": ";
 
 	switch (a.type) {

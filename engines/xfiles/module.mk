@@ -1,6 +1,14 @@
 MODULE := engines/xfiles
 
-MODULE_OBJS = 	console.o 	discfiles.o 	metaengine.o 	neoaccess.o 	vcdata.o 	vcdump.o 	xfiles.o
+MODULE_OBJS = \
+	console.o \
+	discfiles.o \
+	metaengine.o \
+	neoaccess.o \
+	script.o \
+	vcdata.o \
+	vcdump.o \
+	xfiles.o
 
 # This module can be built as a plugin
 ifeq ($(ENABLE_XFILES), DYNAMIC_PLUGIN)
