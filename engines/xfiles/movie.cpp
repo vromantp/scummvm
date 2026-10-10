@@ -136,6 +136,27 @@ uint16 Movie::getHeight() const {
 	return _decoder ? _decoder->getHeight() : 0;
 }
 
+Common::U32String Movie::getCaption() const {
+	if (!_decoder || _ended)
+		return Common::U32String();
+	uint32 time = _decoder->getTime();
+	for (int i = (int)_decoder->getTextTrackCount() - 1; i >= 0; i--) {
+		const Common::Array<Video::QuickTimeDecoder::TextCue> &cues = _decoder->getTextCues(i);
+		for (uint j = 0; j < cues.size(); j++) {
+			if (time < cues[j].startTime || time >= cues[j].endTime)
+				continue;
+			Common::String text = cues[j].text;
+			for (uint k = 0; k < text.size(); k++) {
+				if (text[k] == '\r' || text[k] == '\n')
+					text.setChar(' ', k);
+			}
+			text.trim();
+			return Common::U32String(text, Common::kMacRoman);
+		}
+	}
+	return Common::U32String();
+}
+
 void Movie::copyFrame(const Graphics::Surface *frame) {
 	_frame.free();
 	if (frame->format == _format) {

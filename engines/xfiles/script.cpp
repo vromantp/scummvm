@@ -103,7 +103,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _timerSerial(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _timerSerial(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	Common::Array<NeoEntry> entries;
 	data.getGam().getObjects(kClassVariable, entries);
 	for (uint i = 0; i < entries.size(); i++) {
@@ -262,12 +262,11 @@ void Script::execute(const VCAction &a, int event, const EventFields &fields, Lo
 	}
 	case kActionAsset:
 	case kActionSound3D: {
-		Common::String where = a.type == kActionSound3D ? Common::String::format(" at (%d, %d)", a.x, a.y) : Common::String();
 		Common::Array<uint32> assets;
 		_data.getMembers(a.assetList, assets);
 		for (uint i = 0; i < assets.size(); i++) {
 			if (isEnabled(assets[i]))
-				playAsset(assets[i], a.mode, where);
+				playAsset(assets[i], a.mode, a.type == kActionSound3D ? &a : nullptr);
 		}
 		break;
 	}
@@ -309,12 +308,14 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 		runActions(actions, event, fields);
 	} else {
 		log("      call " + describeAction(_data, a.id, event, false));
+		if (_hooks)
+			_hooks->callFunction(a, args);
 	}
 }
 
 // -- Media --------------------------------------------------------------------
 
-void Script::playAsset(uint32 id, byte mode, const Common::String &where) {
+void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 	VCAsset a;
 	if (!_data.getAsset(id, a)) {
 		warning("Script: #%u is not an asset", id);
@@ -330,10 +331,15 @@ void Script::playAsset(uint32 id, byte mode, const Common::String &where) {
 		if (_videoQueue.size() == 1)
 			startVideo();
 	} else if (mode == kModePlayOnce || mode == kModePlayLoop) {
+		Common::String where = sound3D ? Common::String::format(" at (%d, %d)", sound3D->x, sound3D->y) : Common::String();
 		log(Common::String::format("      %s #%u ", kModeNames[mode], id) + file + where + "  \"" + nameOrNone(_data, a.name) + "\"");
+		if (_hooks)
+			_hooks->playAsset(id, mode, sound3D != nullptr, sound3D ? sound3D->x : 0, sound3D ? sound3D->y : 0);
 		fire(id, kEventObjectActivation);
 	} else if (mode == kModeStop) {
 		log(Common::String::format("      stop #%u ", id) + file);
+		if (_hooks)
+			_hooks->playAsset(id, mode, false, 0, 0);
 	}
 }
 
@@ -524,7 +530,7 @@ void Script::ask(uint32 conversationId) {
 		_data.getMembers(lists[i], assets);
 		for (uint j = 0; j < assets.size(); j++) {
 			if (isEnabled(assets[j]))
-				playAsset(assets[j], kModePlayOnce, Common::String());
+				playAsset(assets[j], kModePlayOnce, nullptr);
 		}
 	}
 }

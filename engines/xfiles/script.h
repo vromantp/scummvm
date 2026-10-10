@@ -31,6 +31,23 @@
 namespace XFiles {
 
 /**
+ * What the engine does for the script beyond the interpreter: C++ functions
+ * and media that do not block the script (sounds, overlays).
+ */
+class ScriptHooks {
+public:
+	virtual ~ScriptHooks() {}
+
+	/** A C++ Function action other than SetStartView and DoActionList; args are the evaluated operands. */
+	virtual void callFunction(const VCAction &action, const Common::Array<int32> &args) {}
+	/**
+	 * A play, loop or stop of an asset that is not a blocking video.
+	 * positional: a 3D Sound action, at (x, y) on the viewpoint grid.
+	 */
+	virtual void playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) {}
+};
+
+/**
  * The VirtualCinema interpreter: runtime state (variables, enable flags,
  * timers, the current view) and the triggers and actions of the database.
  *
@@ -48,6 +65,9 @@ class Script {
 public:
 	Script(const VCData &data);
 	virtual ~Script() {}
+
+	/** Where C++ functions and non-blocking media go; nullptr (the default) only logs them. */
+	void setHooks(ScriptHooks *hooks) { _hooks = hooks; }
 
 	/** Fire the title's Object Activation (the game's start). */
 	void start();
@@ -79,6 +99,7 @@ public:
 	const Common::Array<uint32> &getVideoQueue() const { return _videoQueue; }
 	bool isEnabled(uint32 id) const;
 	int32 getVariable(uint32 id) const;
+	void setVariable(uint32 id, int32 value) { _variables[id] = value; }
 
 	struct Timer {
 		uint32 ms;
@@ -109,12 +130,13 @@ private:
 	bool test(const VCExpression &condition, const EventFields &fields, const LocalVariables &locals) const;
 	void callFunction(const VCAction &action, int event, const EventFields &fields, const LocalVariables &locals);
 
-	void playAsset(uint32 id, byte mode, const Common::String &where);
+	void playAsset(uint32 id, byte mode, const VCAction *sound3D);
 	void startVideo();
 	void enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view);
 	void showView();
 
 	const VCData &_data;
+	ScriptHooks *_hooks;
 	Common::HashMap<uint32, int32> _variables;
 	Common::HashMap<uint32, bool> _enabled;    ///< Objects without a VCEnabled are always enabled
 	Common::HashMap<uint, Timer> _timers;      ///< Running timers

@@ -1,6 +1,7 @@
 MODULE := engines/xfiles
 
 MODULE_OBJS = \
+	captions.o \
 	console.o \
 	discfiles.o \
 	metaengine.o \

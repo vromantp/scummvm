@@ -72,6 +72,7 @@ static const int kMenuQuitTop = 385, kMenuQuitBottom = 420;
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
 	_gameDescription(gameDesc), _data(nullptr), _script(nullptr), _video(nullptr), _viewId(0) {
 	g_engine = this;
+	memset(_prefVariables, 0, sizeof(_prefVariables));
 }
 
 XFilesEngine::~XFilesEngine() {
@@ -110,6 +111,7 @@ Common::Error XFilesEngine::run() {
 	CursorMan.replaceCursor(cursor);
 	delete cursor;
 	CursorMan.showMouse(true);
+	_captions.loadFonts();
 
 	_video = new Movie();
 	if (playIntro() && runMenu())
@@ -227,10 +229,12 @@ void XFilesEngine::runGame() {
 	for (uint i = 0; i < icons.size(); i++)
 		_emotionIcons.push_back(icons[i].key);
 
+	_script->setHooks(this);
 	_script->start();
 	while (!shouldQuit()) {
 		Input input = pollInput();
 		updateTimers();
+		_captions.update(g_system->getMillis());
 		if (!_script->getVideoQueue().empty()) {
 			playQueuedVideo(input);
 		} else {
@@ -240,8 +244,54 @@ void XFilesEngine::runGame() {
 				handleClick(input.pos);
 			drawView();
 		}
+		_captions.drawCard(_screen);
 		present();
 	}
+}
+
+// -- C++ functions ------------------------------------------------------------
+
+void XFilesEngine::callFunction(const VCAction &action, const Common::Array<int32> &args) {
+	if (action.function == "StartVideoText")
+		startVideoText(action, args);
+	else if (action.function == "RegPreferences")
+		registerPreferences(action);
+}
+
+void XFilesEngine::registerPreferences(const VCAction &action) {
+	// RegPreferences(24 variables), called once by the title. XFiles.exe
+	// keeps the preferences in the registry and writes them into these
+	// variables; here ScummVM's settings take the registry's place.
+	for (uint i = 0; i < action.args.size() && i < kPrefCount; i++)
+		_prefVariables[i] = action.args[i].kind == kOperandVariable ? action.args[i].value : 0;
+	if (_prefVariables[kPrefClosedCaptioning])
+		_script->setVariable(_prefVariables[kPrefClosedCaptioning], ConfMan.getBool("subtitles"));
+}
+
+bool XFilesEngine::getPreference(uint index) const {
+	return _prefVariables[index] && _script->getVariable(_prefVariables[index]);
+}
+
+void XFilesEngine::startVideoText(const VCAction &action, const Common::Array<int32> &args) {
+	// StartVideoText(asset, iDayNight, iCurrTime, bWithTime): the asset's
+	// name is the location
+	VCAsset asset;
+	Common::U32String location;
+	if (args.size() < 4 || !_data->getAsset(args[0], asset) || !_data->getName(asset.name, location)) {
+		warning("StartVideoText: bad arguments in #%u", action.id);
+		return;
+	}
+	_captions.startCard(Captions::formatCard(location, args[1], args[2], args[3] == 1), g_system->getMillis());
+}
+
+void XFilesEngine::playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) {
+}
+
+void XFilesEngine::drawCaptions(const Movie &movie, const Common::Point &pos) {
+	if (!getPreference(kPrefClosedCaptioning))
+		return;
+	// Text tracks sit below the picture (track matrix y 240), as wide as the video
+	_captions.drawCaption(_screen, movie.getCaption(), pos.x, pos.y + movie.getHeight(), movie.getWidth());
 }
 
 void XFilesEngine::playQueuedVideo(const Input &input) {
@@ -261,6 +311,7 @@ void XFilesEngine::playQueuedVideo(const Input &input) {
 	_screen.fillRect(Common::Rect(_screen.w, _screen.h), 0);
 	Common::Point pos = getBandPosition(*_video);
 	blit(_video->getFrame(), pos.x, pos.y);
+	drawCaptions(*_video, pos);
 
 	if (_video->hasEnded()) {
 		_video->close();
@@ -384,6 +435,8 @@ void XFilesEngine::drawView() {
 		Common::Point pos = getBandPosition(*_layers[i]);
 		blit(_layers[i]->getFrame(), pos.x, pos.y);
 	}
+	for (uint i = 0; i < _layers.size(); i++)
+		drawCaptions(*_layers[i], getBandPosition(*_layers[i]));
 	for (uint i = 0; i < _shownIcons.size(); i++) {
 		Common::Rect r = getIconRect(i);
 		blit(_iconMovies[_shownIcons[i]]->getFrame(), r.left, r.top);

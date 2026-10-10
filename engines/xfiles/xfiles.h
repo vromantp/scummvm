@@ -30,22 +30,52 @@
 #include "engines/engine.h"
 #include "graphics/surface.h"
 
+#include "xfiles/captions.h"
 #include "xfiles/detection.h"
 #include "xfiles/discfiles.h"
+#include "xfiles/script.h"
 
 namespace XFiles {
 
 class Movie;
-class Script;
 class VCData;
 
-class XFilesEngine : public Engine {
+/** The arguments of RegPreferences, in order: each is a preference variable. */
+enum Preference {
+	kPref3DSound = 0,
+	kPrefArtificialIntuition = 1,
+	kPrefAutoRewind = 2,
+	kPrefClosedCaptioning = 3,
+	kPrefRolloverText = 4,
+	kPrefSaveGameOnExit = 5,
+	kPrefSkipClips = 6,
+	kPrefSkipIntro = 7,
+	kPrefSmoothText = 8,
+	kPrefSubliminalMessages = 9,
+	kPrefTransitions = 10,
+	kPrefTranslucency = 11,
+	kPrefActionSceneDifficulty = 12,
+	kPrefAutoSetDepth = 13,
+	kPrefFlashlightBeam = 14,
+	kPrefFlashlightBrightness = 15,
+	kPrefInventory = 16,
+	kPrefVolumeDialog = 17,
+	kPrefVolumeEffect = 18,
+	kPrefVolumeGame = 19,
+	kPrefVolumeMusic = 20,
+	kPrefAutoSetResolution = 21,
+	kPrefHighQualityVideo = 22,
+	kPrefLiveEnvironments = 23,
+	kPrefCount = 24
+};
+
+class XFilesEngine : public Engine, public ScriptHooks {
 public:
 	XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc);
 	~XFilesEngine() override;
 
 	bool hasFeature(EngineFeature f) const override {
-		return f == kSupportsReturnToLauncher;
+		return f == kSupportsReturnToLauncher || f == kSupportsSubtitleOptions;
 	}
 
 	Common::Language getLanguage() const { return _gameDescription->language; }
@@ -54,6 +84,10 @@ public:
 	const DiscFiles &getDiscFiles() const { return _discFiles; }
 	/** The running game's interpreter, or nullptr before New Game. */
 	Script *getScript() { return _script; }
+
+	// ScriptHooks
+	void callFunction(const VCAction &action, const Common::Array<int32> &args) override;
+	void playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) override;
 
 protected:
 	Common::Error run() override;
@@ -89,6 +123,11 @@ private:
 	void updateIcons();
 	void drawView();
 	void handleClick(const Common::Point &pos);
+	void drawCaptions(const Movie &movie, const Common::Point &pos);
+	void startVideoText(const VCAction &action, const Common::Array<int32> &args);
+	void registerPreferences(const VCAction &action);
+	/** A preference's value, 0 before RegPreferences. */
+	bool getPreference(uint index) const;
 	Common::Rect getIconRect(uint index) const;
 
 	const ADGameDescription *_gameDescription;
@@ -96,6 +135,8 @@ private:
 	DiscFiles _discFiles;
 	Script *_script;
 	Graphics::Surface _screen;
+	Captions _captions;
+	uint32 _prefVariables[kPrefCount];  ///< From RegPreferences
 
 	Movie *_video;                       ///< The play-once video on screen
 	Common::Array<uint32> _viewAssets;   ///< What the view layers show

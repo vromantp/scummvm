@@ -22,6 +22,7 @@
 #ifndef XFILES_MOVIE_H
 #define XFILES_MOVIE_H
 
+#include "common/ustr.h"
 #include "graphics/pixelformat.h"
 #include "graphics/surface.h"
 
@@ -67,6 +68,13 @@ public:
 
 	uint16 getWidth() const;
 	uint16 getHeight() const;
+
+	/**
+	 * The caption at the current time: the cue of the last text track that
+	 * has one (QuickTime draws later tracks on top). Line breaks become
+	 * spaces. Empty if nothing shows.
+	 */
+	Common::U32String getCaption() const;
 	/** The last decoded frame in the screen format; empty before the first one. */
 	const Graphics::Surface &getFrame() const { return _frame; }
 
