@@ -35,7 +35,8 @@ endif
 
 ifdef USE_JPEG
 MODULE_OBJS += \
-	codecs/mjpeg.o
+	codecs/mjpeg.o \
+	codecs/mjpega.o
 endif
 
 ifdef USE_MPEG2

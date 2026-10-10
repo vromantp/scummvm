@@ -30,6 +30,7 @@
 #include "image/codecs/indeo5.h"
 #include "image/codecs/jyv1.h"
 #include "image/codecs/mjpeg.h"
+#include "image/codecs/mjpega.h"
 #include "image/codecs/mpeg.h"
 #ifdef USE_MSMPEG4
 #include "image/codecs/msmpeg4.h"
@@ -199,6 +200,14 @@ Codec *createQuickTimeCodec(uint32 tag, int width, int height, int bitsPerPixel)
 		return new JPEGDecoder();
 #else
 		missingCodec = "JPEG";
+		break;
+#endif
+	case MKTAG('m','j','p','a'):
+#ifdef USE_JPEG
+		// Motion JPEG A: Used by The X-Files Game.
+		return new MJPEGADecoder();
+#else
+		missingCodec = "Motion JPEG A";
 		break;
 #endif
 	case MKTAG('Q','k','B','k'):
