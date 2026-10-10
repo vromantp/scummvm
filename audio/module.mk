@@ -43,6 +43,7 @@ MODULE_OBJS := \
 	decoders/mac_snd_mace.o \
 	decoders/mp3.o \
 	decoders/qdm2.o \
+	decoders/qdmc.o \
 	decoders/quicktime.o \
 	decoders/raw.o \
 	decoders/voc.o \

@@ -33,6 +33,7 @@
 #include "audio/decoders/aac.h"
 #include "audio/decoders/adpcm.h"
 #include "audio/decoders/qdm2.h"
+#include "audio/decoders/qdmc.h"
 #include "audio/decoders/raw.h"
 #include "audio/decoders/g711.h"
 
@@ -575,6 +576,11 @@ bool QuickTimeAudioDecoder::AudioSampleDesc::isAudioCodecSupported() const {
 		return true;
 #endif
 
+#ifdef USE_QDMC
+	if (_codecTag == MKTAG('Q', 'D', 'M', 'C'))
+		return true;
+#endif
+
 	if (_codecTag == MKTAG('m', 'p', '4', 'a')) {
 		Common::String audioType;
 		switch (_objectTypeMP4) {
@@ -636,6 +642,11 @@ void QuickTimeAudioDecoder::AudioSampleDesc::initCodec() {
 	case MKTAG('Q', 'D', 'M', '2'):
 #ifdef USE_QDM2
 		_codec = makeQDM2Decoder(_extraData);
+#endif
+		break;
+	case MKTAG('Q', 'D', 'M', 'C'):
+#ifdef USE_QDMC
+		_codec = makeQDMCDecoder(_extraData);
 #endif
 		break;
 	case MKTAG('m', 'p', '4', 'a'):
