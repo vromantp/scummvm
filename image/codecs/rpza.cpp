@@ -58,8 +58,10 @@ RPZADecoder::~RPZADecoder() {
 		endPtr = blockPtr + pitch; \
 	} \
 	totalBlocks--; \
-	if (totalBlocks < 0) \
-		error("rpza block counter just went negative (this should not happen)") \
+	if (totalBlocks < 0) { \
+		warning("rpza block counter just went negative (this should not happen)"); \
+		return false; \
+	}
 
 struct BlockDecoderRaw {
 	static inline void drawFillBlock(uint16 *blockPtr, uint16 pitch, uint16 color, const byte *colorMap) {
@@ -203,8 +205,9 @@ struct BlockDecoderDither {
 	}
 };
 
+// Decodes one chunk starting at the current stream position. Returns false on invalid data.
 template<typename PixelInt, typename BlockDecoder>
-static inline void decodeFrameTmpl(Common::SeekableReadStream &stream, PixelInt *ptr, uint16 pitch, uint16 blockWidth, uint16 blockHeight, const byte *colorMap) {
+static inline bool decodeChunkTmpl(Common::SeekableReadStream &stream, PixelInt *ptr, uint16 pitch, uint16 blockWidth, uint16 blockHeight, const byte *colorMap) {
 	uint16 colorA = 0, colorB = 0;
 	uint16 color4[4];
 
@@ -212,6 +215,8 @@ static inline void decodeFrameTmpl(Common::SeekableReadStream &stream, PixelInt 
 	PixelInt *endPtr = ptr + pitch;
 	uint16 ta;
 	uint16 tb;
+
+	uint32 chunkStart = stream.pos();
 
 	// First byte is always 0xe1. Warn if it's different
 	byte firstByte = stream.readByte();
@@ -222,17 +227,31 @@ static inline void decodeFrameTmpl(Common::SeekableReadStream &stream, PixelInt 
 	uint32 chunkSize = stream.readUint16BE() << 8;
 	chunkSize += stream.readByte();
 
-	// If length mismatch use size from MOV file and try to decode anyway
-	if (chunkSize != (uint32)stream.size()) {
-		warning("MOV chunk size != encoded chunk size; using MOV chunk size");
-		chunkSize = stream.size();
+	// A sample can hold several chunks, each a complete frame. Otherwise,
+	// if the length mismatches, use the size from the MOV file and try to
+	// decode anyway.
+	uint32 available = stream.size() - chunkStart;
+	if (chunkSize != available) {
+		bool nextChunk = false;
+		if (chunkSize >= 4 && chunkSize + 4 <= available) {
+			stream.seek(chunkStart + chunkSize);
+			nextChunk = stream.readByte() == 0xe1;
+			stream.seek(chunkStart + 4);
+		}
+
+		if (!nextChunk) {
+			warning("MOV chunk size != encoded chunk size; using MOV chunk size");
+			chunkSize = available;
+		}
 	}
+
+	uint32 chunkEnd = chunkStart + chunkSize;
 
 	// Number of 4x4 blocks in frame
 	int32 totalBlocks = blockWidth * blockHeight;
 
 	// Process chunk data
-	while ((uint32)stream.pos() < chunkSize) {
+	while ((uint32)stream.pos() < chunkEnd) {
 		byte opcode = stream.readByte(); // Get opcode
 		byte numBlocks = (opcode & 0x1f) + 1; // Extract block counter from opcode
 
@@ -320,9 +339,13 @@ static inline void decodeFrameTmpl(Common::SeekableReadStream &stream, PixelInt 
 
 		// Unknown opcode
 		default:
-			error("Unknown opcode %02x in rpza chunk", opcode);
+			warning("Unknown opcode %02x in rpza chunk", opcode);
+			return false;
 		}
 	}
+
+	stream.seek(chunkEnd);
+	return true;
 }
 
 const Graphics::Surface *RPZADecoder::decodeFrame(Common::SeekableReadStream &stream) {
@@ -337,10 +360,14 @@ const Graphics::Surface *RPZADecoder::decodeFrame(Common::SeekableReadStream &st
 		_surface->h = _height;
 	}
 
-	if (_colorMap)
-		decodeFrameTmpl<byte, BlockDecoderDither>(stream, (byte *)_surface->getPixels(), _surface->pitch, _blockWidth, _blockHeight, _colorMap);
-	else
-		decodeFrameTmpl<uint16, BlockDecoderRaw>(stream, (uint16 *)_surface->getPixels(), _surface->pitch / 2, _blockWidth, _blockHeight, _colorMap);
+	// Decode the chunks in order; each one updates the same frame
+	bool valid = true;
+	while (valid && stream.size() - stream.pos() >= 4) {
+		if (_colorMap)
+			valid = decodeChunkTmpl<byte, BlockDecoderDither>(stream, (byte *)_surface->getPixels(), _surface->pitch, _blockWidth, _blockHeight, _colorMap);
+		else
+			valid = decodeChunkTmpl<uint16, BlockDecoderRaw>(stream, (uint16 *)_surface->getPixels(), _surface->pitch / 2, _blockWidth, _blockHeight, _colorMap);
+	}
 
 	return _surface;
 }
