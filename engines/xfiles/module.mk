@@ -4,6 +4,7 @@ MODULE_OBJS = \
 	console.o \
 	discfiles.o \
 	metaengine.o \
+	movie.o \
 	neoaccess.o \
 	script.o \
 	vcdata.o \

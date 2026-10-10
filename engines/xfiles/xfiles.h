@@ -22,15 +22,21 @@
 #ifndef XFILES_XFILES_H
 #define XFILES_XFILES_H
 
+#include "common/array.h"
+#include "common/hashmap.h"
+#include "common/rect.h"
 #include "common/scummsys.h"
 #include "common/error.h"
 #include "engines/engine.h"
+#include "graphics/surface.h"
 
 #include "xfiles/detection.h"
 #include "xfiles/discfiles.h"
 
 namespace XFiles {
 
+class Movie;
+class Script;
 class VCData;
 
 class XFilesEngine : public Engine {
@@ -46,16 +52,60 @@ public:
 
 	const VCData &getData() const { return *_data; }
 	const DiscFiles &getDiscFiles() const { return _discFiles; }
+	/** The running game's interpreter, or nullptr before New Game. */
+	Script *getScript() { return _script; }
 
 protected:
 	Common::Error run() override;
 
 private:
+	/** Input gathered by pollInput() for one frame. */
+	struct Input {
+		bool click;
+		Common::Point pos;
+		bool skip;
+	};
+
+	struct TimerState {
+		uint32 serial;
+		uint32 started;
+	};
+
 	bool loadDatabases();
+	Input pollInput();
+	void present();
+	void blit(const Graphics::Surface &src, int x, int y);
+	Common::Point getBandPosition(const Movie &movie) const;
+	bool openMovie(Movie &movie, uint32 assetId);
+
+	bool playIntro();
+	bool runMenu();
+	void runGame();
+
+	void playQueuedVideo(const Input &input);
+	void updateTimers();
+	void syncView();
+	void closeView();
+	void updateIcons();
+	void drawView();
+	void handleClick(const Common::Point &pos);
+	Common::Rect getIconRect(uint index) const;
 
 	const ADGameDescription *_gameDescription;
 	VCData *_data;
 	DiscFiles _discFiles;
+	Script *_script;
+	Graphics::Surface _screen;
+
+	Movie *_video;                       ///< The play-once video on screen
+	Common::Array<uint32> _viewAssets;   ///< What the view layers show
+	uint32 _viewId;
+	Common::Array<Movie *> _layers;      ///< Background and overlays of the view
+	Common::Array<uint32> _emotionIcons; ///< Every VCEmotionIcon
+	Common::HashMap<uint32, bool> _spentIcons;
+	Common::Array<uint32> _shownIcons;
+	Common::HashMap<uint32, Movie *> _iconMovies;
+	Common::HashMap<uint, TimerState> _timerStates;
 };
 
 extern XFilesEngine *g_engine;

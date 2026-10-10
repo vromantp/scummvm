@@ -103,7 +103,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _timerSerial(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	Common::Array<NeoEntry> entries;
 	data.getGam().getObjects(kClassVariable, entries);
 	for (uint i = 0; i < entries.size(); i++) {
@@ -273,7 +273,9 @@ void Script::execute(const VCAction &a, int event, const EventFields &fields, Lo
 	}
 	case kActionTimer:
 		if (a.command == 0) {
-			_timers[a.timer] = a.ms;
+			Timer &timer = _timers[a.timer];
+			timer.ms = a.ms;
+			timer.serial = ++_timerSerial;
 			log(Common::String::format("      timer %u started (%u ms%s)", a.timer, a.ms, a.periodic ? ", periodic" : ""));
 		} else {
 			_timers.erase(a.timer);
@@ -380,27 +382,41 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view) 
 	showView();
 }
 
+void Script::getViewAssets(Common::Array<uint32> &assets, uint32 &background) const {
+	assets.clear();
+	background = 0;
+	VCView v;
+	Common::Array<uint32> ids;
+	if (!_data.getView(_view, v))
+		return;
+	_data.getMembers(v.assets, ids);
+	for (uint i = 0; i < ids.size(); i++) {
+		VCAsset asset;
+		if (!_data.getAsset(ids[i], asset) || !isEnabled(ids[i]) || asset.files.empty())
+			continue;
+		if (asset.flags & kAssetStill) {
+			// The first enabled still is the background, later ones are fallbacks
+			if (background)
+				continue;
+			background = ids[i];
+		}
+		assets.push_back(ids[i]);
+	}
+}
+
 void Script::showView() {
 	VCView v;
 	if (!_data.getView(_view, v))
 		return;
 
 	Common::Array<uint32> ids;
-	_data.getMembers(v.assets, ids);
-	bool background = false;
+	uint32 background;
+	getViewAssets(ids, background);
 	for (uint i = 0; i < ids.size(); i++) {
 		VCAsset asset;
-		if (!_data.getAsset(ids[i], asset) || !isEnabled(ids[i]) || asset.files.empty())
-			continue;
-		const char *what = "overlay";
-		if (asset.flags & kAssetStill) {
-			// The first enabled still is the background, later ones are fallbacks
-			if (background)
-				continue;
-			background = true;
-			what = "background";
-		}
-		log(Common::String::format("      %s #%u ", what, ids[i]) + formatFile(asset.files[0]) + "  \"" + nameOrNone(_data, asset.name) + "\"");
+		_data.getAsset(ids[i], asset);
+		log(Common::String::format("      %s #%u ", ids[i] == background ? "background" : "overlay", ids[i]) +
+			formatFile(asset.files[0]) + "  \"" + nameOrNone(_data, asset.name) + "\"");
 	}
 
 	ids.clear();

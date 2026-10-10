@@ -38,6 +38,8 @@ private:
 	bool Cmd_tree(int argc, const char **argv);
 	bool Cmd_asset(int argc, const char **argv);
 	bool Cmd_discs(int argc, const char **argv);
+	bool Cmd_step(int argc, const char **argv);
+	bool Cmd_state(int argc, const char **argv);
 };
 
 } // End of namespace XFiles

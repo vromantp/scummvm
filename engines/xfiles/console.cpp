@@ -20,6 +20,7 @@
  */
 
 #include "xfiles/console.h"
+#include "xfiles/script.h"
 #include "xfiles/vcdata.h"
 #include "xfiles/vcdump.h"
 #include "xfiles/xfiles.h"
@@ -33,6 +34,8 @@ Console::Console() : GUI::Debugger() {
 	registerCmd("tree", WRAP_METHOD(Console, Cmd_tree));
 	registerCmd("asset", WRAP_METHOD(Console, Cmd_asset));
 	registerCmd("discs", WRAP_METHOD(Console, Cmd_discs));
+	registerCmd("step", WRAP_METHOD(Console, Cmd_step));
+	registerCmd("state", WRAP_METHOD(Console, Cmd_state));
 }
 
 Console::~Console() {
@@ -137,6 +140,41 @@ bool Console::Cmd_asset(int argc, const char **argv) {
 bool Console::Cmd_discs(int argc, const char **argv) {
 	for (uint i = 1; i <= 7; i++)
 		debugPrintf("cd%u: %s\n", i, g_engine->getDiscFiles().hasDiscDirectory(i) ? "present" : "missing");
+	return true;
+}
+
+bool Console::Cmd_step(int argc, const char **argv) {
+	Script *script = g_engine->getScript();
+	if (argc < 2 || !script) {
+		debugPrintf("Usage: %s <step>... (wait, click:ID, timer:N, nav:ID, goto:ID, ask:ID; in a game)\n", argv[0]);
+		debugPrintf("The log goes to the Script debug channel.\n");
+		return true;
+	}
+	for (int i = 1; i < argc; i++)
+		script->step(argv[i]);
+	return true;
+}
+
+bool Console::Cmd_state(int argc, const char **argv) {
+	Script *script = g_engine->getScript();
+	if (!script) {
+		debugPrintf("No game running\n");
+		return true;
+	}
+	const VCData &data = g_engine->getData();
+	debugPrintf("%s / %s / %s / %s\n", getObjectLabel(data, script->getNode()).c_str(),
+		getObjectLabel(data, script->getLocation()).c_str(), getObjectLabel(data, script->getViewPoint()).c_str(),
+		getObjectLabel(data, script->getView()).c_str());
+	const Common::Array<uint32> &queue = script->getVideoQueue();
+	for (uint i = 0; i < queue.size(); i++)
+		debugPrintf("video queue: %s\n", getObjectLabel(data, queue[i]).c_str());
+	for (int i = 1; i < argc; i++) {
+		uint32 id = parseId(argv[i]);
+		VCVariable v;
+		if (data.getVariable(id, v))
+			debugPrintf("var #%u = %d\n", id, script->getVariable(id));
+		debugPrintf("#%u is %s\n", id, script->isEnabled(id) ? "enabled" : "disabled");
+	}
 	return true;
 }
 

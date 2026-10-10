@@ -79,7 +79,19 @@ public:
 	const Common::Array<uint32> &getVideoQueue() const { return _videoQueue; }
 	bool isEnabled(uint32 id) const;
 	int32 getVariable(uint32 id) const;
-	bool isTimerRunning(uint n) const { return _timers.contains(n); }
+
+	struct Timer {
+		uint32 ms;
+		uint32 serial;    ///< Changes each time a timer is (re)started
+	};
+	const Common::HashMap<uint, Timer> &getTimers() const { return _timers; }
+
+	/**
+	 * What the current view shows when no video plays: its enabled media
+	 * assets in list order, of which background is the first enabled still
+	 * (0 if none; later stills are fallbacks and left out).
+	 */
+	void getViewAssets(Common::Array<uint32> &assets, uint32 &background) const;
 
 protected:
 	/** One line of the log; the default writes it to the Script debug channel. */
@@ -105,7 +117,8 @@ private:
 	const VCData &_data;
 	Common::HashMap<uint32, int32> _variables;
 	Common::HashMap<uint32, bool> _enabled;    ///< Objects without a VCEnabled are always enabled
-	Common::HashMap<uint, uint32> _timers;     ///< Running timers and their period in ms
+	Common::HashMap<uint, Timer> _timers;      ///< Running timers
+	uint32 _timerSerial;
 	Common::HashMap<uint32, bool> _asked;      ///< Conversations asked before
 	Common::Array<uint32> _videoQueue;
 	uint32 _node, _location, _viewPoint, _view;
