@@ -158,6 +158,21 @@ public:
 	NodeData getNodeData(uint32 nodeID);
 	void goToNode(uint32 nodeID);
 
+	////////////////
+	// Text tracks
+	////////////////
+
+	/** A sample of a text track, placed in movie time through the track's edit list. */
+	struct TextCue {
+		uint32 startTime;    ///< in milliseconds
+		uint32 endTime;      ///< in milliseconds
+		Common::String text; ///< as stored, usually Mac Roman with '\r' line breaks
+	};
+
+	/** Number of text tracks that have samples. */
+	uint getTextTrackCount() const { return _textTracks.size(); }
+	const Common::Array<TextCue> &getTextCues(uint track) const { return _textTracks[track]; }
+
 protected:
 	Common::QuickTimeParser::SampleDesc *readSampleDesc(Common::QuickTimeParser::Track *track, uint32 format, uint32 descSize) override;
 	Common::QuickTimeParser::SampleDesc *readPanoSampleDesc(Common::QuickTimeParser::Track *track, uint32 format, uint32 descSize);
@@ -182,6 +197,10 @@ private:
 	void setCursor(int curId);
 	void cleanupCursors();
 	void computeInteractivityZones();
+
+	void readTextTrack(Common::QuickTimeParser::Track *track);
+
+	Common::Array<Common::Array<TextCue>> _textTracks;
 
 	uint16 _width, _height;
 	// _origin is the top left corner point of the panorama video being played

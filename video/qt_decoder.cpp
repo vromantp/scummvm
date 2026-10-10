@@ -92,6 +92,8 @@ void QuickTimeDecoder::close() {
 		_scaledSurface = 0;
 	}
 
+	_textTracks.clear();
+
 	closeQTVR();
 }
 
@@ -254,6 +256,9 @@ void QuickTimeDecoder::init() {
 
 			tracks[i]->targetTrack = getNumTracks() - 1;
 		}
+
+		if (tracks[i]->codecType == CODEC_TYPE_TEXT && tracks[i]->chunkCount > 0)
+			readTextTrack(tracks[i]);
 	}
 
 	if (_qtvrType == QTVRType::PANORAMA) {
@@ -277,6 +282,102 @@ void QuickTimeDecoder::init() {
 			_height = nextVideoTrack->getHeight();
 		}
 	}
+}
+
+void QuickTimeDecoder::readTextTrack(Common::QuickTimeParser::Track *track) {
+	struct TextSample {
+		uint32 start; // media time
+		uint32 end;
+		Common::String text;
+	};
+
+	Common::Array<TextSample> samples;
+	uint32 sampleIndex = 0;
+	uint32 mediaTime = 0;
+	int timeToSampleIndex = 0;
+	int timeToSampleUsed = 0;
+
+	for (uint32 chunk = 0; chunk < track->chunkCount; chunk++) {
+		uint32 samplesInChunk = 0;
+		for (uint32 i = 0; i < track->sampleToChunkCount && track->sampleToChunk[i].first <= chunk; i++)
+			samplesInChunk = track->sampleToChunk[i].count;
+
+		uint32 offset = track->chunkOffsets[chunk];
+
+		for (uint32 i = 0; i < samplesInChunk && sampleIndex < track->sampleCount; i++, sampleIndex++) {
+			uint32 size = track->sampleSize ? track->sampleSize : track->sampleSizes[sampleIndex];
+
+			while (timeToSampleIndex < track->timeToSampleCount && timeToSampleUsed >= track->timeToSample[timeToSampleIndex].count) {
+				timeToSampleIndex++;
+				timeToSampleUsed = 0;
+			}
+			uint32 duration = timeToSampleIndex < track->timeToSampleCount ? track->timeToSample[timeToSampleIndex].duration : 0;
+			timeToSampleUsed++;
+
+			// A sample is a 16-bit text length and the text, optionally followed by style atoms
+			TextSample sample;
+			sample.start = mediaTime;
+			sample.end = mediaTime + duration;
+
+			_fd->seek(offset);
+			uint16 length = size >= 2 ? _fd->readUint16BE() : 0;
+			length = MIN<uint32>(length, size >= 2 ? size - 2 : 0);
+			char *text = new char[length];
+			_fd->read(text, length);
+			sample.text = Common::String(text, length);
+			delete[] text;
+
+			samples.push_back(sample);
+			offset += size;
+			mediaTime += duration;
+		}
+	}
+
+	// Place the samples in movie time through the edit list
+	Common::Array<TextCue> cues;
+
+	for (uint32 i = 0; i < track->editList.size(); i++) {
+		const EditListEntry &edit = track->editList[i];
+		if (edit.mediaTime < 0) // Empty edit
+			continue;
+
+		uint64 rateNum = edit.mediaRate.getNumerator();
+		uint64 rateDenom = edit.mediaRate.getDenominator();
+		uint32 editStart = edit.mediaTime;
+		uint32 editEnd = editStart + (uint64)edit.trackDuration * track->timeScale * rateNum / ((uint64)_timeScale * rateDenom);
+
+		for (uint32 j = 0; j < samples.size(); j++) {
+			uint32 movieStart, movieEnd;
+
+			if (rateNum == 0) {
+				// Dwell edit: the sample at the edit's media time lasts the whole edit
+				if (editStart < samples[j].start || editStart >= samples[j].end)
+					continue;
+				movieStart = edit.timeOffset;
+				movieEnd = edit.timeOffset + edit.trackDuration;
+			} else {
+				uint32 from = MAX(samples[j].start, editStart);
+				uint32 to = MIN(samples[j].end, editEnd);
+				if (from >= to)
+					continue;
+				movieStart = edit.timeOffset + (uint64)(from - editStart) * _timeScale * rateDenom / (track->timeScale * rateNum);
+				movieEnd = edit.timeOffset + (uint64)(to - editStart) * _timeScale * rateDenom / (track->timeScale * rateNum);
+			}
+
+			TextCue cue;
+			cue.startTime = (uint64)movieStart * 1000 / _timeScale;
+			cue.endTime = (uint64)movieEnd * 1000 / _timeScale;
+			cue.text = samples[j].text;
+
+			// Join cues that an edit boundary split
+			if (!cues.empty() && cues.back().endTime == cue.startTime && cues.back().text == cue.text)
+				cues.back().endTime = cue.endTime;
+			else
+				cues.push_back(cue);
+		}
+	}
+
+	_textTracks.push_back(cues);
 }
 
 void QuickTimeDecoder::updateAudioBuffer() {

@@ -550,6 +550,8 @@ int QuickTimeParser::readHDLR(Atom atom) {
 		track->codecType = CODEC_TYPE_MIDI;
 	else if (type == MKTAG('S', 'T', 'p', 'n') || type == MKTAG('s', 't', 'p', 'n'))
 		track->codecType = CODEC_TYPE_PANO;
+	else if (type == MKTAG('t', 'e', 'x', 't'))
+		track->codecType = CODEC_TYPE_TEXT;
 
 	_fd->readUint32BE(); // component manufacture
 	_fd->readUint32BE(); // component flags

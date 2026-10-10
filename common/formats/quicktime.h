@@ -152,7 +152,8 @@ public:
 		CODEC_TYPE_VIDEO,
 		CODEC_TYPE_AUDIO,
 		CODEC_TYPE_MIDI,
-		CODEC_TYPE_PANO
+		CODEC_TYPE_PANO,
+		CODEC_TYPE_TEXT
 	};
 
 	enum class GraphicsMode {
