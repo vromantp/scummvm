@@ -71,7 +71,7 @@ static const int kMenuNewTop = 80, kMenuNewBottom = 118;
 static const int kMenuQuitTop = 385, kMenuQuitBottom = 420;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
-	_gameDescription(gameDesc), _data(nullptr), _script(nullptr), _video(nullptr), _viewId(0), _soundView(0), _dialogBoxView(0),
+	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _video(nullptr), _viewId(0), _soundView(0), _dialogBoxView(0),
 	_texts(nullptr) {
 	g_engine = this;
 	memset(_prefVariables, 0, sizeof(_prefVariables));
@@ -247,7 +247,7 @@ void XFilesEngine::runGame() {
 		_emotionIcons.push_back(icons[i].key);
 
 	_script->setHooks(this);
-	_script->setRandomSeed(g_system->getMillis());
+	_script->setRandomSeed(_randomSource.getRandomNumber(0xFFFFFFFF));
 	_script->start();
 	while (!shouldQuit()) {
 		Input input = pollInput();

@@ -24,6 +24,7 @@
 
 #include "common/array.h"
 #include "common/hashmap.h"
+#include "common/random.h"
 #include "common/rect.h"
 #include "common/scummsys.h"
 #include "common/error.h"
@@ -153,6 +154,7 @@ private:
 	void placeSound(Sound &sound);
 
 	const ADGameDescription *_gameDescription;
+	Common::RandomSource _randomSource;
 	VCData *_data;
 	DiscFiles _discFiles;
 	Script *_script;
