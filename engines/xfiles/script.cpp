@@ -96,7 +96,8 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _timerSerial(0), _random(1), _box(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _timerSerial(0), _random(1), _box(0), _clipQueued(false), _node(0), _location(0), _viewPoint(0), _view(0) {
+	_jumpCut.first = _jumpCut.later = false;
 	Common::Array<NeoEntry> entries;
 	data.getGam().getObjects(kClassVariable, entries);
 	for (uint i = 0; i < entries.size(); i++) {
@@ -264,7 +265,7 @@ void Script::execute(const VCAction &a, int event, const EventFields &fields, Lo
 			}
 			// A topic enabled while its box is open joins the box (0x476340)
 			if (a.value && _box && isBoxTopic(_box, target))
-				fire(target, kEventObjectActivation);
+				activateTopic(target);
 			updateLayoutItem(target, a.value != 0);
 		}
 		break;
@@ -354,6 +355,7 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 
 	if (mode == kModePlayOnce && video && !a.hasRange) {
 		_videoQueue.push_back(id);
+		_videoLimits.push_back(0);
 		if (_videoQueue.size() == 1)
 			startVideo();
 	} else if (mode == kModePlayOnce || mode == kModePlayLoop) {
@@ -373,7 +375,8 @@ void Script::startVideo() {
 	uint32 id = _videoQueue[0];
 	VCAsset a;
 	_data.getAsset(id, a);
-	log(Common::String::format("  >> video #%u ", id) + a.files[0].file + "  \"" + nameOrNone(_data, a.name) + "\"");
+	Common::String limit = _videoLimits[0] ? Common::String::format(" for %u ms", _videoLimits[0]) : Common::String();
+	log(Common::String::format("  >> video #%u ", id) + a.files[0].file + limit + "  \"" + nameOrNone(_data, a.name) + "\"");
 	fire(id, kEventObjectActivation);
 }
 
@@ -383,6 +386,7 @@ void Script::finishVideo() {
 		return;
 	}
 	uint32 id = _videoQueue.remove_at(0);
+	_videoLimits.remove_at(0);
 	log(Common::String::format("  << video #%u ended", id));
 	fire(id, kEventObjectDeactivation);
 	if (!_videoQueue.empty())
@@ -569,7 +573,33 @@ void Script::openBox(uint32 charViewId) {
 	getBoxTopics(charViewId, topics);
 	for (uint i = 0; i < topics.size(); i++) {
 		if (isEnabled(topics[i]))
-			fire(topics[i], kEventObjectActivation);
+			activateTopic(topics[i]);
+	}
+}
+
+void Script::activateTopic(uint32 conversationId) {
+	// 0x47d010: the topic's Object Activation, then HandleFixJumpCut
+	// (0x47ca30), which reads FixJumpCut(first, later) among the actions of
+	// those triggers into +0x148 and +0x14c of the topic's object
+	fire(conversationId, kEventObjectActivation);
+	_jumpCuts.erase(conversationId);
+	Common::Array<uint32> triggers;
+	_data.getMembers(getTriggers(conversationId), triggers);
+	for (uint i = 0; i < triggers.size(); i++) {
+		VCTrigger t;
+		if (!_data.getTrigger(triggers[i], t) || t.event != kEventObjectActivation)
+			continue;
+		for (uint j = 0; j < t.actions.size(); j++) {
+			VCAction a;
+			if (!_data.getAction(t.actions[j], a) || a.type != kActionFunction || a.function != "FixJumpCut" ||
+					a.args.size() < 2)
+				continue;
+			JumpCut cut;
+			cut.first = getValue(a.args[0], EventFields(), LocalVariables()) != 0;
+			cut.later = getValue(a.args[1], EventFields(), LocalVariables()) != 0;
+			_jumpCuts[conversationId] = cut;
+			return;
+		}
 	}
 }
 
@@ -656,20 +686,33 @@ void Script::playTopic(uint32 conversationId, bool inBox) {
 	// "What's the matter with you?" instead; one without plays atom and
 	// answer. inBox is +0x144 of the topic's runtime object: set for a
 	// click in the box, clear for an item dropped on the character.
+	//
+	// The view's loop may go between clips to hide the cut: before the
+	// first clip after the question or before the answer, as the topic's
+	// FixJumpCut asks (beforeLead, beforeAnswer), and always before "What's
+	// the matter with you?" after another stock reply.
 	VCConversation c;
 	if (!_data.getConversation(conversationId, c)) {
 		warning("Script: #%u is not a conversation", conversationId);
 		return;
 	}
+	_jumpCut = _jumpCuts.getValOrDefault(conversationId, JumpCut());
+	_clipQueued = false;
 	uint count = ++_asked[conversationId];
 	playList(c.question);
 	if (count < 2) {
+		beforeAnswer();
 		playList(c.answer);
 		return;
 	}
 	uint32 stock[kStockAtomCount];
 	if (!getStockAtoms(conversationId, stock)) {
-		playList(c.atom);
+		if (c.atom) {
+			beforeLead();
+			playList(c.atom);
+			_clipQueued = true;
+		}
+		beforeAnswer();
 		playList(c.answer);
 		return;
 	}
@@ -679,35 +722,93 @@ void Script::playTopic(uint32 conversationId, bool inBox) {
 		int limit = count == 4 ? 6 : count == 5 ? 7 : count == 6 ? 8 : 9;
 		if (roll() < limit) {
 			if (inBox) {
+				beforeLead();
 				playStock(stock[0]);
-				if (stock[kStockWhatsTheMatter] && roll() < 4)
+				_clipQueued = true;
+				if (stock[kStockWhatsTheMatter] && roll() < 4) {
+					queueViewLoop();
 					playStock(stock[kStockWhatsTheMatter]);
+				}
 				return;
 			}
 			if (stock[kStockWhatsTheMatter]) {
+				beforeLead();
 				playStock(stock[kStockWhatsTheMatter]);
 				return;
 			}
 		}
 	}
+	// 0x4ea400
 	if (c.atom && roll() < 9) {
+		beforeLead();
 		playList(c.atom);
-		if (c.answer && roll() < 4)
+		_clipQueued = true;
+		if (c.answer && roll() < 4) {
+			beforeAnswer();
 			playList(c.answer);
+		}
 		return;
 	}
 	// 0x495820: from the box S0 or S1, otherwise S1
 	if ((stock[0] || stock[1]) && roll() < 4) {
+		uint32 reply;
 		if (!inBox)
-			playStock(stock[1]);
+			reply = stock[1];
 		else if (stock[0] && stock[1])
-			playStock(roll() < 6 ? stock[0] : stock[1]);
+			reply = roll() < 6 ? stock[0] : stock[1];
 		else
-			playStock(stock[0] ? stock[0] : stock[1]);
-		if (stock[kStockWhatsTheMatter] && count > 2 && roll() < 4)
+			reply = stock[0] ? stock[0] : stock[1];
+		if (reply) {
+			beforeLead();
+			playStock(reply);
+			_clipQueued = true;
+		}
+		if (stock[kStockWhatsTheMatter] && count > 2 && roll() < 4) {
+			queueViewLoop();
+			beforeLead();
 			playStock(stock[kStockWhatsTheMatter]);
+			_clipQueued = true;
+		}
 	}
+	beforeAnswer();
 	playList(c.answer);
+}
+
+void Script::beforeLead() {
+	if (_jumpCut.first && !_clipQueued)
+		queueViewLoop();
+}
+
+void Script::beforeAnswer() {
+	if (_jumpCut.later && _clipQueued)
+		queueViewLoop();
+}
+
+void Script::queueViewLoop() {
+	// 0x4ea320: the clip playing in the view, if it loops, for 750 ms
+	// (0x5049c0 sets up its player; the segment it picks is not read, so
+	// this plays the loop from its start)
+	uint32 id = getViewLoop();
+	if (!id)
+		return;
+	_videoQueue.push_back(id);
+	_videoLimits.push_back(750);
+	if (_videoQueue.size() == 1)
+		startVideo();
+}
+
+uint32 Script::getViewLoop() const {
+	// The view's player (view object +0x148) holds its background or its
+	// looping clip; only a looping asset (flag 8, 0x4966d0) is used
+	Common::Array<uint32> assets;
+	uint32 background;
+	getViewAssets(assets, background);
+	for (uint i = 0; i < assets.size(); i++) {
+		VCAsset asset;
+		if (assets[i] != background && _data.getAsset(assets[i], asset) && (asset.flags & kAssetLoop))
+			return assets[i];
+	}
+	return 0;
 }
 
 void Script::playList(uint32 listId) {

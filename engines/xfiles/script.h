@@ -130,6 +130,8 @@ public:
 	uint32 getView() const { return _view; }
 	/** Play-once videos; the first one is on screen. */
 	const Common::Array<uint32> &getVideoQueue() const { return _videoQueue; }
+	/** How long the first video plays, in ms; 0 for all of it. */
+	uint32 getVideoLimit() const { return _videoLimits.empty() ? 0 : _videoLimits[0]; }
 	bool isEnabled(uint32 id) const;
 	/** How often a conversation topic was asked. */
 	uint getAskCount(uint32 id) const { return _asked.getValOrDefault(id, 0); }
@@ -181,6 +183,12 @@ private:
 	/** A number from 1 to 10, as XFiles.exe draws them. */
 	int roll();
 	void playTopic(uint32 conversationId, bool inBox);
+	void activateTopic(uint32 conversationId);
+	void beforeLead();
+	void beforeAnswer();
+	void queueViewLoop();
+	/** The looping asset of the current view, or 0. */
+	uint32 getViewLoop() const;
 	bool getStockAtoms(uint32 conversationId, uint32 (&atoms)[kStockAtomCount]) const;
 	/** The topics of a character view, in box order. */
 	void getBoxTopics(uint32 charViewId, Common::Array<uint32> &topics) const;
@@ -205,6 +213,16 @@ private:
 	Common::Array<Layout> _layouts;
 	Common::Array<uint32> _kit;
 	Common::Array<uint32> _videoQueue;
+	Common::Array<uint32> _videoLimits;        ///< Per queued video: ms to play, 0 for all
+
+	/** FixJumpCut(first, later) of a topic's Object Activation (0x47ca30). */
+	struct JumpCut {
+		bool first;   ///< The view's loop before the first clip after the question
+		bool later;   ///< The view's loop before the answer when a clip came before it
+	};
+	Common::HashMap<uint32, JumpCut> _jumpCuts;
+	JumpCut _jumpCut;                          ///< Of the topic being played
+	bool _clipQueued;                          ///< A clip after the question is queued (topic +0x150)
 	uint32 _node, _location, _viewPoint, _view;
 };
 

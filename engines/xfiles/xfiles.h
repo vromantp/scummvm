@@ -175,6 +175,7 @@ private:
 	uint32 _prefVariables[kPrefCount];  ///< From RegPreferences
 
 	Movie *_video;                       ///< The play-once video on screen
+	uint32 _videoStarted;                ///< When it started (getMillis)
 	Common::Array<uint32> _viewAssets;   ///< What the view layers show
 	uint32 _viewId;
 	Common::Array<Movie *> _layers;      ///< Background and overlays of the view

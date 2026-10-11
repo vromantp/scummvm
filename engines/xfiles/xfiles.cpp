@@ -70,7 +70,7 @@ static const int kMenuNewTop = 80, kMenuNewBottom = 118;
 static const int kMenuQuitTop = 385, kMenuQuitBottom = 420;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
-	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _video(nullptr), _viewId(0), _soundView(0), _dialogBoxView(0),
+	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _video(nullptr), _videoStarted(0), _viewId(0), _soundView(0), _dialogBoxView(0),
 	_texts(nullptr), _interface(nullptr), _inventoryVariable(0), _inventoryNone(0), _lastClickTime(0) {
 	g_engine = this;
 	memset(_prefVariables, 0, sizeof(_prefVariables));
@@ -493,8 +493,12 @@ void XFilesEngine::playQueuedVideo(const Input &input) {
 			return;
 		}
 		_video->play(false);
+		_videoStarted = g_system->getMillis();
 	}
-	if (input.skip)
+	// A piece of the view's loop between conversation clips plays for a
+	// fixed time (Script::queueViewLoop)
+	uint32 limit = _script->getVideoLimit();
+	if (input.skip || (limit && g_system->getMillis() - _videoStarted >= limit))
 		_video->stop();
 	_video->update();
 
