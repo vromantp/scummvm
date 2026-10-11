@@ -35,6 +35,7 @@
 #include "xfiles/detection.h"
 #include "xfiles/dialogbox.h"
 #include "xfiles/discfiles.h"
+#include "xfiles/interface.h"
 #include "xfiles/script.h"
 
 namespace Common {
@@ -126,9 +127,17 @@ private:
 	void updateTimers();
 	void syncView();
 	void closeView();
-	void updateIcons();
+	void updateInterface();
 	void drawView();
 	void handleClick(const Common::Point &pos);
+	/** The second click of a double-click: Mouse Double-Click instead of Mouse Click. */
+	void handleDoubleClick(const Interface::Hit &hit);
+	void clickInventory(uint32 inventory);
+	/** An item is in hand: iCurrInventory (RegCurrInvVar) is not Inventory_None. */
+	bool isHolding() const;
+	/** Put the item in hand back into the bar (Inv_PutBack, XFiles.exe 0x429f00). */
+	void putBack();
+	void callInventoryFunction(const VCAction &action, const Common::Array<int32> &args);
 	void openDialogBox(const VCCharView &charView);
 	/** Close the box if its character left the view, and update its topics. */
 	void updateDialogBox();
@@ -138,7 +147,6 @@ private:
 	void registerPreferences(const VCAction &action);
 	/** A preference's value, 0 before RegPreferences. */
 	bool getPreference(uint index) const;
-	Common::Rect getIconRect(uint index) const;
 
 	/** A playing sound asset (XS): environments, effects, music. */
 	struct Sound {
@@ -170,10 +178,12 @@ private:
 	Common::Array<uint32> _viewAssets;   ///< What the view layers show
 	uint32 _viewId;
 	Common::Array<Movie *> _layers;      ///< Background and overlays of the view
-	Common::Array<uint32> _emotionIcons; ///< Every VCEmotionIcon
-	Common::HashMap<uint32, bool> _spentIcons;
-	Common::Array<uint32> _shownIcons;
-	Common::HashMap<uint32, Movie *> _iconMovies;
+	Interface *_interface;
+	uint32 _inventoryVariable;           ///< iCurrInventory, from RegCurrInvVar
+	int32 _inventoryNone;                ///< Its value with nothing in hand
+	uint32 _lastClickTime;               ///< For double-clicks
+	Common::Point _lastClickPos;
+	Interface::Hit _lastClickHit;
 	Common::HashMap<uint, TimerState> _timerStates;
 	Common::HashMap<uint32, Sound> _sounds;
 	uint32 _soundView;                    ///< The view the 3D sounds were placed for

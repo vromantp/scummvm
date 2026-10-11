@@ -97,6 +97,8 @@ public:
 	void finishVideo();
 	/** Mouse Click on an object (icon, hotspot, explorable...), if it is enabled. */
 	void click(uint32 id);
+	/** Mouse Double-Click on an object, if it is enabled. */
+	void doubleClick(uint32 id);
 	/** Timer n expired: fire Timer Expiration on the scene levels and the title. */
 	void expireTimer(uint n);
 	/** Follow a VCNav to its view, in the current location. */
@@ -138,6 +140,14 @@ public:
 	};
 	const Common::HashMap<uint, Timer> &getTimers() const { return _timers; }
 
+	/** A shown VCIFaceLayout and its items that were enabled when it was shown. */
+	struct Layout {
+		uint32 id;
+		Common::Array<uint32> items;
+	};
+	/** Shown layouts, oldest first. */
+	const Common::Array<Layout> &getLayouts() const { return _layouts; }
+
 	/**
 	 * What the current view shows when no video plays: its enabled media
 	 * assets in list order, of which background is the first enabled still
@@ -171,6 +181,9 @@ private:
 	/** The topics of a character view, in box order. */
 	void getBoxTopics(uint32 charViewId, Common::Array<uint32> &topics) const;
 	bool isBoxTopic(uint32 charViewId, uint32 conversationId) const;
+	void showLayout(uint32 layoutId);
+	void hideLayout(uint32 layoutId);
+	void updateLayoutItem(uint32 itemId, bool enabled);
 	void startVideo();
 	void enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view);
 	void showView();
@@ -184,6 +197,7 @@ private:
 	Common::HashMap<uint32, uint> _asked;      ///< How often each conversation was asked
 	uint32 _random;                            ///< State of the random numbers
 	uint32 _box;                               ///< Character view whose conversation box is open, or 0
+	Common::Array<Layout> _layouts;
 	Common::Array<uint32> _videoQueue;
 	uint32 _node, _location, _viewPoint, _view;
 };

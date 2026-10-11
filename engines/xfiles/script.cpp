@@ -254,6 +254,7 @@ void Script::execute(const VCAction &a, int event, const EventFields &fields, Lo
 			// A topic enabled while its box is open joins the box (0x476340)
 			if (a.value && _box && isBoxTopic(_box, target))
 				fire(target, kEventObjectActivation);
+			updateLayoutItem(target, a.value != 0);
 		}
 		break;
 	}
@@ -282,6 +283,10 @@ void Script::execute(const VCAction &a, int event, const EventFields &fields, Lo
 		break;
 	case kActionInterface:
 		log(Common::String(a.mode ? "      hide" : "      show") + " interface " + getObjectLabel(_data, a.layout));
+		if (a.mode)
+			hideLayout(a.layout);
+		else
+			showLayout(a.layout);
 		break;
 	case kActionFunction:
 		callFunction(a, event, fields, locals);
@@ -493,6 +498,14 @@ void Script::click(uint32 id) {
 		fire(id, kEventMouseClick);
 }
 
+void Script::doubleClick(uint32 id) {
+	_box = 0;
+	if (!isEnabled(id))
+		log("  " + getObjectLabel(_data, id) + " is disabled");
+	else
+		fire(id, kEventMouseDoubleClick);
+}
+
 void Script::expireTimer(uint n) {
 	if (!_timers.contains(n))
 		return;
@@ -528,6 +541,63 @@ void Script::openBox(uint32 charViewId) {
 	for (uint i = 0; i < topics.size(); i++) {
 		if (isEnabled(topics[i]))
 			fire(topics[i], kEventObjectActivation);
+	}
+}
+
+void Script::showLayout(uint32 layoutId) {
+	// XFiles.exe 0x44ec80, 0x42b250: every enabled item gets a runtime
+	// object, whose activation fires its Object Activation triggers. The
+	// layout itself owns no triggers.
+	for (uint i = 0; i < _layouts.size(); i++) {
+		if (_layouts[i].id == layoutId)
+			return;
+	}
+	VCLayout layout;
+	if (!_data.getLayout(layoutId, layout)) {
+		warning("Script: #%u is not a layout", layoutId);
+		return;
+	}
+	Layout shown;
+	shown.id = layoutId;
+	for (uint i = 0; i < layout.items.size(); i++) {
+		if (isEnabled(layout.items[i]))
+			shown.items.push_back(layout.items[i]);
+	}
+	_layouts.push_back(shown);
+	for (uint i = 0; i < shown.items.size(); i++)
+		fire(shown.items[i], kEventObjectActivation);
+}
+
+void Script::hideLayout(uint32 layoutId) {
+	// The items' objects go away, firing their Object Deactivation (0x425200)
+	for (uint i = 0; i < _layouts.size(); i++) {
+		if (_layouts[i].id != layoutId)
+			continue;
+		Common::Array<uint32> items = _layouts[i].items;
+		_layouts.remove_at(i);
+		for (uint j = 0; j < items.size(); j++)
+			fire(items[j], kEventObjectDeactivation);
+		return;
+	}
+}
+
+void Script::updateLayoutItem(uint32 itemId, bool enabled) {
+	// An item of a shown layout comes and goes with its flag (0x41ae20,
+	// 0x446790), with its Object Activation or Deactivation
+	for (uint i = 0; i < _layouts.size(); i++) {
+		VCLayout layout;
+		if (!_data.getLayout(_layouts[i].id, layout) ||
+				Common::find(layout.items.begin(), layout.items.end(), itemId) == layout.items.end())
+			continue;
+		Common::Array<uint32> &items = _layouts[i].items;
+		Common::Array<uint32>::iterator it = Common::find(items.begin(), items.end(), itemId);
+		if (enabled && it == items.end()) {
+			items.push_back(itemId);
+			fire(itemId, kEventObjectActivation);
+		} else if (!enabled && it != items.end()) {
+			items.erase(it);
+			fire(itemId, kEventObjectDeactivation);
+		}
 	}
 }
 
@@ -732,6 +802,8 @@ void Script::step(const Common::String &s) {
 		finishVideo();
 	else if (kind == "click")
 		click(id);
+	else if (kind == "dclick")
+		doubleClick(id);
 	else if (kind == "timer")
 		expireTimer(id);
 	else if (kind == "ask")

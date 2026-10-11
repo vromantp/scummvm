@@ -49,11 +49,10 @@ enum {
 	kBandTop = 90,
 	kBandWidth = 600,
 	kBandHeight = 240,
-	// Emotion icons: placed in a row below the band (position not from the game)
-	kIconTop = 360,
-	kIconWidth = 80,
-	kIconHeight = 60,
-	kIconGap = 20,
+	// Two clicks at most this far apart in time and space make a double-click
+	// (the Windows defaults)
+	kDoubleClickMs = 500,
+	kDoubleClickDistance = 4,
 	// The main menu: the X movie at the left, the entries movie at the right
 	kMenuEntriesLeft = 472,
 	kMenuEntriesShown = 75   ///< Frame of the entries movie where all entries are lit and no help text shows
@@ -72,16 +71,17 @@ static const int kMenuQuitTop = 385, kMenuQuitBottom = 420;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
 	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _video(nullptr), _viewId(0), _soundView(0), _dialogBoxView(0),
-	_texts(nullptr) {
+	_texts(nullptr), _interface(nullptr), _inventoryVariable(0), _inventoryNone(0), _lastClickTime(0) {
 	g_engine = this;
 	memset(_prefVariables, 0, sizeof(_prefVariables));
+	_lastClickHit.kind = Interface::kHitNone;
+	_lastClickHit.id = 0;
 }
 
 XFilesEngine::~XFilesEngine() {
 	stopAllSounds();
 	closeView();
-	for (Common::HashMap<uint32, Movie *>::iterator it = _iconMovies.begin(); it != _iconMovies.end(); ++it)
-		delete it->_value;
+	delete _interface;
 	delete _video;
 	delete _texts;
 	delete _script;
@@ -116,6 +116,8 @@ Common::Error XFilesEngine::run() {
 	delete cursor;
 	CursorMan.showMouse(true);
 	_captions.loadFonts();
+	_interface = new Interface(*_data, _discFiles);
+	_interface->setFormat(_screen.format);
 	if (!_dialogBox.load(*_data, _discFiles, _screen.format))
 		warning("Cannot load the dialog box pictures from x.pff");
 	// The language DLL with the topic texts (the exe loads it with LoadLibrary)
@@ -241,11 +243,6 @@ bool XFilesEngine::runMenu() {
 
 void XFilesEngine::runGame() {
 	_script = new Script(*_data);
-	Common::Array<NeoEntry> icons;
-	_data->getHdb().getObjects(kClassEmotionIcon, icons);
-	for (uint i = 0; i < icons.size(); i++)
-		_emotionIcons.push_back(icons[i].key);
-
 	_script->setHooks(this);
 	_script->setRandomSeed(_randomSource.getRandomNumber(0xFFFFFFFF));
 	_script->start();
@@ -258,7 +255,7 @@ void XFilesEngine::runGame() {
 			playQueuedVideo(input);
 		} else {
 			syncView();
-			updateIcons();
+			updateInterface();
 			updateDialogBox();
 			if (input.click)
 				handleClick(input.pos);
@@ -279,6 +276,41 @@ void XFilesEngine::callFunction(const VCAction &action, const Common::Array<int3
 		registerPreferences(action);
 	else if (action.function == "StopEnvSounds")
 		stopAllSounds(); // XFiles.exe 0x4cc9c0: stops every playing asset without a picture
+	else
+		callInventoryFunction(action, args);
+}
+
+void XFilesEngine::callInventoryFunction(const VCAction &action, const Common::Array<int32> &args) {
+	const Common::String &name = action.function;
+	if (name == "RegCurrInvVar" && action.args.size() >= 2 && action.args[0].kind == kOperandVariable) {
+		// RegCurrInvVar(iCurrInventory, Inventory_None), 0x458e60: the
+		// variable starts as "nothing in hand"
+		_inventoryVariable = action.args[0].value;
+		_inventoryNone = args[1];
+		_script->setVariable(_inventoryVariable, _inventoryNone);
+	} else if (name == "OnInvClick" && args.size() >= 1) {
+		// Inv_Select (0x49b410): the item's value goes into the variable
+		if (_inventoryVariable && _script->getVariable(_inventoryVariable) != args[0])
+			_script->setVariable(_inventoryVariable, args[0]);
+	} else if (name == "OnIntInvClick") {
+		// Interface items (PDA, phone) are not held (0x467fb0)
+		_interface->setHeld(0);
+	} else if (name == "SelectInv" && args.size() >= 1) {
+		// 0x50a390: put back what is in hand and take the item, as a click
+		// on its icon would
+		if (_interface->hasInventoryIcon(args[0])) {
+			putBack();
+			clickInventory(args[0]);
+		}
+	} else if (name == "DeselectInv" && args.size() >= 1) {
+		// 0x50a570: 0 puts back any item
+		if (args[0] == 0 || (uint32)args[0] == _interface->getHeld())
+			putBack();
+	} else if (name == "AddIFLExcept" && args.size() >= 1) {
+		_interface->addModalException(args[0]);
+	} else if (name == "ClearIFLExcept") {
+		_interface->clearModalExceptions();
+	}
 }
 
 void XFilesEngine::registerPreferences(const VCAction &action) {
@@ -481,9 +513,8 @@ void XFilesEngine::updateTimers() {
 	for (uint i = 0; i < expired.size(); i++) {
 		debugC(1, kDebugScript, "-- timer %u expired", expired[i]);
 		_timerStates.erase(expired[i]);
-		// The choice is over: the emotion icons on screen go away (an assumption, see updateIcons)
-		for (uint j = 0; j < _shownIcons.size(); j++)
-			_spentIcons[_shownIcons[j]] = true;
+		// The choice is over: the emotion icons on screen go away (an assumption)
+		_interface->spendEmotionIcons();
 		_script->expireTimer(expired[i]);
 	}
 }
@@ -527,45 +558,43 @@ void XFilesEngine::closeView() {
 	_viewId = 0;
 }
 
-void XFilesEngine::updateIcons() {
-	// The exe decides when emotion icons show (they stay enabled after a
-	// choice). Here an enabled icon shows until one of them is clicked or a
-	// timer expires; disabling it makes it available again.
-	Common::Array<uint32> shown;
-	for (uint i = 0; i < _emotionIcons.size(); i++) {
-		uint32 id = _emotionIcons[i];
-		if (!_script->isEnabled(id))
-			_spentIcons.erase(id);
-		else if (!_spentIcons.contains(id))
-			shown.push_back(id);
-	}
-
-	for (uint i = 0; i < shown.size(); i++) {
-		if (_iconMovies.contains(shown[i]))
-			continue;
-		VCIcon icon;
-		Common::Array<uint32> graphics;
-		Movie *movie = new Movie();
-		if (_data->getIcon(shown[i], icon) && _data->getMembers(icon.graphic, graphics) && !graphics.empty() &&
-				openMovie(*movie, graphics[0]))
-			movie->play(true);
-		_iconMovies[shown[i]] = movie;
-	}
-	for (uint i = 0; i < _shownIcons.size(); i++) {
-		if (Common::find(shown.begin(), shown.end(), _shownIcons[i]) == shown.end()) {
-			delete _iconMovies[_shownIcons[i]];
-			_iconMovies.erase(_shownIcons[i]);
-		}
-	}
-	_shownIcons = shown;
-	for (uint i = 0; i < _shownIcons.size(); i++)
-		_iconMovies[_shownIcons[i]]->update();
+void XFilesEngine::updateInterface() {
+	bool hiddenBar = _prefVariables[kPrefInventory] && _script->getVariable(_prefVariables[kPrefInventory]) == 'H';
+	_interface->update(*_script, _mouse, getPreference(kPrefClosedCaptioning), hiddenBar);
+	// The item in hand goes back when the mouse moves into the bar
+	// (InvBar_OnRoll 0x468330) or when it is disabled (0x436c20)
+	if (isHolding() && (_interface->hasEnteredBar() || !_script->isEnabled(_interface->getHeld())))
+		putBack();
 }
 
-Common::Rect XFilesEngine::getIconRect(uint index) const {
-	int width = _shownIcons.size() * (kIconWidth + kIconGap) - kIconGap;
-	int left = (kScreenWidth - width) / 2 + index * (kIconWidth + kIconGap);
-	return Common::Rect(left, kIconTop, left + kIconWidth, kIconTop + kIconHeight);
+bool XFilesEngine::isHolding() const {
+	return _inventoryVariable && _script->getVariable(_inventoryVariable) != _inventoryNone;
+}
+
+void XFilesEngine::putBack() {
+	// The held-item object exists only while something is in hand; its
+	// deactivation (0x437c20) resets the variable
+	if (!isHolding())
+		return;
+	debugC(1, kDebugScript, "-- #%u put back", _interface->getHeld());
+	_script->setVariable(_inventoryVariable, _inventoryNone);
+	_interface->setHeld(0);
+}
+
+void XFilesEngine::clickInventory(uint32 inventory) {
+	// InvIcon_OnMouseClick (0x49c180): close the box, put back what is in
+	// hand, take the item's cursor, then the icon's Mouse Click triggers
+	// (which call OnInvClick)
+	if (inventory == _interface->getHeld())
+		return;
+	if (_dialogBox.isOpen()) {
+		_dialogBox.close();
+		_script->closeBox();
+	}
+	putBack();
+	_interface->setHeld(inventory);
+	debugC(1, kDebugScript, "-- click:%u (inventory)", inventory);
+	_script->click(inventory);
 }
 
 void XFilesEngine::drawView() {
@@ -576,10 +605,7 @@ void XFilesEngine::drawView() {
 	}
 	for (uint i = 0; i < _layers.size(); i++)
 		drawCaptions(*_layers[i], getBandPosition(*_layers[i]));
-	for (uint i = 0; i < _shownIcons.size(); i++) {
-		Common::Rect r = getIconRect(i);
-		blit(_iconMovies[_shownIcons[i]]->getFrame(), r.left, r.top);
-	}
+	_interface->draw(_screen);
 }
 
 static bool containsPoint(const VCRect &r, const Common::Point &pos) {
@@ -587,29 +613,62 @@ static bool containsPoint(const VCRect &r, const Common::Point &pos) {
 }
 
 void XFilesEngine::handleClick(const Common::Point &pos) {
-	if (_dialogBox.isOpen()) {
-		// A click outside the box closes it (assumed; DisplayDBox(0) also does)
-		uint32 topic = 0;
-		DialogBox::Hit hit = _dialogBox.click(pos, topic);
-		if (hit == DialogBox::kHitTopic)
-			askTopic(topic);
-		else if (hit != DialogBox::kHitInside) {
-			_dialogBox.close();
-			_script->closeBox();
-		}
+	Interface::Hit hit = _interface->hitTest(pos);
+	uint32 now = g_system->getMillis();
+	bool doubleClick = now - _lastClickTime <= kDoubleClickMs && hit.kind != Interface::kHitNone &&
+		hit.kind == _lastClickHit.kind && hit.id == _lastClickHit.id &&
+		ABS(pos.x - _lastClickPos.x) <= kDoubleClickDistance && ABS(pos.y - _lastClickPos.y) <= kDoubleClickDistance;
+	_lastClickTime = doubleClick ? 0 : now;
+	_lastClickPos = pos;
+	_lastClickHit = hit;
+	if (doubleClick) {
+		handleDoubleClick(hit);
 		return;
 	}
 
-	for (uint i = 0; i < _shownIcons.size(); i++) {
-		if (getIconRect(i).contains(pos)) {
-			uint32 id = _shownIcons[i];
-			debugC(1, kDebugScript, "-- click:%u (emotion icon)", id);
-			for (uint j = 0; j < _shownIcons.size(); j++)
-				_spentIcons[_shownIcons[j]] = true;
-			_script->click(id);
+	if (hit.kind == Interface::kHitItem) {
+		debugC(1, kDebugScript, "-- click:%u (interface item)", hit.id);
+		_script->click(hit.id);
+		return;
+	}
+
+	if (_dialogBox.isOpen()) {
+		// A click outside the box closes it (assumed; DisplayDBox(0) also
+		// does); one on an icon goes on to the icon
+		uint32 topic = 0;
+		DialogBox::Hit boxHit = _dialogBox.click(pos, topic);
+		if (boxHit == DialogBox::kHitTopic) {
+			askTopic(topic);
 			return;
 		}
+		if (boxHit == DialogBox::kHitInside)
+			return;
+		_dialogBox.close();
+		_script->closeBox();
+		if (hit.kind == Interface::kHitNone)
+			return;
 	}
+
+	switch (hit.kind) {
+	case Interface::kHitInventory:
+		clickInventory(hit.id);
+		return;
+	case Interface::kHitEmotion:
+		// A click on one removes all of them (0x49bfe0)
+		debugC(1, kDebugScript, "-- click:%u (emotion icon)", hit.id);
+		_interface->spendEmotionIcons();
+		_script->click(hit.id);
+		return;
+	case Interface::kHitAction:
+		debugC(1, kDebugScript, "-- click:%u (action icon)", hit.id);
+		_interface->spendActionIcons();
+		_script->click(hit.id);
+		return;
+	default:
+		break;
+	}
+	if (_interface->isModal())
+		return; // A layout has the input
 
 	VCView view;
 	if (!_data->getView(_script->getView(), view))
@@ -633,7 +692,8 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 			// The view's triggers handle inventory items held over the
 			// character; with nothing in hand the exe opens the dialog box
 			_script->click(ids[i]);
-			openDialogBox(cv);
+			if (!isHolding())
+				openDialogBox(cv);
 			return;
 		}
 	}
@@ -648,6 +708,16 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 			return;
 		}
 	}
+}
+
+void XFilesEngine::handleDoubleClick(const Interface::Hit &hit) {
+	debugC(1, kDebugScript, "-- dclick:%u", hit.id);
+	if (hit.kind == Interface::kHitInventory && _dialogBox.isOpen()) {
+		// InvIcon_OnDoubleClick (0x4a7ce0) also closes the box
+		_dialogBox.close();
+		_script->closeBox();
+	}
+	_script->doubleClick(hit.id);
 }
 
 // -- Dialog box ---------------------------------------------------------------
