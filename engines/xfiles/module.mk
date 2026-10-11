@@ -3,10 +3,12 @@ MODULE := engines/xfiles
 MODULE_OBJS = \
 	captions.o \
 	console.o \
+	dialogbox.o \
 	discfiles.o \
 	metaengine.o \
 	movie.o \
 	neoaccess.o \
+	pictures.o \
 	script.o \
 	vcdata.o \
 	vcdump.o \

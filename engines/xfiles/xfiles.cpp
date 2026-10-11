@@ -70,7 +70,7 @@ static const int kMenuNewTop = 80, kMenuNewBottom = 118;
 static const int kMenuQuitTop = 385, kMenuQuitBottom = 420;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
-	_gameDescription(gameDesc), _data(nullptr), _script(nullptr), _video(nullptr), _viewId(0), _soundView(0) {
+	_gameDescription(gameDesc), _data(nullptr), _script(nullptr), _video(nullptr), _viewId(0), _soundView(0), _dialogBoxView(0) {
 	g_engine = this;
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 }
@@ -113,6 +113,8 @@ Common::Error XFilesEngine::run() {
 	delete cursor;
 	CursorMan.showMouse(true);
 	_captions.loadFonts();
+	if (!_dialogBox.load(*_data, _discFiles, _screen.format))
+		warning("Cannot load the dialog box pictures from x.pff");
 	syncSoundSettings();
 
 	_video = new Movie();
@@ -132,6 +134,8 @@ XFilesEngine::Input XFilesEngine::pollInput() {
 		if (event.type == Common::EVENT_LBUTTONDOWN) {
 			input.click = true;
 			input.pos = event.mouse;
+		} else if (event.type == Common::EVENT_MOUSEMOVE) {
+			_mouse = event.mouse;
 		} else if (event.type == Common::EVENT_KEYDOWN && event.kbd.keycode == Common::KEYCODE_ESCAPE) {
 			input.skip = true;
 		}
@@ -232,6 +236,7 @@ void XFilesEngine::runGame() {
 		_emotionIcons.push_back(icons[i].key);
 
 	_script->setHooks(this);
+	_script->setRandomSeed(g_system->getMillis());
 	_script->start();
 	while (!shouldQuit()) {
 		Input input = pollInput();
@@ -243,9 +248,11 @@ void XFilesEngine::runGame() {
 		} else {
 			syncView();
 			updateIcons();
+			updateDialogBox();
 			if (input.click)
 				handleClick(input.pos);
 			drawView();
+			_dialogBox.draw(_screen, _mouse);
 		}
 		_captions.drawCard(_screen);
 		present();
@@ -569,6 +576,17 @@ static bool containsPoint(const VCRect &r, const Common::Point &pos) {
 }
 
 void XFilesEngine::handleClick(const Common::Point &pos) {
+	if (_dialogBox.isOpen()) {
+		// A click outside the box closes it (assumed; DisplayDBox(0) also does)
+		uint32 topic = 0;
+		DialogBox::Hit hit = _dialogBox.click(pos, topic);
+		if (hit == DialogBox::kHitTopic)
+			askTopic(topic);
+		else if (hit != DialogBox::kHitInside)
+			_dialogBox.close();
+		return;
+	}
+
 	for (uint i = 0; i < _shownIcons.size(); i++) {
 		if (getIconRect(i).contains(pos)) {
 			uint32 id = _shownIcons[i];
@@ -599,7 +617,10 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 		VCCharView cv;
 		if (_script->isEnabled(ids[i]) && _data->getCharView(ids[i], cv) && containsPoint(cv.rect, pos)) {
 			debugC(1, kDebugScript, "-- click:%u (character view)", ids[i]);
+			// The view's triggers handle inventory items held over the
+			// character; with nothing in hand the exe opens the dialog box
 			_script->click(ids[i]);
+			openDialogBox(cv);
 			return;
 		}
 	}
@@ -614,6 +635,55 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 			return;
 		}
 	}
+}
+
+// -- Dialog box ---------------------------------------------------------------
+
+void XFilesEngine::openDialogBox(const VCCharView &charView) {
+	// DisplayDBox / XFiles.exe 0x481660: only for a character with topics
+	if (!charView.conversations)
+		return;
+	_dialogBox.open(charView.id, Common::Rect(charView.rect.left, charView.rect.top, charView.rect.right, charView.rect.bottom));
+	_dialogBoxView = _script->getView();
+	debugC(1, kDebugScript, "-- dialog box of #%u", charView.id);
+	updateDialogBox();
+}
+
+void XFilesEngine::updateDialogBox() {
+	if (!_dialogBox.isOpen())
+		return;
+	VCCharView charView;
+	if (_script->getView() != _dialogBoxView || !_script->isEnabled(_dialogBox.getCharView()) ||
+			!_data->getCharView(_dialogBox.getCharView(), charView)) {
+		_dialogBox.close();
+		return;
+	}
+	// Topics with a label that are enabled; those asked before also go
+	// into the history (the exe's rules for the history are not known yet)
+	Common::Array<uint32> ids;
+	_data->getMembers(charView.conversations, ids);
+	Common::Array<DialogBox::Topic> talk, history;
+	for (uint i = 0; i < ids.size(); i++) {
+		VCConversation c;
+		Common::Array<uint32> labels;
+		VCAsset label;
+		DialogBox::Topic topic;
+		topic.id = ids[i];
+		// The label is an asset without media; its name is the text
+		if (!_script->isEnabled(ids[i]) || !_data->getConversation(ids[i], c) || !c.label ||
+				!_data->getMembers(c.label, labels) || labels.empty() || !_data->getAsset(labels[0], label) ||
+				!_data->getName(label.name, topic.label))
+			continue;
+		talk.push_back(topic);
+		if (_script->getAskCount(ids[i]))
+			history.push_back(topic);
+	}
+	_dialogBox.setTopics(talk, history);
+}
+
+void XFilesEngine::askTopic(uint32 conversation) {
+	debugC(1, kDebugScript, "-- ask:%u", conversation);
+	_script->ask(conversation);
 }
 
 } // End of namespace XFiles

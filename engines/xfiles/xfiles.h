@@ -32,6 +32,7 @@
 
 #include "xfiles/captions.h"
 #include "xfiles/detection.h"
+#include "xfiles/dialogbox.h"
 #include "xfiles/discfiles.h"
 #include "xfiles/script.h"
 
@@ -123,6 +124,10 @@ private:
 	void updateIcons();
 	void drawView();
 	void handleClick(const Common::Point &pos);
+	void openDialogBox(const VCCharView &charView);
+	/** Close the box if its character left the view, and update its topics. */
+	void updateDialogBox();
+	void askTopic(uint32 conversation);
 	void drawCaptions(const Movie &movie, const Common::Point &pos);
 	void startVideoText(const VCAction &action, const Common::Array<int32> &args);
 	void registerPreferences(const VCAction &action);
@@ -149,6 +154,9 @@ private:
 	Script *_script;
 	Graphics::Surface _screen;
 	Captions _captions;
+	DialogBox _dialogBox;
+	uint32 _dialogBoxView;                ///< The view the box was opened in
+	Common::Point _mouse;
 	uint32 _prefVariables[kPrefCount];  ///< From RegPreferences
 
 	Movie *_video;                       ///< The play-once video on screen

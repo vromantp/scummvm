@@ -19,6 +19,7 @@
  *
  */
 
+#include "common/algorithm.h"
 #include "common/debug.h"
 #include "common/textconsole.h"
 
@@ -95,7 +96,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _timerSerial(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _timerSerial(0), _random(1), _node(0), _location(0), _viewPoint(0), _view(0) {
 	Common::Array<NeoEntry> entries;
 	data.getGam().getObjects(kClassVariable, entries);
 	for (uint i = 0; i < entries.size(); i++) {
@@ -500,31 +501,97 @@ void Script::expireTimer(uint n) {
 }
 
 void Script::ask(uint32 conversationId) {
-	// Assumed behaviour (not yet confirmed in the exe): the topic's Mouse Click triggers run, then Willmore's
-	// question and the character's answer play; a topic asked before plays its short atom.
+	// XFiles.exe 0x47d010, 0x4e9080, 0x4e9440: the topic's Mouse Click
+	// triggers run, Willmore asks the question, the character answers.
+	// Asked again, a character with stock replies may give the topic's
+	// atom, a stock reply before the answer, or (after four times) "What's
+	// the matter with you?" instead; one without plays atom and answer.
 	VCConversation c;
 	if (!_data.getConversation(conversationId, c)) {
 		warning("Script: #%u is not a conversation", conversationId);
 		return;
 	}
 	fire(conversationId, kEventMouseClick);
-	bool again = _asked.contains(conversationId);
-	_asked[conversationId] = true;
-	Common::Array<uint32> lists;
-	if (again && c.atom) {
-		lists.push_back(c.atom);
-	} else {
-		lists.push_back(c.question);
-		lists.push_back(c.answer);
+	uint count = ++_asked[conversationId];
+	playList(c.question);
+	if (count < 2) {
+		playList(c.answer);
+		return;
 	}
-	for (uint i = 0; i < lists.size(); i++) {
-		Common::Array<uint32> assets;
-		_data.getMembers(lists[i], assets);
-		for (uint j = 0; j < assets.size(); j++) {
-			if (isEnabled(assets[j]))
-				playAsset(assets[j], kModePlayOnce, nullptr);
+	uint32 stock[kStockAtomCount];
+	if (!getStockAtoms(conversationId, stock)) {
+		playList(c.atom);
+		playList(c.answer);
+		return;
+	}
+	// 0x4e9880
+	if (count >= 4 && stock[0]) {
+		int limit = count == 4 ? 6 : count == 5 ? 7 : count == 6 ? 8 : 9;
+		if (roll() < limit && stock[kStockWhatsTheMatter]) {
+			playStock(stock[kStockWhatsTheMatter]);
+			return;
 		}
 	}
+	if (c.atom && roll() < 9) {
+		playList(c.atom);
+		if (c.answer && roll() < 4)
+			playList(c.answer);
+		return;
+	}
+	// 0x495820
+	if ((stock[0] || stock[1]) && roll() < 4) {
+		playStock(stock[1]);
+		if (stock[kStockWhatsTheMatter] && count > 2 && roll() < 4)
+			playStock(stock[kStockWhatsTheMatter]);
+	}
+	playList(c.answer);
+}
+
+void Script::playList(uint32 listId) {
+	Common::Array<uint32> assets;
+	if (!listId || !_data.getMembers(listId, assets))
+		return;
+	for (uint i = 0; i < assets.size(); i++) {
+		if (isEnabled(assets[i]))
+			playAsset(assets[i], kModePlayOnce, nullptr);
+	}
+}
+
+void Script::playStock(uint32 assetId) {
+	if (assetId && isEnabled(assetId))
+		playAsset(assetId, kModePlayOnce, nullptr);
+}
+
+int Script::roll() {
+	// XFiles.exe 0x468df0; the exe seeds it from the clock
+	_random = _random * 0x41C64E6D + 0x3039;
+	return _random % 10 + 1;
+}
+
+bool Script::getStockAtoms(uint32 conversationId, uint32 (&atoms)[kStockAtomCount]) const {
+	// 0x43d3d0: the atoms of the first topic of the character asked, if it
+	// has no label. Text assets (a placeholder) leave their slot empty.
+	VCView view;
+	Common::Array<uint32> charViews;
+	if (!_data.getView(_view, view) || !_data.getMembers(view.characters, charViews))
+		return false;
+	for (uint i = 0; i < charViews.size(); i++) {
+		VCCharView charView;
+		Common::Array<uint32> topics;
+		if (!_data.getCharView(charViews[i], charView) || !_data.getMembers(charView.conversations, topics) ||
+				Common::find(topics.begin(), topics.end(), conversationId) == topics.end())
+			continue;
+		VCConversation first;
+		Common::Array<uint32> assets;
+		if (!_data.getConversation(topics[0], first) || first.label || !_data.getMembers(first.atom, assets))
+			return false;
+		for (uint j = 0; j < kStockAtomCount; j++) {
+			VCAsset asset;
+			atoms[j] = j < assets.size() && _data.getAsset(assets[j], asset) && !asset.files.empty() ? assets[j] : 0;
+		}
+		return true;
+	}
+	return false;
 }
 
 void Script::followNav(uint32 navId) {

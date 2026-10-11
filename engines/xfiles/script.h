@@ -72,6 +72,12 @@ public:
  */
 class Script {
 public:
+	/** A character's stock replies: the atoms of its topic without a label. */
+	enum {
+		kStockWhatsTheMatter = 2,   ///< "What's the matter with you?"
+		kStockAtomCount = 7
+	};
+
 	Script(const VCData &data);
 	virtual ~Script() {}
 
@@ -97,8 +103,14 @@ public:
 	void followNav(uint32 navId);
 	/** Follow the shortest path of enabled navs to a view in the current location. */
 	void goTo(uint32 viewId);
-	/** Ask a conversation topic: its Mouse Click, then the question and answer (or the short atom). */
+	/**
+	 * Ask a conversation topic of a character in the current view: its
+	 * Mouse Click, then the question and the answer. Asked again, the
+	 * character may give the topic's short atom or a stock reply instead.
+	 */
 	void ask(uint32 conversationId);
+	/** Seed the random numbers of ask(); the same seed gives the same replies. */
+	void setRandomSeed(uint32 seed) { _random = seed; }
 
 	uint32 getNode() const { return _node; }
 	uint32 getLocation() const { return _location; }
@@ -107,6 +119,8 @@ public:
 	/** Play-once videos; the first one is on screen. */
 	const Common::Array<uint32> &getVideoQueue() const { return _videoQueue; }
 	bool isEnabled(uint32 id) const;
+	/** How often a conversation topic was asked. */
+	uint getAskCount(uint32 id) const { return _asked.getValOrDefault(id, 0); }
 	int32 getVariable(uint32 id) const;
 	void setVariable(uint32 id, int32 value) { _variables[id] = value; }
 
@@ -140,6 +154,11 @@ private:
 	void callFunction(const VCAction &action, int event, const EventFields &fields, const LocalVariables &locals);
 
 	void playAsset(uint32 id, byte mode, const VCAction *sound3D);
+	void playList(uint32 listId);
+	void playStock(uint32 assetId);
+	/** A number from 1 to 10, as XFiles.exe draws them. */
+	int roll();
+	bool getStockAtoms(uint32 conversationId, uint32 (&atoms)[kStockAtomCount]) const;
 	void startVideo();
 	void enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view);
 	void showView();
@@ -150,7 +169,8 @@ private:
 	Common::HashMap<uint32, bool> _enabled;    ///< Objects without a VCEnabled are always enabled
 	Common::HashMap<uint, Timer> _timers;      ///< Running timers
 	uint32 _timerSerial;
-	Common::HashMap<uint32, bool> _asked;      ///< Conversations asked before
+	Common::HashMap<uint32, uint> _asked;      ///< How often each conversation was asked
+	uint32 _random;                            ///< State of the random numbers
 	Common::Array<uint32> _videoQueue;
 	uint32 _node, _location, _viewPoint, _view;
 };
