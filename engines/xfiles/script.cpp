@@ -96,7 +96,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _timerSerial(0), _random(1), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _timerSerial(0), _random(1), _box(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	Common::Array<NeoEntry> entries;
 	data.getGam().getObjects(kClassVariable, entries);
 	for (uint i = 0; i < entries.size(); i++) {
@@ -249,8 +249,12 @@ void Script::execute(const VCAction &a, int event, const EventFields &fields, Lo
 	case kActionEnable: {
 		uint32 target;
 		bool enabled;
-		if (_data.getEnabled(a.target, target, enabled) && target)
+		if (_data.getEnabled(a.target, target, enabled) && target) {
 			_enabled[target] = a.value != 0;
+			// A topic enabled while its box is open joins the box (0x476340)
+			if (a.value && _box && isBoxTopic(_box, target))
+				fire(target, kEventObjectActivation);
+		}
 		break;
 	}
 	case kActionAsset:
@@ -374,6 +378,7 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view) 
 	_location = location;
 	_viewPoint = viewPoint;
 	_view = view;
+	_box = 0;
 	log("  == enter " + getObjectLabel(_data, node) + " / " + getObjectLabel(_data, location) + " / " +
 		getObjectLabel(_data, viewPoint) + " / " + getObjectLabel(_data, view));
 	for (int i = first; i < 4; i++)
@@ -481,6 +486,7 @@ void Script::start() {
 }
 
 void Script::click(uint32 id) {
+	_box = 0; // a click outside the box closes it
 	if (!isEnabled(id))
 		log("  " + getObjectLabel(_data, id) + " is disabled");
 	else
@@ -500,18 +506,62 @@ void Script::expireTimer(uint n) {
 		fire(ids[i], kEventTimerExpiration, fields);
 }
 
+void Script::getBoxTopics(uint32 charViewId, Common::Array<uint32> &topics) const {
+	VCCharView charView;
+	if (_data.getCharView(charViewId, charView) && charView.conversations)
+		_data.getMembers(charView.conversations, topics);
+}
+
+bool Script::isBoxTopic(uint32 charViewId, uint32 conversationId) const {
+	Common::Array<uint32> topics;
+	getBoxTopics(charViewId, topics);
+	return Common::find(topics.begin(), topics.end(), conversationId) != topics.end();
+}
+
+void Script::openBox(uint32 charViewId) {
+	// XFiles.exe 0x4767a0: each enabled topic gets a runtime object listed
+	// in the box, whose activation (0x47d010) fires its Object Activation
+	// triggers and plays nothing.
+	_box = charViewId;
+	Common::Array<uint32> topics;
+	getBoxTopics(charViewId, topics);
+	for (uint i = 0; i < topics.size(); i++) {
+		if (isEnabled(topics[i]))
+			fire(topics[i], kEventObjectActivation);
+	}
+}
+
 void Script::ask(uint32 conversationId) {
-	// XFiles.exe 0x47d010, 0x4e9080, 0x4e9440: the topic's Mouse Click
-	// triggers run, Willmore asks the question, the character answers.
-	// Asked again, a character with stock replies may give the topic's
-	// atom, a stock reply before the answer, or (after four times) "What's
-	// the matter with you?" instead; one without plays atom and answer.
+	// XFiles.exe 0x46d0d0: a click on a topic in the box queues its
+	// playlist (0x4e9080), then fires its Mouse Click triggers.
+	if (!_box || !isBoxTopic(_box, conversationId)) {
+		VCView view;
+		Common::Array<uint32> charViews;
+		if (_data.getView(_view, view))
+			_data.getMembers(view.characters, charViews);
+		for (uint i = 0; i < charViews.size(); i++) {
+			if (isBoxTopic(charViews[i], conversationId)) {
+				openBox(charViews[i]);
+				break;
+			}
+		}
+	}
+	playTopic(conversationId, true);
+	fire(conversationId, kEventMouseClick);
+}
+
+void Script::playTopic(uint32 conversationId, bool inBox) {
+	// 0x4e9080, 0x4e9440: Willmore asks the question, the character
+	// answers. Asked again, a character with stock replies may give the
+	// topic's atom, a stock reply before the answer, or (after four times)
+	// "What's the matter with you?" instead; one without plays atom and
+	// answer. inBox is +0x144 of the topic's runtime object: set for a
+	// click in the box, clear for an item dropped on the character.
 	VCConversation c;
 	if (!_data.getConversation(conversationId, c)) {
 		warning("Script: #%u is not a conversation", conversationId);
 		return;
 	}
-	fire(conversationId, kEventMouseClick);
 	uint count = ++_asked[conversationId];
 	playList(c.question);
 	if (count < 2) {
@@ -524,12 +574,21 @@ void Script::ask(uint32 conversationId) {
 		playList(c.answer);
 		return;
 	}
-	// 0x4e9880
+	// 0x4e9880: from the box S0, sometimes followed by "What's the matter
+	// with you?"; otherwise that alone
 	if (count >= 4 && stock[0]) {
 		int limit = count == 4 ? 6 : count == 5 ? 7 : count == 6 ? 8 : 9;
-		if (roll() < limit && stock[kStockWhatsTheMatter]) {
-			playStock(stock[kStockWhatsTheMatter]);
-			return;
+		if (roll() < limit) {
+			if (inBox) {
+				playStock(stock[0]);
+				if (stock[kStockWhatsTheMatter] && roll() < 4)
+					playStock(stock[kStockWhatsTheMatter]);
+				return;
+			}
+			if (stock[kStockWhatsTheMatter]) {
+				playStock(stock[kStockWhatsTheMatter]);
+				return;
+			}
 		}
 	}
 	if (c.atom && roll() < 9) {
@@ -538,9 +597,14 @@ void Script::ask(uint32 conversationId) {
 			playList(c.answer);
 		return;
 	}
-	// 0x495820
+	// 0x495820: from the box S0 or S1, otherwise S1
 	if ((stock[0] || stock[1]) && roll() < 4) {
-		playStock(stock[1]);
+		if (!inBox)
+			playStock(stock[1]);
+		else if (stock[0] && stock[1])
+			playStock(roll() < 6 ? stock[0] : stock[1]);
+		else
+			playStock(stock[0] ? stock[0] : stock[1]);
 		if (stock[kStockWhatsTheMatter] && count > 2 && roll() < 4)
 			playStock(stock[kStockWhatsTheMatter]);
 	}

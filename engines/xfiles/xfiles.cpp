@@ -593,8 +593,10 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 		DialogBox::Hit hit = _dialogBox.click(pos, topic);
 		if (hit == DialogBox::kHitTopic)
 			askTopic(topic);
-		else if (hit != DialogBox::kHitInside)
+		else if (hit != DialogBox::kHitInside) {
 			_dialogBox.close();
+			_script->closeBox();
+		}
 		return;
 	}
 
@@ -657,6 +659,7 @@ void XFilesEngine::openDialogBox(const VCCharView &charView) {
 	_dialogBox.open(charView.id, Common::Rect(charView.rect.left, charView.rect.top, charView.rect.right, charView.rect.bottom));
 	_dialogBoxView = _script->getView();
 	debugC(1, kDebugScript, "-- dialog box of #%u", charView.id);
+	_script->openBox(charView.id);
 	updateDialogBox();
 }
 
@@ -667,6 +670,7 @@ void XFilesEngine::updateDialogBox() {
 	if (_script->getView() != _dialogBoxView || !_script->isEnabled(_dialogBox.getCharView()) ||
 			!_data->getCharView(_dialogBox.getCharView(), charView)) {
 		_dialogBox.close();
+		_script->closeBox();
 		return;
 	}
 	// Enabled topics with a label: Talk lists those not asked yet, History

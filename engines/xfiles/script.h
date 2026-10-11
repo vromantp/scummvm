@@ -104,9 +104,17 @@ public:
 	/** Follow the shortest path of enabled navs to a view in the current location. */
 	void goTo(uint32 viewId);
 	/**
-	 * Ask a conversation topic of a character in the current view: its
-	 * Mouse Click, then the question and the answer. Asked again, the
-	 * character may give the topic's short atom or a stock reply instead.
+	 * Open the conversation box of a character view: the Object Activation
+	 * of each of its enabled topics.
+	 */
+	void openBox(uint32 charViewId);
+	/** The conversation box was closed. */
+	void closeBox() { _box = 0; }
+	/**
+	 * Ask a conversation topic of a character in the current view, opening
+	 * its box if needed: the question and the answer, then the topic's
+	 * Mouse Click. Asked again, the character may give the topic's short
+	 * atom or a stock reply instead.
 	 */
 	void ask(uint32 conversationId);
 	/** Seed the random numbers of ask(); the same seed gives the same replies. */
@@ -158,7 +166,11 @@ private:
 	void playStock(uint32 assetId);
 	/** A number from 1 to 10, as XFiles.exe draws them. */
 	int roll();
+	void playTopic(uint32 conversationId, bool inBox);
 	bool getStockAtoms(uint32 conversationId, uint32 (&atoms)[kStockAtomCount]) const;
+	/** The topics of a character view, in box order. */
+	void getBoxTopics(uint32 charViewId, Common::Array<uint32> &topics) const;
+	bool isBoxTopic(uint32 charViewId, uint32 conversationId) const;
 	void startVideo();
 	void enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view);
 	void showView();
@@ -171,6 +183,7 @@ private:
 	uint32 _timerSerial;
 	Common::HashMap<uint32, uint> _asked;      ///< How often each conversation was asked
 	uint32 _random;                            ///< State of the random numbers
+	uint32 _box;                               ///< Character view whose conversation box is open, or 0
 	Common::Array<uint32> _videoQueue;
 	uint32 _node, _location, _viewPoint, _view;
 };
