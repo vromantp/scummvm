@@ -36,6 +36,10 @@
 #include "xfiles/discfiles.h"
 #include "xfiles/script.h"
 
+namespace Common {
+class WinResources;
+}
+
 namespace XFiles {
 
 class Movie;
@@ -156,6 +160,7 @@ private:
 	Captions _captions;
 	DialogBox _dialogBox;
 	uint32 _dialogBoxView;                ///< The view the box was opened in
+	Common::WinResources *_texts;         ///< XFilesT.dll: topic texts (string table)
 	Common::Point _mouse;
 	uint32 _prefVariables[kPrefCount];  ///< From RegPreferences
 

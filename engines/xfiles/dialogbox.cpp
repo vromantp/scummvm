@@ -47,10 +47,33 @@ enum {
 	kArrowH = 10,
 	// The small square at the top right; assumed to close the box
 	kCloseX = 233, kCloseY = 16, kCloseW = 13, kCloseH = 14,
-	// Not found in the exe yet: the topics' font, colours and spacing
+	// Topics (reference run of XFiles.exe, 2026-10-11): Courier New with
+	// lfHeight -12, drawn with DrawTextA from the top of each 22-pixel row
 	kFontSize = 12,
-	kRowHeight = 15
+	kRowHeight = 22
 };
+
+// Draw src over dst at 60% opacity, skipping the transparent blue. The exe
+// draws the black History patch this way: in a reference run the tab's text
+// shows at 40% of its brightness until a topic has been asked.
+static void drawBlended(Graphics::Surface &dst, const Graphics::Surface &src, int x, int y) {
+	uint32 key = src.format.RGBToColor(0, 0, 255);
+	for (int sy = 0; sy < src.h; sy++) {
+		int dy = y + sy;
+		if (dy < 0 || dy >= dst.h)
+			continue;
+		for (int sx = 0; sx < src.w; sx++) {
+			int dx = x + sx;
+			uint32 color = src.getPixel(sx, sy);
+			if (dx < 0 || dx >= dst.w || color == key)
+				continue;
+			byte sr, sg, sb, dr, dg, db;
+			src.format.colorToRGB(color, sr, sg, sb);
+			dst.format.colorToRGB(dst.getPixel(dx, dy), dr, dg, db);
+			dst.setPixel(dx, dy, dst.format.RGBToColor((dr * 2 + sr * 3) / 5, (dg * 2 + sg * 3) / 5, (db * 2 + sb * 3) / 5));
+		}
+	}
+}
 
 DialogBox::DialogBox() : _font(nullptr), _charView(0), _historyTab(false), _scroll(0) {
 	for (uint i = 0; i < kPicCount; i++)
@@ -73,8 +96,8 @@ bool DialogBox::load(const VCData &data, const DiscFiles &files, const Graphics:
 			return false;
 	}
 #ifdef USE_FREETYPE2
-	// Arial's metrics, as for the captions; the exe's font for the topics is not known yet
-	_font = Graphics::loadTTFFontFromArchive("LiberationSans-Regular.ttf", kFontSize, Graphics::kTTFSizeModeCharacter);
+	// Courier New's metrics
+	_font = Graphics::loadTTFFontFromArchive("LiberationMono-Regular.ttf", kFontSize, Graphics::kTTFSizeModeCharacter);
 #endif
 	if (!_font)
 		warning("DialogBox: cannot load the font from fonts.dat");
@@ -169,6 +192,9 @@ DialogBox::Hit DialogBox::click(const Common::Point &pos, uint32 &topic) {
 		uint row = _scroll + (pos.y - _pos.y - kListY) / kRowHeight;
 		if (row < getTopics().size() && row < _scroll + getVisibleRows()) {
 			topic = getTopics()[row].id;
+			// The box comes back on the Talk tab, also after a topic of the History
+			_historyTab = false;
+			_scroll = 0;
 			return kHitTopic;
 		}
 	}
@@ -180,7 +206,7 @@ void DialogBox::draw(Graphics::Surface &dst, const Common::Point &mouse) const {
 		return;
 	drawKeyed(dst, *_pictures[_historyTab ? kPicHistory : kPicTalk], _pos.x, _pos.y);
 	if (_history.empty())
-		drawKeyed(dst, *_pictures[kPicNoHistory], _pos.x + kHistoryTabX, _pos.y + kTabY);
+		drawBlended(dst, *_pictures[kPicNoHistory], _pos.x + kHistoryTabX, _pos.y + kTabY);
 
 	if (getMaxScroll()) {
 		const Graphics::Surface *bar = _pictures[kPicScrollBar];
@@ -194,12 +220,12 @@ void DialogBox::draw(Graphics::Surface &dst, const Common::Point &mouse) const {
 	if (!_font)
 		return;
 	const Common::Array<Topic> &topics = getTopics();
-	uint32 normal = dst.format.RGBToColor(191, 191, 191);
-	uint32 hover = dst.format.RGBToColor(255, 255, 255);
+	// SetTextColor values of the exe: Talk grey, History blue, lighter under the mouse
+	uint32 normal = _historyTab ? dst.format.RGBToColor(46, 107, 140) : dst.format.RGBToColor(205, 205, 205);
+	uint32 hover = _historyTab ? dst.format.RGBToColor(65, 140, 175) : dst.format.RGBToColor(255, 255, 255);
 	for (uint i = _scroll; i < topics.size() && i < _scroll + getVisibleRows(); i++) {
 		Common::Rect row = getRect(kListX, kListY + (i - _scroll) * kRowHeight, kListW, kRowHeight);
-		int y = row.top + (kRowHeight - _font->getFontHeight()) / 2;
-		_font->drawString(&dst, topics[i].label, row.left, y, row.width(), row.contains(mouse) ? hover : normal,
+		_font->drawString(&dst, topics[i].label, row.left, row.top, row.width(), row.contains(mouse) ? hover : normal,
 			Graphics::kTextAlignLeft, 0, true);
 	}
 }

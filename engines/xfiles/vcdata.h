@@ -375,6 +375,11 @@ public:
 	bool getAction(uint32 id, VCAction &action) const;
 	bool getAsset(uint32 id, VCAsset &asset) const;
 	bool getText(uint32 id, Common::U32String &text) const;
+	/**
+	 * A media-less asset that names a Windows resource: its blob holds the
+	 * resource type and ID as numbers ("6", "1" = string 1 of XFilesT.dll).
+	 */
+	bool getResourceRef(uint32 id, uint32 &type, uint32 &resource) const;
 	bool getVariable(uint32 id, VCVariable &variable) const;
 	/** The .hdb object a VCEnabled (.gam) switches, and its initial state. */
 	bool getEnabled(uint32 id, uint32 &target, bool &enabled) const;

@@ -23,6 +23,7 @@
 #include "common/debug-channels.h"
 #include "common/events.h"
 #include "common/file.h"
+#include "common/formats/winexe.h"
 #include "common/system.h"
 #include "engines/util.h"
 #include "graphics/cursorman.h"
@@ -70,7 +71,8 @@ static const int kMenuNewTop = 80, kMenuNewBottom = 118;
 static const int kMenuQuitTop = 385, kMenuQuitBottom = 420;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
-	_gameDescription(gameDesc), _data(nullptr), _script(nullptr), _video(nullptr), _viewId(0), _soundView(0), _dialogBoxView(0) {
+	_gameDescription(gameDesc), _data(nullptr), _script(nullptr), _video(nullptr), _viewId(0), _soundView(0), _dialogBoxView(0),
+	_texts(nullptr) {
 	g_engine = this;
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 }
@@ -81,6 +83,7 @@ XFilesEngine::~XFilesEngine() {
 	for (Common::HashMap<uint32, Movie *>::iterator it = _iconMovies.begin(); it != _iconMovies.end(); ++it)
 		delete it->_value;
 	delete _video;
+	delete _texts;
 	delete _script;
 	delete _data;
 	_screen.free();
@@ -115,6 +118,14 @@ Common::Error XFilesEngine::run() {
 	_captions.loadFonts();
 	if (!_dialogBox.load(*_data, _discFiles, _screen.format))
 		warning("Cannot load the dialog box pictures from x.pff");
+	// The language DLL with the topic texts (the exe loads it with LoadLibrary)
+	Common::SeekableReadStream *texts = _discFiles.openFile(0, "XFilesT.dll");
+	if (!texts)
+		texts = _discFiles.openFile(1, "XFilesT.dll");
+	if (texts)
+		_texts = Common::WinResources::createFromEXE(texts);
+	if (!_texts)
+		warning("Cannot load XFilesT.dll; topics show their authoring names");
 	syncSoundSettings();
 
 	_video = new Movie();
@@ -658,8 +669,8 @@ void XFilesEngine::updateDialogBox() {
 		_dialogBox.close();
 		return;
 	}
-	// Topics with a label that are enabled; those asked before also go
-	// into the history (the exe's rules for the history are not known yet)
+	// Enabled topics with a label: Talk lists those not asked yet, History
+	// those asked (seen in a reference run of XFiles.exe)
 	Common::Array<uint32> ids;
 	_data->getMembers(charView.conversations, ids);
 	Common::Array<DialogBox::Topic> talk, history;
@@ -669,14 +680,22 @@ void XFilesEngine::updateDialogBox() {
 		VCAsset label;
 		DialogBox::Topic topic;
 		topic.id = ids[i];
-		// The label is an asset without media; its name is the text
+		// The label is an asset without media naming a string of XFilesT.dll
+		// (RT_STRING = 6); its authoring name is an older wording
 		if (!_script->isEnabled(ids[i]) || !_data->getConversation(ids[i], c) || !c.label ||
 				!_data->getMembers(c.label, labels) || labels.empty() || !_data->getAsset(labels[0], label) ||
 				!_data->getName(label.name, topic.label))
 			continue;
-		talk.push_back(topic);
+		uint32 type, string;
+		if (_texts && _data->getResourceRef(labels[0], type, string) && type == 6) {
+			Common::String text = _texts->loadString(string);
+			if (!text.empty())
+				topic.label = Common::U32String(text, Common::kWindows1252);
+		}
 		if (_script->getAskCount(ids[i]))
 			history.push_back(topic);
+		else
+			talk.push_back(topic);
 	}
 	_dialogBox.setTopics(talk, history);
 }

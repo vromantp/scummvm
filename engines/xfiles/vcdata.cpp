@@ -512,6 +512,24 @@ bool VCData::getText(uint32 id, Common::U32String &text) const {
 	return true;
 }
 
+bool VCData::getResourceRef(uint32 id, uint32 &type, uint32 &resource) const {
+	uint32 m;
+	if (!getObject(id, kClassAssetRef, m) || (_hdb.readByte(m + 22) & kAssetFile))
+		return false;
+	uint32 ptr = _hdb.readUint32(m + 6);
+	uint32 length = _hdb.readUint32(m + 10);
+	if (!length || ptr > _hdb.getSize() || _hdb.getSize() - ptr < length)
+		return false;
+	MediaBlobReader r(_hdb.getData() + ptr, length);
+	int32 t = r.readNumber();
+	int32 n = r.readNumber();
+	if (!r._ok || t <= 0 || n < 0)
+		return false;
+	type = t;
+	resource = n;
+	return true;
+}
+
 // -- .gam objects -------------------------------------------------------------
 
 bool VCData::getVariable(uint32 id, VCVariable &variable) const {
