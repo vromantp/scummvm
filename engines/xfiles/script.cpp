@@ -250,7 +250,18 @@ void Script::execute(const VCAction &a, int event, const EventFields &fields, Lo
 		uint32 target;
 		bool enabled;
 		if (_data.getEnabled(a.target, target, enabled) && target) {
+			bool was = isEnabled(target);
 			_enabled[target] = a.value != 0;
+			// An evidence icon gets its object when it is enabled (0x4201a0),
+			// firing its Object Activation; disabling removes its kit icon too
+			// (0x4a1940)
+			if (_data.getClassOf(target) == kClassEvidenceIcon) {
+				Common::Array<uint32>::iterator it = Common::find(_kit.begin(), _kit.end(), target);
+				if (a.value && !was)
+					fire(target, kEventObjectActivation);
+				else if (!a.value && it != _kit.end())
+					_kit.erase(it);
+			}
 			// A topic enabled while its box is open joins the box (0x476340)
 			if (a.value && _box && isBoxTopic(_box, target))
 				fire(target, kEventObjectActivation);
@@ -310,9 +321,22 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 		runActions(actions, event, fields);
 	} else {
 		log("      call " + describeAction(_data, a.id, event, false));
+		if (a.function == "EnableKitIcon" && !args.empty())
+			enableKitIcon(args[0]);
 		if (_hooks)
 			_hooks->callFunction(a, args);
 	}
+}
+
+void Script::enableKitIcon(uint32 id) {
+	// XFiles.exe 0x4effd0: enable the evidence icon and give it an object in
+	// the kit, whose activation fires its Object Activation
+	if (_data.getClassOf(id) != kClassEvidenceIcon)
+		return;
+	_enabled[id] = true;
+	if (Common::find(_kit.begin(), _kit.end(), id) == _kit.end())
+		_kit.push_back(id);
+	fire(id, kEventObjectActivation);
 }
 
 // -- Media --------------------------------------------------------------------
@@ -504,6 +528,11 @@ void Script::doubleClick(uint32 id) {
 		log("  " + getObjectLabel(_data, id) + " is disabled");
 	else
 		fire(id, kEventMouseDoubleClick);
+}
+
+void Script::roll(uint32 id, bool into) {
+	if (isEnabled(id))
+		fire(id, into ? kEventRollInto : kEventRollOutOf);
 }
 
 void Script::expireTimer(uint n) {
@@ -804,6 +833,8 @@ void Script::step(const Common::String &s) {
 		click(id);
 	else if (kind == "dclick")
 		doubleClick(id);
+	else if (kind == "rollin" || kind == "rollout")
+		roll(id, kind == "rollin");
 	else if (kind == "timer")
 		expireTimer(id);
 	else if (kind == "ask")

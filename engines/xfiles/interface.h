@@ -25,9 +25,15 @@
 #include "common/array.h"
 #include "common/hashmap.h"
 #include "common/rect.h"
+#include "common/ustr.h"
 #include "graphics/pixelformat.h"
 
+namespace Common {
+class WinResources;
+}
+
 namespace Graphics {
+class Font;
 struct Surface;
 }
 
@@ -46,7 +52,9 @@ class VCData;
  * Icons follow the enable flags: an enabled icon is shown (emotion and
  * action icons until one of their kind is clicked). Each kind is placed
  * in a pane with a start point, a spacing and a direction (XFiles.exe
- * 0x4373e0, 0x487060).
+ * 0x4373e0, 0x487060). Evidence shows in the evidence kit: a column of
+ * icons above the kit's inventory icon while the kit is open
+ * (EvKit_Open, 0x5188e0).
  */
 class Interface {
 public:
@@ -55,6 +63,7 @@ public:
 		kHitInventory,   ///< VCInventory icon
 		kHitEmotion,     ///< VCEmotionIcon
 		kHitAction,      ///< VCActionIcon
+		kHitEvidence,    ///< VCEvidenceIcon in the open evidence kit
 		kHitItem         ///< VCInterfaceItem of a shown layout
 	};
 
@@ -67,14 +76,17 @@ public:
 	~Interface();
 
 	void setFormat(const Graphics::PixelFormat &format) { _format = format; }
+	/** Load the rollover text font; the texts come from XFilesT.dll (may be nullptr). */
+	void init(Common::WinResources *texts);
 
 	/**
 	 * Follow the script: icons of enabled objects, the shown layouts' items.
 	 * captions: the closed-captioning preference (moves the panes);
 	 * hiddenBar: the inventory preference is "hide", so the bar only opens
-	 * while the mouse is over it.
+	 * while the mouse is over it; rolloverText: the preference that shows
+	 * an icon's text below it while the mouse is over it.
 	 */
-	void update(const Script &script, const Common::Point &mouse, bool captions, bool hiddenBar);
+	void update(const Script &script, const Common::Point &mouse, bool captions, bool hiddenBar, bool rolloverText);
 	void draw(Graphics::Surface &dst) const;
 
 	/** What is under the mouse: layout items first, then icons. */
@@ -84,7 +96,20 @@ public:
 	/** The mouse moved into the inventory bar during the last update(). */
 	bool hasEnteredBar() const { return _enteredBar; }
 	/** Whether an icon of a VCInventory is in the bar. */
-	bool hasInventoryIcon(uint32 id) const;
+	bool hasInventoryIcon(uint32 id) const { return getInventoryRect(id, nullptr); }
+	/** Where the icon of a VCInventory is; false if it has none. */
+	bool getInventoryRect(uint32 id, Common::Rect *rect) const;
+
+	/** Open the evidence kit above an inventory icon. */
+	void openKit(const Common::Rect &from);
+	void closeKit();
+	bool isKitOpen() const { return _kitOpen; }
+	/** The mouse is over the open kit or the icon it was opened from. */
+	bool isMouseInKit() const;
+	/** DispEvIcons: while the evidence row is shown, the kit shows no icons. */
+	void setEvidenceRowShown(bool shown);
+	/** Close the bar until the mouse leaves it (EvKitIconClick in hidden-bar mode). */
+	void closeBar() { _barClosed = true; }
 
 	/** Emotion icons go away until disabled and enabled again (a click on one, or a timer). */
 	void spendEmotionIcons();
@@ -128,6 +153,7 @@ private:
 		uint32 id;
 		Graphic *graphic;
 		Graphic *rollover;   ///< Shown while the mouse is over the icon, or nullptr
+		Common::U32String text;  ///< Rollover text
 		Common::Rect rect;
 	};
 
@@ -141,11 +167,16 @@ private:
 	/** Load the graphic of the first asset of a VCAssetRefList, nullptr if none opens. */
 	Graphic *loadGraphic(uint32 assetList) const;
 	void syncIcons(const Script &script, uint32 classId, Common::Array<Icon> &icons, Common::HashMap<uint32, bool> *spent);
+	void syncKit(const Script &script);
+	Icon makeIcon(uint32 id) const;
+	void placeKit();
+	Common::Rect getKitArea() const;
 	void freeIcons(Common::Array<Icon> &icons);
 	void placeIcons(Common::Array<Icon> &icons, Pane pane, bool captions);
 	void syncItems(const Script &script);
 	void freeItems();
 	void drawIcons(Graphics::Surface &dst, const Common::Array<Icon> &icons) const;
+	void drawRolloverText(Graphics::Surface &dst, const Common::Array<Icon> &icons) const;
 	static void blit(Graphics::Surface &dst, const Graphics::Surface &src, int x, int y);
 
 	const VCData &_data;
@@ -153,6 +184,14 @@ private:
 	Graphics::PixelFormat _format;
 	Common::Array<uint32> _classOrder[3];         ///< Every icon of a class, in database order
 	Common::Array<Icon> _inventory, _emotions, _actions;
+	Common::Array<Icon> _kit;                     ///< Evidence icons in the kit
+	bool _kitOpen;
+	Common::Rect _kitFrom;                        ///< The inventory icon the kit opened from
+	bool _evidenceRowShown;
+	Common::WinResources *_texts;
+	Graphics::Font *_font;
+	bool _rolloverText;
+	bool _barClosed;
 	Common::HashMap<uint32, bool> _spentEmotions, _spentActions;
 	Common::Array<uint32> _layouts;               ///< Shown layouts whose items are loaded
 	Common::Array<uint32> _itemIds;               ///< Their items, in script order

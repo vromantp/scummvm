@@ -184,6 +184,7 @@ private:
 	uint32 _lastClickTime;               ///< For double-clicks
 	Common::Point _lastClickPos;
 	Interface::Hit _lastClickHit;
+	Interface::Hit _hover;               ///< What the mouse is over, for Roll Into and Roll Out Of
 	Common::HashMap<uint, TimerState> _timerStates;
 	Common::HashMap<uint32, Sound> _sounds;
 	uint32 _soundView;                    ///< The view the 3D sounds were placed for

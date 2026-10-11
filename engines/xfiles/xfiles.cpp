@@ -76,6 +76,7 @@ XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : E
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	_lastClickHit.kind = Interface::kHitNone;
 	_lastClickHit.id = 0;
+	_hover = _lastClickHit;
 }
 
 XFilesEngine::~XFilesEngine() {
@@ -128,6 +129,7 @@ Common::Error XFilesEngine::run() {
 		_texts = Common::WinResources::createFromEXE(texts);
 	if (!_texts)
 		warning("Cannot load XFilesT.dll; topics show their authoring names");
+	_interface->init(_texts);
 	syncSoundSettings();
 
 	_video = new Movie();
@@ -306,6 +308,23 @@ void XFilesEngine::callInventoryFunction(const VCAction &action, const Common::A
 		// 0x50a570: 0 puts back any item
 		if (args[0] == 0 || (uint32)args[0] == _interface->getHeld())
 			putBack();
+	} else if (name == "RollOnEvKit" && args.size() >= 2) {
+		// 0x4efda0: nothing while that item is in hand; open the kit above
+		// the item's icon, or close it once the mouse has left it
+		Common::Rect from;
+		if ((uint32)args[0] == _interface->getHeld())
+			return;
+		if (args[1] && _interface->getInventoryRect(args[0], &from))
+			_interface->openKit(from);
+		else if (!args[1] && !_interface->isMouseInKit())
+			_interface->closeKit();
+	} else if (name == "EvKitIconClick") {
+		// 0x4efc90: the kit is taken in hand; the hidden bar closes
+		_interface->closeKit();
+		if (_prefVariables[kPrefInventory] && _script->getVariable(_prefVariables[kPrefInventory]) == 'H')
+			_interface->closeBar();
+	} else if (name == "DispEvIcons" && args.size() >= 1) {
+		_interface->setEvidenceRowShown(args[0] != 0);
 	} else if (name == "AddIFLExcept" && args.size() >= 1) {
 		_interface->addModalException(args[0]);
 	} else if (name == "ClearIFLExcept") {
@@ -560,7 +579,18 @@ void XFilesEngine::closeView() {
 
 void XFilesEngine::updateInterface() {
 	bool hiddenBar = _prefVariables[kPrefInventory] && _script->getVariable(_prefVariables[kPrefInventory]) == 'H';
-	_interface->update(*_script, _mouse, getPreference(kPrefClosedCaptioning), hiddenBar);
+	_interface->update(*_script, _mouse, getPreference(kPrefClosedCaptioning), hiddenBar, getPreference(kPrefRolloverText));
+	// Roll Into and Roll Out Of for the icons and layout items under the
+	// mouse (the evidence kit icon opens the kit from these)
+	Interface::Hit hover = _interface->hitTest(_mouse);
+	if (hover.kind != _hover.kind || hover.id != _hover.id) {
+		Interface::Hit old = _hover;
+		_hover = hover;
+		if (old.kind != Interface::kHitNone)
+			_script->roll(old.id, false);
+		if (hover.kind != Interface::kHitNone)
+			_script->roll(hover.id, true);
+	}
 	// The item in hand goes back when the mouse moves into the bar
 	// (InvBar_OnRoll 0x468330) or when it is disabled (0x436c20)
 	if (isHolding() && (_interface->hasEnteredBar() || !_script->isEnabled(_interface->getHeld())))
@@ -664,6 +694,10 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 		_interface->spendActionIcons();
 		_script->click(hit.id);
 		return;
+	case Interface::kHitEvidence:
+		debugC(1, kDebugScript, "-- click:%u (evidence kit)", hit.id);
+		_script->click(hit.id);
+		return;
 	default:
 		break;
 	}
@@ -712,10 +746,13 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 
 void XFilesEngine::handleDoubleClick(const Interface::Hit &hit) {
 	debugC(1, kDebugScript, "-- dclick:%u", hit.id);
-	if (hit.kind == Interface::kHitInventory && _dialogBox.isOpen()) {
-		// InvIcon_OnDoubleClick (0x4a7ce0) also closes the box
-		_dialogBox.close();
-		_script->closeBox();
+	if (hit.kind == Interface::kHitInventory) {
+		// InvIcon_OnDoubleClick (0x4a7ce0) also closes the box and the kit
+		if (_dialogBox.isOpen()) {
+			_dialogBox.close();
+			_script->closeBox();
+		}
+		_interface->closeKit();
 	}
 	_script->doubleClick(hit.id);
 }

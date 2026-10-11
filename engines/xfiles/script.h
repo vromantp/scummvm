@@ -99,6 +99,8 @@ public:
 	void click(uint32 id);
 	/** Mouse Double-Click on an object, if it is enabled. */
 	void doubleClick(uint32 id);
+	/** The mouse moved onto (Roll Into) or off (Roll Out Of) an object, if it is enabled. */
+	void roll(uint32 id, bool into);
 	/** Timer n expired: fire Timer Expiration on the scene levels and the title. */
 	void expireTimer(uint n);
 	/** Follow a VCNav to its view, in the current location. */
@@ -147,6 +149,8 @@ public:
 	};
 	/** Shown layouts, oldest first. */
 	const Common::Array<Layout> &getLayouts() const { return _layouts; }
+	/** Evidence icons in the evidence kit (EnableKitIcon), in order. */
+	const Common::Array<uint32> &getKitIcons() const { return _kit; }
 
 	/**
 	 * What the current view shows when no video plays: its enabled media
@@ -184,6 +188,7 @@ private:
 	void showLayout(uint32 layoutId);
 	void hideLayout(uint32 layoutId);
 	void updateLayoutItem(uint32 itemId, bool enabled);
+	void enableKitIcon(uint32 id);
 	void startVideo();
 	void enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view);
 	void showView();
@@ -198,6 +203,7 @@ private:
 	uint32 _random;                            ///< State of the random numbers
 	uint32 _box;                               ///< Character view whose conversation box is open, or 0
 	Common::Array<Layout> _layouts;
+	Common::Array<uint32> _kit;
 	Common::Array<uint32> _videoQueue;
 	uint32 _node, _location, _viewPoint, _view;
 };
