@@ -281,7 +281,7 @@ void Script::execute(const VCAction &a, int event, const EventFields &fields, Lo
 		enter(a.path[1], a.path[2], a.path[3], a.path[0]);
 		break;
 	case kActionInterface:
-		log(Common::String(a.mode ? "      show" : "      hide") + " interface " + getObjectLabel(_data, a.layout));
+		log(Common::String(a.mode ? "      hide" : "      show") + " interface " + getObjectLabel(_data, a.layout));
 		break;
 	case kActionFunction:
 		callFunction(a, event, fields, locals);

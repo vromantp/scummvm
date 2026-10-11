@@ -152,7 +152,7 @@ struct VCAction {
 
 	VCExpression statement;   ///< kActionStatement
 	uint32 assetList;         ///< kActionAsset, kActionSound3D
-	byte mode;                ///< Asset mode (kActionAsset, kActionSound3D), display flag (kActionInterface)
+	byte mode;                ///< Asset mode (kActionAsset, kActionSound3D), 0 = display, 1 = unshow (kActionInterface)
 	int16 x, y;               ///< kActionSound3D position
 	uint32 ms;                ///< kActionTimer
 	byte timer;

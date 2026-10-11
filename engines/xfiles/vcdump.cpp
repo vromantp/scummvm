@@ -221,7 +221,7 @@ Common::String describeAction(const VCData &data, uint32 id, int event, bool wit
 			Common::String::format(" at (%d, %d)", a.x, a.y);
 		break;
 	case kActionInterface:
-		text += (a.mode ? "display " : "unshow ") + getObjectLabel(data, a.layout);
+		text += (a.mode ? "unshow " : "display ") + getObjectLabel(data, a.layout);
 		break;
 	case kActionTimer:
 		text += Common::String::format("timer %u ", a.timer) + tableName(kTimerCommands, a.command);
