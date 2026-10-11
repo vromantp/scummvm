@@ -61,6 +61,9 @@ static const uint32 kNonModalLayouts[] = {
 	60115, 62952, 81530, 72504, 57082, 84328, 84370, 58553, 32600, 32660, 61792
 };
 
+// Layouts the activation itself exempts (0x42b250), whatever the list holds
+static const uint32 kAlwaysNonModalLayouts[] = { 49738, 49781, 49783, 49785, 72933, 50460 };
+
 // -- Graphic ------------------------------------------------------------------
 
 Interface::Graphic::Graphic() : _picture(nullptr), _movie(nullptr) {
@@ -286,7 +289,9 @@ void Interface::freeItems() {
 
 bool Interface::isModal() const {
 	for (uint i = 0; i < _layouts.size(); i++) {
-		if (Common::find(_modalExceptions.begin(), _modalExceptions.end(), _layouts[i]) == _modalExceptions.end())
+		const uint32 *always = kAlwaysNonModalLayouts + ARRAYSIZE(kAlwaysNonModalLayouts);
+		if (Common::find(_modalExceptions.begin(), _modalExceptions.end(), _layouts[i]) == _modalExceptions.end() &&
+				Common::find(kAlwaysNonModalLayouts, always, _layouts[i]) == always)
 			return true;
 	}
 	return false;
