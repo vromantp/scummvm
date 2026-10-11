@@ -785,9 +785,10 @@ void Script::beforeAnswer() {
 }
 
 void Script::queueViewLoop() {
-	// 0x4ea320: the clip playing in the view, if it loops, for 750 ms
-	// (0x5049c0 sets up its player; the segment it picks is not read, so
-	// this plays the loop from its start)
+	// 0x4ea320: the clip playing in the view, if it loops; 0x5049c0 sets
+	// its segment from the clip's start for 750 ms, or less if the clip is
+	// shorter (Movie plays from the start of the asset's range and stops at
+	// its end)
 	uint32 id = getViewLoop();
 	if (!id)
 		return;
