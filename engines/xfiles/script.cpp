@@ -330,7 +330,14 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 		_data.getMembers(args[1], actions);
 		runActions(actions, event, fields);
 	} else {
-		log("      call " + describeAction(_data, a.id, event, false));
+		// The values of its variable arguments follow, as a reference run
+		// logs them
+		Common::String values;
+		for (uint i = 0; i < a.args.size(); i++) {
+			if (a.args[i].kind == kOperandVariable)
+				values += Common::String::format("%s%d", values.empty() ? "" : ", ", args[i]);
+		}
+		log("      call " + describeAction(_data, a.id, event, false) + (values.empty() ? "" : " [" + values + "]"));
 		if (a.function == "EnableKitIcon" && !args.empty())
 			enableKitIcon(args[0]);
 		if (_hooks)
