@@ -410,11 +410,11 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view) 
 	int first = 0;
 	while (first < 4 && oldPath[first] == newPath[first])
 		first++;
-	if (first < 4)
-		deactivateViewObjects();
 	for (int i = 3; i >= first; i--) {
 		if (oldPath[i])
 			fire(oldPath[i], kEventObjectDeactivation);
+		if (i == 3)
+			deactivateViewObjects();
 	}
 	_node = node;
 	_location = location;
@@ -433,7 +433,8 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view) 
 void Script::activateViewObjects() {
 	// XFiles.exe activates, after the view, the asset it shows and its
 	// enabled character views, then (after the transition) its enabled navs
-	// and explorables (reference run, 2026-10-12)
+	// and explorables (reference run, 2026-10-12); the view's activation
+	// creates them (0x4402e0)
 	VCView v;
 	if (!_data.getView(_view, v))
 		return;
@@ -456,10 +457,17 @@ void Script::activateViewObjects() {
 }
 
 void Script::deactivateViewObjects() {
+	// After its own triggers, the view deactivates its navs, character views
+	// and explorables (0x438770); the asset it showed is left alone
 	Common::Array<uint32> ids = _viewObjects;
 	_viewObjects.clear();
-	for (uint i = ids.size(); i-- > 0;)
-		fire(ids[i], kEventObjectDeactivation);
+	const uint32 kinds[3] = { kClassNav, kClassCharView, kClassExplorable };
+	for (int i = 0; i < 3; i++) {
+		for (uint j = 0; j < ids.size(); j++) {
+			if (_data.getClassOf(ids[j]) == kinds[i])
+				fire(ids[j], kEventObjectDeactivation);
+		}
+	}
 }
 
 bool Script::isInView(uint32 id) const {
