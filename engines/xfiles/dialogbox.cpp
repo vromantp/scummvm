@@ -47,10 +47,12 @@ enum {
 	kArrowH = 10,
 	// The small square at the top right; assumed to close the box
 	kCloseX = 233, kCloseY = 16, kCloseW = 13, kCloseH = 14,
-	// Topics (reference run of XFiles.exe, 2026-10-11): Courier New with
-	// lfHeight -12, drawn with DrawTextA from the top of each 22-pixel row
+	// Topics (reference runs of XFiles.exe, 2026-10-11/12): Courier New with
+	// lfHeight -12 (15-pixel lines), drawn with DrawTextA's word break at the
+	// list's width, each 7 pixels below the one before, clipped to the list
 	kFontSize = 12,
-	kRowHeight = 22
+	kLineHeight = 15,
+	kRowGap = 7
 };
 
 // Draw src over dst at 60% opacity, skipping the transparent blue. The exe
@@ -131,13 +133,51 @@ void DialogBox::setTopics(const Common::Array<Topic> &talk, const Common::Array<
 	_scroll = MIN(_scroll, getMaxScroll());
 }
 
+int DialogBox::getTextHeight(const Topic &topic) const {
+	Common::Array<Common::U32String> lines;
+	if (_font)
+		_font->wordWrapText(topic.label, kListW, lines);
+	return MAX<int>(1, lines.size()) * kLineHeight;
+}
+
+int DialogBox::getTopicAt(int y) const {
+	const Common::Array<Topic> &topics = getTopics();
+	int top = 0;
+	for (uint i = _scroll; i < topics.size() && top < kListH; i++) {
+		int bottom = top + getTextHeight(topics[i]) + kRowGap;
+		if (y >= top && y < bottom)
+			return i;
+		top = bottom;
+	}
+	return -1;
+}
+
 uint DialogBox::getVisibleRows() const {
-	return kListH / kRowHeight;
+	// The topics whose text fits in the list from the scroll position, for
+	// paging (at least one)
+	const Common::Array<Topic> &topics = getTopics();
+	uint rows = 0;
+	int top = 0;
+	for (uint i = _scroll; i < topics.size(); i++) {
+		if (top + getTextHeight(topics[i]) > kListH)
+			break;
+		rows++;
+		top += getTextHeight(topics[i]) + kRowGap;
+	}
+	return MAX<uint>(rows, 1);
 }
 
 uint DialogBox::getMaxScroll() const {
-	uint rows = getTopics().size();
-	return rows > getVisibleRows() ? rows - getVisibleRows() : 0;
+	// Scrolled until the last topic fits
+	const Common::Array<Topic> &topics = getTopics();
+	int height = 0;
+	for (uint i = topics.size(); i > 0; i--) {
+		height += getTextHeight(topics[i - 1]);
+		if (height > kListH)
+			return i;
+		height += kRowGap;
+	}
+	return 0;
 }
 
 Common::Rect DialogBox::getRect(int x, int y, int w, int h) const {
@@ -189,8 +229,8 @@ DialogBox::Hit DialogBox::click(const Common::Point &pos, uint32 &topic) {
 		return kHitInside;
 	}
 	if (getRect(kListX, kListY, kListW, kListH).contains(pos)) {
-		uint row = _scroll + (pos.y - _pos.y - kListY) / kRowHeight;
-		if (row < getTopics().size() && row < _scroll + getVisibleRows()) {
+		int row = getTopicAt(pos.y - _pos.y - kListY);
+		if (row >= 0) {
 			topic = getTopics()[row].id;
 			// The box comes back on the Talk tab, also after a topic of the History
 			_historyTab = false;
@@ -223,10 +263,20 @@ void DialogBox::draw(Graphics::Surface &dst, const Common::Point &mouse) const {
 	// SetTextColor values of the exe: Talk grey, History blue, lighter under the mouse
 	uint32 normal = _historyTab ? dst.format.RGBToColor(46, 107, 140) : dst.format.RGBToColor(205, 205, 205);
 	uint32 hover = _historyTab ? dst.format.RGBToColor(65, 140, 175) : dst.format.RGBToColor(255, 255, 255);
-	for (uint i = _scroll; i < topics.size() && i < _scroll + getVisibleRows(); i++) {
-		Common::Rect row = getRect(kListX, kListY + (i - _scroll) * kRowHeight, kListW, kRowHeight);
-		_font->drawString(&dst, topics[i].label, row.left, row.top, row.width(), row.contains(mouse) ? hover : normal,
-			Graphics::kTextAlignLeft, 0, true);
+	Common::Rect list = getRect(kListX, kListY, kListW, kListH);
+	list.clip(Common::Rect(dst.w, dst.h));
+	if (list.isEmpty())
+		return;
+	Graphics::Surface clipped = dst.getSubArea(list);
+	int hovered = list.contains(mouse) ? getTopicAt(mouse.y - _pos.y - kListY) : -1;
+	int top = _pos.y + kListY - list.top;
+	for (uint i = _scroll; i < topics.size() && top < kListH; i++) {
+		Common::Array<Common::U32String> lines;
+		_font->wordWrapText(topics[i].label, kListW, lines);
+		for (uint j = 0; j < lines.size(); j++)
+			_font->drawString(&clipped, lines[j], _pos.x + kListX - list.left, top + j * kLineHeight, kListW,
+				(int)i == hovered ? hover : normal);
+		top += getTextHeight(topics[i]) + kRowGap;
 	}
 }
 

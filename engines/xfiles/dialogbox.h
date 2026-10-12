@@ -88,6 +88,10 @@ private:
 	};
 
 	const Common::Array<Topic> &getTopics() const { return _historyTab ? _history : _talk; }
+	/** Height of a topic's text: its lines as DrawTextA's word break makes them. */
+	int getTextHeight(const Topic &topic) const;
+	/** The topic shown at a height in the list (from its top), or -1. */
+	int getTopicAt(int y) const;
 	uint getVisibleRows() const;
 	uint getMaxScroll() const;
 	Common::Rect getRect(int x, int y, int w, int h) const;
