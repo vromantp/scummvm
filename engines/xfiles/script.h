@@ -224,6 +224,7 @@ private:
 	void enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view);
 	void showView();
 	/** Activate what the current view shows: its first asset, character views, navs, explorables. */
+	void activateView();
 	void activateViewObjects();
 	void deactivateViewObjects();
 	/** An enabled character view, nav or explorable of the current view gets activated. */
@@ -262,6 +263,7 @@ private:
 	bool _clipQueued;                          ///< A clip after the question is queued (topic +0x150)
 	uint32 _node, _location, _viewPoint, _view;
 	Common::Array<uint32> _viewObjects;        ///< Activated with the view, in activation order
+	bool _viewHeld;                            ///< The view is entered but not activated until the video ends
 };
 
 } // End of namespace XFiles

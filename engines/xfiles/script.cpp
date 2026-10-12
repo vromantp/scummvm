@@ -96,7 +96,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _clipQueued(false), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _clipQueued(false), _viewHeld(false), _node(0), _location(0), _viewPoint(0), _view(0) {
 	_jumpCut.first = _jumpCut.later = false;
 	Common::Array<NeoEntry> entries;
 	data.getGam().getObjects(kClassVariable, entries);
@@ -397,10 +397,17 @@ void Script::finishVideo() {
 	uint32 id = _videoQueue.remove_at(0);
 	_videoLimits.remove_at(0);
 	log(Common::String::format("  << video #%u ended", id));
+	bool next = !_videoQueue.empty();
+	// A held view comes first, before the video's Object Deactivation (its
+	// asset object is deactivated after the view's activation); a video the
+	// view queues starts at once if the queue was empty, otherwise after
+	// the one already queued
+	if (_viewHeld)
+		activateView();
 	fire(id, kEventObjectDeactivation);
-	if (!_videoQueue.empty())
+	if (next)
 		startVideo();
-	else
+	else if (_videoQueue.empty())
 		showView(); // Back to the view, with whatever the video's triggers changed
 }
 
@@ -413,11 +420,15 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view) 
 	while (first < 4 && oldPath[first] == newPath[first])
 		first++;
 	for (int i = 3; i >= first; i--) {
-		if (oldPath[i])
+		// A view still held (below) was never activated: entering another
+		// one drops it, as Action_DoSetView (0x46a950) cancels its activation
+		if (oldPath[i] && !(i == 3 && _viewHeld))
 			fire(oldPath[i], kEventObjectDeactivation);
 		if (i == 3)
 			deactivateViewObjects();
 	}
+	if (first < 4)
+		_viewHeld = false;
 	_node = node;
 	_location = location;
 	_viewPoint = viewPoint;
@@ -425,11 +436,30 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view) 
 	_box = 0;
 	log("  == enter " + getObjectLabel(_data, node) + " / " + getObjectLabel(_data, location) + " / " +
 		getObjectLabel(_data, viewPoint) + " / " + getObjectLabel(_data, view));
-	for (int i = first; i < 4; i++)
+	for (int i = first; i < 3; i++)
 		fire(newPath[i], kEventObjectActivation);
-	if (first < 4)
-		activateViewObjects();
+	if (first < 4) {
+		// While a video plays, XFiles.exe's event loop holds the activation
+		// of views (0x433000, the table 0x6bbff8 that 0x44f860 raises when a
+		// video's movie starts and lowers when it ends): the view, its
+		// triggers and its objects come after the video
+		if (_videoQueue.empty()) {
+			activateView();
+		} else {
+			_viewHeld = true;
+			log("      view held until the video ends");
+		}
+	}
 	showView();
+}
+
+void Script::activateView() {
+	if (_viewHeld) {
+		_viewHeld = false;
+		log("  == view activated " + getObjectLabel(_data, _view));
+	}
+	fire(_view, kEventObjectActivation);
+	activateViewObjects();
 }
 
 void Script::activateViewObjects() {
