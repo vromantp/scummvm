@@ -63,8 +63,9 @@ public:
  * Variables and enable flags start from the .gam. Entering a view fires
  * Object Activation down the scene graph (Node > Locaton > ViewPoint >
  * View) for every level that changes, and Object Deactivation on the levels
- * left. Play-once videos play one after another: a video asset's Object
- * Activation fires when it starts, its Object Deactivation when it ends.
+ * left. Videos (.xmv and .nmv assets, played once or looped, with or without
+ * a range) play one after another: a video asset's Object Activation fires
+ * when it starts, its Object Deactivation when it ends or is stopped.
  *
  * Everything that happens is written to log(), in the format of the
  * research tool vc_sim.py, so the two can be diffed. C++ functions other
@@ -94,7 +95,7 @@ public:
 	void step(const Common::String &step);
 
 	/** The video on screen ended: fire its Object Deactivation, start the next one. */
-	void finishVideo();
+	void finishVideo() { endVideo("ended"); }
 	/** Mouse Click on an object (icon, hotspot, explorable...), if it is enabled. */
 	void click(uint32 id);
 	/** Mouse Double-Click on an object, if it is enabled. */
@@ -138,10 +139,12 @@ public:
 	uint32 getLocation() const { return _location; }
 	uint32 getViewPoint() const { return _viewPoint; }
 	uint32 getView() const { return _view; }
-	/** Play-once videos; the first one is on screen. */
+	/** Queued videos; the first one is on screen. */
 	const Common::Array<uint32> &getVideoQueue() const { return _videoQueue; }
 	/** How long the first video plays, in ms; 0 for all of it. */
-	uint32 getVideoLimit() const { return _videoLimits.empty() ? 0 : _videoLimits[0]; }
+	uint32 getVideoLimit() const { return _videoPlays.empty() ? 0 : _videoPlays[0].limit; }
+	/** Whether the first video loops: it ends only when a Stop action stops it. */
+	bool isVideoLooped() const { return !_videoPlays.empty() && _videoPlays[0].loop; }
 	bool isEnabled(uint32 id) const;
 	/**
 	 * An emotion or action icon is spent when an icon of its class is
@@ -220,7 +223,10 @@ private:
 	void hideLayout(uint32 layoutId);
 	void updateLayoutItem(uint32 itemId, bool enabled);
 	void enableKitIcon(uint32 id);
+	void queueVideo(uint32 id, uint32 limit, bool loop);
 	void startVideo();
+	/** The video on screen ended or was stopped (how is logged). */
+	void endVideo(const char *how);
 	void enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view);
 	void showView();
 	/** Activate what the current view shows: its first asset, character views, navs, explorables. */
@@ -251,7 +257,11 @@ private:
 	Common::Array<Layout> _layouts;
 	Common::Array<uint32> _kit;
 	Common::Array<uint32> _videoQueue;
-	Common::Array<uint32> _videoLimits;        ///< Per queued video: ms to play, 0 for all
+	struct VideoPlay {
+		uint32 limit;   ///< ms to play, 0 for all
+		bool loop;      ///< Plays until stopped
+	};
+	Common::Array<VideoPlay> _videoPlays;      ///< Per queued video
 
 	/** FixJumpCut(first, later) of a topic's Object Activation (0x47ca30). */
 	struct JumpCut {

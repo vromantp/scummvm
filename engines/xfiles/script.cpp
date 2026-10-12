@@ -362,11 +362,14 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 		video |= a.files[i].file.hasPrefix("XV:") || a.files[i].file.hasPrefix("XN:");
 	Common::String file = a.files.empty() ? Common::String() : formatFile(a.files[0]);
 
-	if (mode == kModePlayOnce && video && !a.hasRange) {
-		_videoQueue.push_back(id);
-		_videoLimits.push_back(0);
-		if (_videoQueue.size() == 1)
-			startVideo();
+	// XFiles.exe makes a sound object for every asset it plays (Action_DoAsset
+	// 0x47a4e0) and treats one whose asset is an .xmv or .nmv (types 0x17 and
+	// 0x16, 0x444d00) the same whatever its mode or range: its movie starts in
+	// 0x488240, which raises the hold on views and on other sound objects'
+	// play events (0x44f860), so these clips play one after another, and its
+	// end or stop deactivates the sound and its asset object (0x43a970)
+	if (video && (mode == kModePlayOnce || mode == kModePlayLoop)) {
+		queueVideo(id, 0, mode == kModePlayLoop);
 	} else if (mode == kModePlayOnce || mode == kModePlayLoop) {
 		Common::String where = sound3D ? Common::String::format(" at (%d, %d)", sound3D->x, sound3D->y) : Common::String();
 		log(Common::String::format("      %s #%u ", kModeNames[mode], id) + file + where + "  \"" + nameOrNone(_data, a.name) + "\"");
@@ -377,26 +380,47 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 		log(Common::String::format("      stop #%u ", id) + file);
 		if (_hooks)
 			_hooks->playAsset(id, mode, false, 0, 0);
+		// A video stopped while it plays ends; one still waiting never starts
+		for (uint i = _videoQueue.size(); i-- > 0; ) {
+			if (_videoQueue[i] != id) {
+				continue;
+			} else if (i == 0) {
+				endVideo("stopped");
+			} else {
+				_videoQueue.remove_at(i);
+				_videoPlays.remove_at(i);
+			}
+		}
 	}
+}
+
+void Script::queueVideo(uint32 id, uint32 limit, bool loop) {
+	VideoPlay play = { limit, loop };
+	_videoQueue.push_back(id);
+	_videoPlays.push_back(play);
+	if (_videoQueue.size() == 1)
+		startVideo();
 }
 
 void Script::startVideo() {
 	uint32 id = _videoQueue[0];
 	VCAsset a;
 	_data.getAsset(id, a);
-	Common::String limit = _videoLimits[0] ? Common::String::format(" for %u ms", _videoLimits[0]) : Common::String();
+	Common::String limit = _videoPlays[0].limit ? Common::String::format(" for %u ms", _videoPlays[0].limit) : Common::String();
+	if (_videoPlays[0].loop)
+		limit += " looped";
 	log(Common::String::format("  >> video #%u ", id) + a.files[0].file + limit + "  \"" + nameOrNone(_data, a.name) + "\"");
 	fire(id, kEventObjectActivation);
 }
 
-void Script::finishVideo() {
+void Script::endVideo(const char *how) {
 	if (_videoQueue.empty()) {
 		log("  (nothing playing)");
 		return;
 	}
 	uint32 id = _videoQueue.remove_at(0);
-	_videoLimits.remove_at(0);
-	log(Common::String::format("  << video #%u ended", id));
+	_videoPlays.remove_at(0);
+	log(Common::String::format("  << video #%u %s", id, how));
 	bool next = !_videoQueue.empty();
 	// A held view comes first, before the video's Object Deactivation (its
 	// asset object is deactivated after the view's activation); a video the
@@ -989,10 +1013,7 @@ void Script::queueViewLoop() {
 	uint32 id = getViewLoop();
 	if (!id)
 		return;
-	_videoQueue.push_back(id);
-	_videoLimits.push_back(750);
-	if (_videoQueue.size() == 1)
-		startVideo();
+	queueVideo(id, 750, false);
 }
 
 uint32 Script::getViewLoop() const {
@@ -1154,7 +1175,9 @@ void Script::step(const Common::String &s) {
 		arg = s.substr(colon + 1);
 	}
 	uint32 id = (uint32)atoi(arg.c_str());
-	if (kind == "wait")
+	if (kind == "wait" && isVideoLooped())
+		log(Common::String::format("  (video #%u loops)", _videoQueue[0]));
+	else if (kind == "wait")
 		finishVideo();
 	else if (kind == "click")
 		click(id);

@@ -256,6 +256,8 @@ void XFilesEngine::runGame() {
 		if (!_script->getVideoQueue().empty()) {
 			playQueuedVideo(input);
 		} else {
+			if (_video->isOpen())
+				_video->close(); // Stopped by the script
 			syncView();
 			updateInterface();
 			updateDialogBox();
@@ -492,13 +494,14 @@ void XFilesEngine::playQueuedVideo(const Input &input) {
 			_script->finishVideo();
 			return;
 		}
-		_video->play(false);
+		_video->play(_script->isVideoLooped());
 		_videoStarted = g_system->getMillis();
 	}
 	// A piece of the view's loop between conversation clips plays for a
-	// fixed time (Script::queueViewLoop)
+	// fixed time (Script::queueViewLoop); a looping clip plays until a Stop
+	// action stops it
 	uint32 limit = _script->getVideoLimit();
-	if (input.skip || (limit && g_system->getMillis() - _videoStarted >= limit))
+	if ((input.skip && !_script->isVideoLooped()) || (limit && g_system->getMillis() - _videoStarted >= limit))
 		_video->stop();
 	_video->update();
 
