@@ -142,10 +142,11 @@ Common::Error XFilesEngine::run() {
 	_steps = Common::StringTokenizer(ConfMan.get("xfiles_steps")).split();
 	if (!_steps.empty())
 		_mouse = Common::Point(320, 240); // tools/ref/run.ps1 Start-Game: move 320 240
+	_fastForward = Common::StringTokenizer(ConfMan.get("xfiles_fastforward")).split();
 
 	_video = new Movie();
 	// A step list starts the game at once, without the intro and the menu
-	if (!_steps.empty() || (playIntro() && runMenu()))
+	if (!_steps.empty() || !_fastForward.empty() || (playIntro() && runMenu()))
 		runGame();
 	return Common::kNoError;
 }
@@ -265,6 +266,11 @@ void XFilesEngine::runGame() {
 	// (XFiles.exe Game_Start 0x48cd70)
 	_headCredits.setEnabled(true);
 	_script->start();
+	// Fast-forward (xfiles_fastforward): the steps run in the script alone,
+	// as vc_sim.py runs them, so nothing plays and no time passes; the
+	// game goes on from where they end
+	for (uint i = 0; i < _fastForward.size(); i++)
+		_script->step(_fastForward[i]);
 	while (!shouldQuit()) {
 		Input input = pollInput();
 		updateTimers();

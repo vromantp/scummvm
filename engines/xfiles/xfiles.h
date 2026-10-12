@@ -223,6 +223,7 @@ private:
 	uint32 _shotView;                     ///< The view the last view shot was for
 	bool _shotBox;                        ///< The dialog box was on screen at the last frame
 	Common::StringArray _steps;
+	Common::StringArray _fastForward;     ///< xfiles_fastforward: steps run headless before the game starts
 	uint _nextStep;
 	uint32 _waitVideo;                    ///< A wait step waits for this video to end
 	int _waitTimer;                       ///< A timer step waits for this timer to expire; -1: none

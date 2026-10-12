@@ -28,6 +28,7 @@
 namespace XFiles {
 
 class NeoFile;
+class Script;
 class VCData;
 
 /*
@@ -64,6 +65,14 @@ Common::String dumpActions(const VCData &data, uint limit);
  * with every object's triggers.
  */
 Common::String dumpSceneTree(const VCData &data, const Common::String &nodeFilter, bool withTriggers);
+
+/**
+ * The script's state as JSON with the keys of a save's delta (the research
+ * repo's tools/save_delta.py): every variable's value, every VCEnabled's
+ * flag (by VCEnabled ID) and game_state.position [node, location,
+ * viewpoint, view]. tools/save_compare.py compares it with a save.
+ */
+Common::String dumpState(const VCData &data, const Script &script);
 
 } // End of namespace XFiles
 

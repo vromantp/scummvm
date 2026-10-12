@@ -19,6 +19,8 @@
  *
  */
 
+#include "common/file.h"
+
 #include "xfiles/console.h"
 #include "xfiles/script.h"
 #include "xfiles/vcdata.h"
@@ -162,6 +164,20 @@ bool Console::Cmd_state(int argc, const char **argv) {
 		return true;
 	}
 	const VCData &data = g_engine->getData();
+	if (argc >= 2 && !strcmp(argv[1], "json")) {
+		// For the research repo's tools/save_compare.py
+		Common::String json = dumpState(data, *script);
+		if (argc == 2) {
+			debugPrintf("%s", json.c_str());
+			return true;
+		}
+		Common::DumpFile file;
+		if (file.open(Common::Path(argv[2], '/'), true) && file.write(json.c_str(), json.size()) == json.size())
+			debugPrintf("Wrote %s\n", argv[2]);
+		else
+			debugPrintf("Cannot write %s\n", argv[2]);
+		return true;
+	}
 	debugPrintf("%s / %s / %s / %s\n", getObjectLabel(data, script->getNode()).c_str(),
 		getObjectLabel(data, script->getLocation()).c_str(), getObjectLabel(data, script->getViewPoint()).c_str(),
 		getObjectLabel(data, script->getView()).c_str());

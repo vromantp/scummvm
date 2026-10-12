@@ -20,6 +20,7 @@
  */
 
 #include "xfiles/vcdump.h"
+#include "xfiles/script.h"
 #include "xfiles/vcdata.h"
 
 namespace XFiles {
@@ -325,6 +326,44 @@ Common::String dumpSceneTree(const VCData &data, const Common::String &nodeFilte
 			}
 		}
 	}
+	return out;
+}
+
+/** JSON {"id": value, ...}, ten pairs to a line. */
+static Common::String jsonMap(const Common::Array<uint32> &ids, const Common::Array<int32> &values) {
+	Common::String out = "{";
+	for (uint i = 0; i < ids.size(); i++)
+		out += Common::String::format("%s\"%u\": %d", i ? (i % 10 ? ", " : ",\n  ") : "\n  ", ids[i], values[i]);
+	return out + (ids.empty() ? "}" : "\n }");
+}
+
+Common::String dumpState(const VCData &data, const Script &script) {
+	Common::Array<NeoEntry> entries;
+	Common::Array<uint32> ids;
+	Common::Array<int32> values;
+	data.getGam().getObjects(kClassVariable, entries);
+	for (uint i = 0; i < entries.size(); i++) {
+		ids.push_back(entries[i].key);
+		values.push_back(script.getVariable(entries[i].key));
+	}
+	Common::String out = "{\n \"format\": \"xfiles-engine-state 1\",\n \"variables\": " + jsonMap(ids, values);
+
+	// By VCEnabled ID, as in a save's delta (the Script keeps them by target)
+	entries.clear();
+	ids.clear();
+	values.clear();
+	data.getGam().getObjects(kClassEnabled, entries);
+	for (uint i = 0; i < entries.size(); i++) {
+		uint32 target;
+		bool enabled;
+		if (data.getEnabled(entries[i].key, target, enabled)) {
+			ids.push_back(entries[i].key);
+			values.push_back(script.isEnabled(target));
+		}
+	}
+	out += ",\n \"enabled\": " + jsonMap(ids, values);
+	out += Common::String::format(",\n \"game_state\": {\"position\": [%u, %u, %u, %u]}\n}\n", script.getNode(),
+		script.getLocation(), script.getViewPoint(), script.getView());
 	return out;
 }
 
