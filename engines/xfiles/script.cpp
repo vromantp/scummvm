@@ -367,7 +367,9 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 	// 0x16, 0x444d00) the same whatever its mode or range: its movie starts in
 	// 0x488240, which raises the hold on views and on other sound objects'
 	// play events (0x44f860), so these clips play one after another, and its
-	// end or stop deactivates the sound and its asset object (0x43a970)
+	// end or stop deactivates the sound and its asset object (0x43a970).
+	// Only the .xmv clips (XV, XN) are queued here: the ranged .nmv clips
+	// (frames of a view's navigation movie) are not played as videos yet
 	if (video && (mode == kModePlayOnce || mode == kModePlayLoop)) {
 		queueVideo(id, 0, mode == kModePlayLoop);
 	} else if (mode == kModePlayOnce || mode == kModePlayLoop) {
