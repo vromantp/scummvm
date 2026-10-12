@@ -276,6 +276,16 @@ bool VCData::getHotSpot(uint32 id, VCHotSpot &hotSpot) const {
 	return true;
 }
 
+bool VCData::getDefaultHotSpots(uint32 hotSpots[3]) const {
+	const NeoClass *c = _hdb.getClass(kClassDefaultHotSpots);
+	Common::Array<NeoEntry> entries;
+	if (!c || !_hdb.walk(c->root, entries) || entries.empty())
+		return false;
+	for (int i = 0; i < 3; i++)
+		hotSpots[i] = _hdb.readUint32(entries[0].mark + kFieldStart + 4 * i);
+	return true;
+}
+
 // -- Triggers and actions -----------------------------------------------------
 
 bool VCData::getTrigger(uint32 id, VCTrigger &trigger) const {

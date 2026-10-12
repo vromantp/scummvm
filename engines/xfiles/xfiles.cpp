@@ -418,16 +418,65 @@ void XFilesEngine::updateSounds() {
 		stopSound(ended[i]);
 }
 
-/** Unit vector of a view facing (1 North ... 8 NorthWest); North is +y, East +x. */
-static bool getFacingVector(uint32 facing, int &x, int &y) {
-	static const int kVectors[8][2] = {
-		{ 0, 1 }, { 1, 1 }, { 1, 0 }, { 1, -1 }, { 0, -1 }, { -1, -1 }, { -1, 0 }, { -1, 1 }
-	};
-	if (facing < 1 || facing > 8)
+uint32 XFilesEngine::getNavTarget(uint32 view, uint32 hotSpot) const {
+	// XFiles.exe matches navs by their hotspot's name: a nav whose own
+	// hotspot is named Forward counts as the forward one
+	VCView v;
+	VCHotSpot wanted;
+	Common::Array<uint32> navs;
+	if (!_data->getView(view, v) || !_data->getHotSpot(hotSpot, wanted) || !_data->getMembers(v.navs, navs))
+		return 0;
+	for (uint i = 0; i < navs.size(); i++) {
+		VCNav nav;
+		VCHotSpot h;
+		if (_data->getNav(navs[i], nav) && _data->getHotSpot(nav.hotSpot, h) && h.name == wanted.name)
+			return nav.target;
+	}
+	return 0;
+}
+
+bool XFilesEngine::getViewPosition(uint32 view, Common::Point &pos) const {
+	VCLocation location;
+	if (!_data->getLocation(_script->getLocation(), location))
 		return false;
-	x = kVectors[facing - 1][0];
-	y = kVectors[facing - 1][1];
-	return true;
+	for (uint i = 0; i < location.viewPoints.size(); i++) {
+		VCViewPoint vp;
+		if (!_data->getViewPoint(location.viewPoints[i], vp))
+			continue;
+		for (uint j = 0; j < vp.views.size(); j++) {
+			if (vp.views[j] == view) {
+				pos = Common::Point(vp.x, vp.y);
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+bool XFilesEngine::getFacing(uint32 view, const Common::Point &from, Common::Point &facing) const {
+	// XFiles.exe 0x46d7a0, as Sound3D_Place 0x4a8be0 uses it: towards the
+	// viewpoint of the view's forward nav; else the forward one of the view
+	// its left nav leads to, turned right by 90 degrees; else that of its
+	// right nav's view, turned left. North is +y, East +x.
+	uint32 hotSpots[3]; // Left, right, forward
+	Common::Point to;
+	if (!_data->getDefaultHotSpots(hotSpots))
+		return false;
+	uint32 target = getNavTarget(view, hotSpots[2]);
+	if (target && getViewPosition(target, to)) {
+		facing = to - from;
+		return true;
+	}
+	for (int side = 0; side < 2; side++) {
+		uint32 sideView = getNavTarget(view, hotSpots[side]);
+		target = sideView ? getNavTarget(sideView, hotSpots[2]) : 0;
+		if (target && getViewPosition(target, to)) {
+			Common::Point d = to - from;
+			facing = side == 0 ? Common::Point(d.y, -d.x) : Common::Point(-d.y, d.x);
+			return true;
+		}
+	}
+	return false;
 }
 
 void XFilesEngine::placeSound(Sound &sound) {
@@ -437,6 +486,13 @@ void XFilesEngine::placeSound(Sound &sound) {
 	if (!getPreference(kPref3DSound) || !_data->getViewPoint(_script->getViewPoint(), viewPoint)) {
 		sound.movie->setVolume(Audio::Mixer::kMaxChannelVolume);
 		sound.movie->setBalance(0);
+		return;
+	}
+	// Placed before its view is activated, it is silent until the player
+	// moves on (reference run, 2026-10-12: the Field Office ambience at the
+	// start of the game)
+	if (_script->isViewHeld()) {
+		sound.movie->setVolume(0);
 		return;
 	}
 
@@ -458,25 +514,25 @@ void XFilesEngine::placeSound(Sound &sound) {
 		return; // The original leaves the balance alone
 
 	// Balance: the angle between the view's facing and the sound, 0 straight
-	// ahead or behind and 85% to the side. The original takes the facing from
-	// the neighbouring viewpoints (0x46d7a0); the view's direction gives the
-	// same vector for views that face a compass direction.
-	VCView view;
-	int fx, fy;
-	if (!_data->getView(_script->getView(), view) || !getFacingVector(view.facing, fx, fy) || (dx == 0 && dy == 0)) {
-		sound.movie->setBalance(0);
+	// ahead or behind and 85% to the side. A view without a facing keeps the
+	// last one found; with no facing or the sound on the viewpoint, the
+	// balance is left alone.
+	getFacing(_script->getView(), Common::Point(viewPoint.x, viewPoint.y), _soundFacing);
+	int fx = _soundFacing.x, fy = _soundFacing.y;
+	if ((fx == 0 && fy == 0) || (dx == 0 && dy == 0))
 		return;
-	}
 	double angle = acos((fx * dx + fy * dy) / (sqrt((double)(fx * fx + fy * fy)) * distance)) * 2 / M_PI;
 	if (angle > 1)
 		angle = 2 - angle;
 	int balance = (int)(angle * 100);
-	if (fx * dy - dx * fy > 0)
-		balance = -balance; // To the left
-	balance = CLIP((int)(balance * 0.85), -100, 100);
+	// The original takes 85% in extended precision, which truncates exact
+	// products one lower (100 gives 84)
+	int scaled = ABS(balance) * 85;
+	scaled = scaled / 100 - (scaled && scaled % 100 == 0 ? 1 : 0);
+	balance = fx * dy - dx * fy > 0 ? -scaled : scaled; // Negative: to the left
 	sound.movie->setBalance(balance * 127 / 100);
-	debugC(1, kDebugScript, "-- sound #%u at (%d, %d), viewpoint (%d, %d) facing %u: volume %d, balance %d",
-		sound.movie->getAssetId(), sound.x, sound.y, viewPoint.x, viewPoint.y, view.facing, volume, balance);
+	debugC(1, kDebugScript, "-- sound #%u at (%d, %d), viewpoint (%d, %d) facing (%d, %d): volume %d, balance %d",
+		sound.movie->getAssetId(), sound.x, sound.y, viewPoint.x, viewPoint.y, fx, fy, volume, balance);
 }
 
 void XFilesEngine::drawCaptions(const Movie &movie, const Common::Point &pos) {

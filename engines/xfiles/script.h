@@ -139,6 +139,8 @@ public:
 	uint32 getLocation() const { return _location; }
 	uint32 getViewPoint() const { return _viewPoint; }
 	uint32 getView() const { return _view; }
+	/** The view is entered but its activation waits for the playing video. */
+	bool isViewHeld() const { return _viewHeld; }
 	/** Queued videos; the first one is on screen. */
 	const Common::Array<uint32> &getVideoQueue() const { return _videoQueue; }
 	/** How long the first video plays, in ms; 0 for all of it. */

@@ -160,6 +160,12 @@ private:
 	void updateSounds();
 	/** Volume and balance of a 3D sound for the current view. */
 	void placeSound(Sound &sound);
+	/** The target of a view's first nav whose hotspot is named like the given one; 0 if none. */
+	uint32 getNavTarget(uint32 view, uint32 hotSpot) const;
+	/** Position of the viewpoint of the current location that holds a view. */
+	bool getViewPosition(uint32 view, Common::Point &pos) const;
+	/** Where a view looks, from its navigation (XFiles.exe 0x46d7a0). */
+	bool getFacing(uint32 view, const Common::Point &from, Common::Point &facing) const;
 
 	const ADGameDescription *_gameDescription;
 	Common::RandomSource _randomSource;
@@ -189,6 +195,7 @@ private:
 	Common::HashMap<uint, TimerState> _timerStates;
 	Common::HashMap<uint32, Sound> _sounds;
 	uint32 _soundView;                    ///< The view the 3D sounds were placed for
+	Common::Point _soundFacing;           ///< The last facing found, kept for views without one
 };
 
 extern XFilesEngine *g_engine;

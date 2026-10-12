@@ -371,6 +371,8 @@ public:
 	bool getView(uint32 id, VCView &view) const;
 	bool getNav(uint32 id, VCNav &nav) const;
 	bool getHotSpot(uint32 id, VCHotSpot &hotSpot) const;
+	/** The standard navigation areas (VCDefaultHotSpots): left, right and forward hotspots. */
+	bool getDefaultHotSpots(uint32 hotSpots[3]) const;
 	bool getTrigger(uint32 id, VCTrigger &trigger) const;
 	bool getAction(uint32 id, VCAction &action) const;
 	bool getAsset(uint32 id, VCAsset &asset) const;
