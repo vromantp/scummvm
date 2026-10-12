@@ -200,6 +200,13 @@ private:
 	void startVideo();
 	void enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view);
 	void showView();
+	/** Activate what the current view shows: its first asset, character views, navs, explorables. */
+	void activateViewObjects();
+	void deactivateViewObjects();
+	/** An enabled character view, nav or explorable of the current view gets activated. */
+	void activateViewObject(uint32 id);
+	void deactivateViewObject(uint32 id);
+	bool isInView(uint32 id) const;
 
 	const VCData &_data;
 	ScriptHooks *_hooks;
@@ -224,6 +231,7 @@ private:
 	JumpCut _jumpCut;                          ///< Of the topic being played
 	bool _clipQueued;                          ///< A clip after the question is queued (topic +0x150)
 	uint32 _node, _location, _viewPoint, _view;
+	Common::Array<uint32> _viewObjects;        ///< Activated with the view, in activation order
 };
 
 } // End of namespace XFiles

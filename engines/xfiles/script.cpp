@@ -266,6 +266,12 @@ void Script::execute(const VCAction &a, int event, const EventFields &fields, Lo
 			// A topic enabled while its box is open joins the box (0x476340)
 			if (a.value && _box && isBoxTopic(_box, target))
 				activateTopic(target);
+			// A character view, nav or explorable of the view comes and goes
+			// with its flag (0x492170, 0x46de10, 0x46efc0; 0x47ff40)
+			if (a.value && !was)
+				activateViewObject(target);
+			else if (!a.value && was)
+				deactivateViewObject(target);
 			updateLayoutItem(target, a.value != 0);
 		}
 		break;
@@ -403,6 +409,8 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view) 
 	int first = 0;
 	while (first < 4 && oldPath[first] == newPath[first])
 		first++;
+	if (first < 4)
+		deactivateViewObjects();
 	for (int i = 3; i >= first; i--) {
 		if (oldPath[i])
 			fire(oldPath[i], kEventObjectDeactivation);
@@ -416,7 +424,79 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view) 
 		getObjectLabel(_data, viewPoint) + " / " + getObjectLabel(_data, view));
 	for (int i = first; i < 4; i++)
 		fire(newPath[i], kEventObjectActivation);
+	if (first < 4)
+		activateViewObjects();
 	showView();
+}
+
+void Script::activateViewObjects() {
+	// XFiles.exe activates, after the view, the asset it shows and its
+	// enabled character views, then (after the transition) its enabled navs
+	// and explorables (reference run, 2026-10-12)
+	VCView v;
+	if (!_data.getView(_view, v))
+		return;
+	Common::Array<uint32> ids;
+	uint32 background;
+	getViewAssets(ids, background);
+	if (!ids.empty()) {
+		_viewObjects.push_back(ids[0]);
+		fire(ids[0], kEventObjectActivation);
+	}
+	const uint32 lists[3] = { v.characters, v.navs, v.explorables };
+	for (int i = 0; i < 3; i++) {
+		ids.clear();
+		_data.getMembers(lists[i], ids);
+		for (uint j = 0; j < ids.size(); j++) {
+			if (isEnabled(ids[j]))
+				activateViewObject(ids[j]);
+		}
+	}
+}
+
+void Script::deactivateViewObjects() {
+	Common::Array<uint32> ids = _viewObjects;
+	_viewObjects.clear();
+	for (uint i = ids.size(); i-- > 0;)
+		fire(ids[i], kEventObjectDeactivation);
+}
+
+bool Script::isInView(uint32 id) const {
+	VCView v;
+	if (!_data.getView(_view, v))
+		return false;
+	uint32 list;
+	switch (_data.getClassOf(id)) {
+	case kClassCharView:
+		list = v.characters;
+		break;
+	case kClassNav:
+		list = v.navs;
+		break;
+	case kClassExplorable:
+		list = v.explorables;
+		break;
+	default:
+		return false;
+	}
+	Common::Array<uint32> ids;
+	_data.getMembers(list, ids);
+	return Common::find(ids.begin(), ids.end(), id) != ids.end();
+}
+
+void Script::activateViewObject(uint32 id) {
+	if (!isInView(id) || Common::find(_viewObjects.begin(), _viewObjects.end(), id) != _viewObjects.end())
+		return;
+	_viewObjects.push_back(id);
+	fire(id, kEventObjectActivation);
+}
+
+void Script::deactivateViewObject(uint32 id) {
+	Common::Array<uint32>::iterator it = Common::find(_viewObjects.begin(), _viewObjects.end(), id);
+	if (it == _viewObjects.end() || !isInView(id))
+		return;
+	_viewObjects.erase(it);
+	fire(id, kEventObjectDeactivation);
 }
 
 void Script::getViewAssets(Common::Array<uint32> &assets, uint32 &background) const {
