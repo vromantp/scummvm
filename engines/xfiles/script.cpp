@@ -96,7 +96,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _timerSerial(0), _random(1), _box(0), _clipQueued(false), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _clipQueued(false), _node(0), _location(0), _viewPoint(0), _view(0) {
 	_jumpCut.first = _jumpCut.later = false;
 	Common::Array<NeoEntry> entries;
 	data.getGam().getObjects(kClassVariable, entries);
@@ -880,14 +880,17 @@ void Script::playTopic(uint32 conversationId, bool inBox) {
 	}
 	// 0x4e9880: from the box S0, sometimes followed by "What's the matter
 	// with you?"; otherwise that alone
-	if (count >= 4 && stock[0]) {
+	// (Each step builds its own generator where XFiles.exe does, rolled or
+	// not, so that fixed seeds match a reference run's.)
+	if (count >= 4) {
+		Dice dice = newDice(0x4e98fe);
 		int limit = count == 4 ? 6 : count == 5 ? 7 : count == 6 ? 8 : 9;
-		if (roll() < limit) {
+		if (stock[0] && roll(dice) < limit) {
 			if (inBox) {
 				beforeLead();
 				playStock(stock[0]);
 				_clipQueued = true;
-				if (stock[kStockWhatsTheMatter] && roll() < 4) {
+				if (stock[kStockWhatsTheMatter] && roll(dice) < 4) {
 					queueViewLoop();
 					playStock(stock[kStockWhatsTheMatter]);
 				}
@@ -900,24 +903,26 @@ void Script::playTopic(uint32 conversationId, bool inBox) {
 			}
 		}
 	}
-	// 0x4ea400
-	if (c.atom && roll() < 9) {
+	// 0x4e9440, then 0x4ea400
+	Dice dice = newDice(0x4e97c7);
+	if (c.atom && roll(dice) < 9) {
 		beforeLead();
 		playList(c.atom);
 		_clipQueued = true;
-		if (c.answer && roll() < 4) {
+		if (c.answer && roll(dice) < 4) {
 			beforeAnswer();
 			playList(c.answer);
 		}
 		return;
 	}
 	// 0x495820: from the box S0 or S1, otherwise S1
-	if ((stock[0] || stock[1]) && roll() < 4) {
+	dice = newDice(0x495864);
+	if ((stock[0] || stock[1]) && roll(dice) < 4) {
 		uint32 reply;
 		if (!inBox)
 			reply = stock[1];
 		else if (stock[0] && stock[1])
-			reply = roll() < 6 ? stock[0] : stock[1];
+			reply = roll(dice) < 6 ? stock[0] : stock[1];
 		else
 			reply = stock[0] ? stock[0] : stock[1];
 		if (reply) {
@@ -925,7 +930,7 @@ void Script::playTopic(uint32 conversationId, bool inBox) {
 			playStock(reply);
 			_clipQueued = true;
 		}
-		if (stock[kStockWhatsTheMatter] && count > 2 && roll() < 4) {
+		if (stock[kStockWhatsTheMatter] && count > 2 && roll(dice) < 4) {
 			queueViewLoop();
 			beforeLead();
 			playStock(stock[kStockWhatsTheMatter]);
@@ -989,10 +994,38 @@ void Script::playStock(uint32 assetId) {
 		playAsset(assetId, kModePlayOnce, nullptr);
 }
 
-int Script::roll() {
-	// XFiles.exe 0x468df0; the exe seeds it from the clock
-	_random = _random * 0x41C64E6D + 0x3039;
-	return _random % 10 + 1;
+void Script::setFixedSeeds(uint32 base) {
+	_fixedSeeds = true;
+	_seedBase = base;
+	_diceBuilt.clear();
+}
+
+static uint32 mixBits(uint32 h) {
+	// MurmurHash3's finalizer
+	h ^= h >> 16;
+	h *= 0x85EBCA6B;
+	h ^= h >> 13;
+	h *= 0xC2B2AE35;
+	h ^= h >> 16;
+	return h;
+}
+
+Script::Dice Script::newDice(uint32 site) {
+	// XFiles.exe seeds each generator from the clock; xfref.dll (the
+	// reference runs' logging DLL) replaces that with this hash
+	Dice dice;
+	dice.own = _fixedSeeds;
+	dice.state = 0;
+	if (_fixedSeeds)
+		dice.state = mixBits(mixBits(_seedBase ^ site) + _diceBuilt[site]++);
+	return dice;
+}
+
+int Script::roll(Dice &dice) {
+	// XFiles.exe 0x468df0
+	uint32 &x = dice.own ? dice.state : _random;
+	x = x * 0x41C64E6D + 0x3039;
+	return x % 10 + 1;
 }
 
 bool Script::getStockAtoms(uint32 conversationId, uint32 (&atoms)[kStockAtomCount]) const {
@@ -1107,6 +1140,8 @@ void Script::step(const Common::String &s) {
 		goTo(id);
 	else if (kind == "nav")
 		followNav(id);
+	else if (kind == "seed")
+		setFixedSeeds(id);
 }
 
 } // End of namespace XFiles

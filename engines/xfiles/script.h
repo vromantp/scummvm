@@ -126,6 +126,13 @@ public:
 	void ask(uint32 conversationId);
 	/** Seed the random numbers of ask(); the same seed gives the same replies. */
 	void setRandomSeed(uint32 seed) { _random = seed; }
+	/**
+	 * Seed every generator of ask() the way a reference run's xfref.dll
+	 * seeds XFiles.exe's (step seed:N): the n-th one built at a call site
+	 * gets a hash of (base, site, n). Until then all draw from one sequence
+	 * (setRandomSeed).
+	 */
+	void setFixedSeeds(uint32 base);
 
 	uint32 getNode() const { return _node; }
 	uint32 getLocation() const { return _location; }
@@ -189,8 +196,15 @@ private:
 	void playAsset(uint32 id, byte mode, const VCAction *sound3D);
 	void playList(uint32 listId);
 	void playStock(uint32 assetId);
-	/** A number from 1 to 10, as XFiles.exe draws them. */
-	int roll();
+	/** A generator of numbers from 1 to 10 (Random_Seed 0x468810). */
+	struct Dice {
+		bool own;     ///< Seeded for this use (setFixedSeeds); otherwise it draws from _random
+		uint32 state;
+	};
+	/** The generator XFiles.exe builds at site, the return address of its Random_Seed call. */
+	Dice newDice(uint32 site);
+	/** A number from 1 to 10, as XFiles.exe draws them (0x468df0). */
+	int roll(Dice &dice);
 	void playTopic(uint32 conversationId, bool inBox);
 	void activateTopic(uint32 conversationId);
 	void beforeLead();
@@ -229,6 +243,9 @@ private:
 	uint32 _timerSerial;
 	Common::HashMap<uint32, uint> _asked;      ///< How often each conversation was asked
 	uint32 _random;                            ///< State of the random numbers
+	bool _fixedSeeds;                          ///< See setFixedSeeds()
+	uint32 _seedBase;
+	Common::HashMap<uint32, uint32> _diceBuilt; ///< Generators built per call site, with _fixedSeeds
 	uint32 _box;                               ///< Character view whose conversation box is open, or 0
 	Common::Array<Layout> _layouts;
 	Common::Array<uint32> _kit;
