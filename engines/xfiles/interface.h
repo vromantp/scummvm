@@ -111,11 +111,6 @@ public:
 	/** Close the bar until the mouse leaves it (EvKitIconClick in hidden-bar mode). */
 	void closeBar() { _barClosed = true; }
 
-	/** Emotion icons go away until disabled and enabled again (a click on one, or a timer). */
-	void spendEmotionIcons();
-	/** The same for action icons. */
-	void spendActionIcons();
-
 	/** The VCInventory in hand (0 for none); its cursor replaces the default one. */
 	void setHeld(uint32 inventory);
 	uint32 getHeld() const { return _held; }
@@ -166,7 +161,7 @@ private:
 
 	/** Load the graphic of the first asset of a VCAssetRefList, nullptr if none opens. */
 	Graphic *loadGraphic(uint32 assetList) const;
-	void syncIcons(const Script &script, uint32 classId, Common::Array<Icon> &icons, Common::HashMap<uint32, bool> *spent);
+	void syncIcons(const Script &script, uint32 classId, Common::Array<Icon> &icons);
 	void syncKit(const Script &script);
 	Icon makeIcon(uint32 id) const;
 	void placeKit();
@@ -192,7 +187,6 @@ private:
 	Graphics::Font *_font;
 	bool _rolloverText;
 	bool _barClosed;
-	Common::HashMap<uint32, bool> _spentEmotions, _spentActions;
 	Common::Array<uint32> _layouts;               ///< Shown layouts whose items are loaded
 	Common::Array<uint32> _itemIds;               ///< Their items, in script order
 	Common::Array<Item> _items;                   ///< The same, in drawing order

@@ -536,8 +536,7 @@ void XFilesEngine::updateTimers() {
 	for (uint i = 0; i < expired.size(); i++) {
 		debugC(1, kDebugScript, "-- timer %u expired", expired[i]);
 		_timerStates.erase(expired[i]);
-		// The choice is over: the emotion icons on screen go away (an assumption)
-		_interface->spendEmotionIcons();
+		// Icons are left alone: the data disables them when a choice times out
 		_script->expireTimer(expired[i]);
 	}
 }
@@ -688,14 +687,11 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 		clickInventory(hit.id);
 		return;
 	case Interface::kHitEmotion:
-		// A click on one removes all of them (0x49bfe0)
 		debugC(1, kDebugScript, "-- click:%u (emotion icon)", hit.id);
-		_interface->spendEmotionIcons();
 		_script->click(hit.id);
 		return;
 	case Interface::kHitAction:
 		debugC(1, kDebugScript, "-- click:%u (action icon)", hit.id);
-		_interface->spendActionIcons();
 		_script->click(hit.id);
 		return;
 	case Interface::kHitEvidence:

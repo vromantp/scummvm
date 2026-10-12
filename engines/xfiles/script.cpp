@@ -253,6 +253,8 @@ void Script::execute(const VCAction &a, int event, const EventFields &fields, Lo
 		if (_data.getEnabled(a.target, target, enabled) && target) {
 			bool was = isEnabled(target);
 			_enabled[target] = a.value != 0;
+			if (!a.value)
+				_spent.erase(target);
 			// An evidence icon gets its object when it is enabled (0x4201a0),
 			// firing its Object Activation; disabling removes its kit icon too
 			// (0x4a1940)
@@ -609,10 +611,24 @@ void Script::start() {
 
 void Script::click(uint32 id) {
 	_box = 0; // a click outside the box closes it
-	if (!isEnabled(id))
+	if (!isEnabled(id)) {
 		log("  " + getObjectLabel(_data, id) + " is disabled");
-	else
-		fire(id, kEventMouseClick);
+		return;
+	}
+	fire(id, kEventMouseClick);
+	// A click on an emotion or action icon removes all of them (0x49bfe0, 0x4c0660)
+	uint32 classId = _data.getClassOf(id);
+	if (classId == kClassEmotionIcon || classId == kClassActionIcon)
+		spendIcons(classId);
+}
+
+void Script::spendIcons(uint32 classId) {
+	Common::Array<NeoEntry> entries;
+	_data.getHdb().getObjects(classId, entries);
+	for (uint i = 0; i < entries.size(); i++) {
+		if (isEnabled(entries[i].key))
+			_spent[entries[i].key] = true;
+	}
 }
 
 void Script::doubleClick(uint32 id) {
@@ -667,6 +683,18 @@ void Script::expireTimer(uint n) {
 		for (uint j = 0; j < _viewObjects.size(); j++) {
 			if (_data.getClassOf(_viewObjects[j]) == kinds[i])
 				ids.push_back(_viewObjects[j]);
+		}
+		if (kinds[i] == kClassCharView) {
+			// Then the icons on screen: action icons (kind 14), emotion icons (15)
+			const uint32 icons[2] = { kClassActionIcon, kClassEmotionIcon };
+			for (int j = 0; j < 2; j++) {
+				Common::Array<NeoEntry> entries;
+				_data.getHdb().getObjects(icons[j], entries);
+				for (uint k = 0; k < entries.size(); k++) {
+					if (isEnabled(entries[k].key) && !isSpent(entries[k].key))
+						ids.push_back(entries[k].key);
+				}
+			}
 		}
 	}
 	for (uint i = 0; i < _layouts.size(); i++)

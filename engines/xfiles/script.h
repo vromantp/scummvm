@@ -136,6 +136,11 @@ public:
 	/** How long the first video plays, in ms; 0 for all of it. */
 	uint32 getVideoLimit() const { return _videoLimits.empty() ? 0 : _videoLimits[0]; }
 	bool isEnabled(uint32 id) const;
+	/**
+	 * An emotion or action icon is spent when an icon of its class is
+	 * clicked, and comes back once it is disabled and enabled again.
+	 */
+	bool isSpent(uint32 id) const { return _spent.contains(id); }
 	/** How often a conversation topic was asked. */
 	uint getAskCount(uint32 id) const { return _asked.getValOrDefault(id, 0); }
 	int32 getVariable(uint32 id) const;
@@ -211,6 +216,7 @@ private:
 	void activateViewObject(uint32 id);
 	void deactivateViewObject(uint32 id);
 	bool isInView(uint32 id) const;
+	void spendIcons(uint32 classId);
 	/** Whether the Timer Expiration actions of an object test for timer n. */
 	bool holdsTimer(uint32 id, uint n) const;
 
@@ -218,6 +224,7 @@ private:
 	ScriptHooks *_hooks;
 	Common::HashMap<uint32, int32> _variables;
 	Common::HashMap<uint32, bool> _enabled;    ///< Objects without a VCEnabled are always enabled
+	Common::HashMap<uint32, bool> _spent;      ///< Spent emotion and action icons
 	Common::HashMap<uint, Timer> _timers;      ///< Running timers
 	uint32 _timerSerial;
 	Common::HashMap<uint32, uint> _asked;      ///< How often each conversation was asked

@@ -186,9 +186,9 @@ void Interface::update(const Script &script, const Common::Point &mouse, bool ca
 	_mouse = mouse;
 	_rolloverText = rolloverText;
 	syncItems(script);
-	syncIcons(script, kClassActionIcon, _actions, &_spentActions);
-	syncIcons(script, kClassEmotionIcon, _emotions, &_spentEmotions);
-	syncIcons(script, kClassInventory, _inventory, nullptr);
+	syncIcons(script, kClassActionIcon, _actions);
+	syncIcons(script, kClassEmotionIcon, _emotions);
+	syncIcons(script, kClassInventory, _inventory);
 	syncKit(script);
 	placeIcons(_actions, kPaneAction, captions);
 	placeIcons(_emotions, kPaneEmotion, captions);
@@ -310,21 +310,11 @@ void Interface::setEvidenceRowShown(bool shown) {
 	_evidenceRowShown = shown;
 }
 
-void Interface::syncIcons(const Script &script, uint32 classId, Common::Array<Icon> &icons, Common::HashMap<uint32, bool> *spent) {
+void Interface::syncIcons(const Script &script, uint32 classId, Common::Array<Icon> &icons) {
 	// Disabled and spent icons go; newly enabled ones join at the end, as
-	// the exe creates their objects when they are enabled (0x4201a0). A
-	// spent icon comes back once it is disabled and enabled again.
-	if (spent) {
-		Common::Array<uint32> disabled;
-		for (Common::HashMap<uint32, bool>::iterator it = spent->begin(); it != spent->end(); ++it) {
-			if (!script.isEnabled(it->_key))
-				disabled.push_back(it->_key);
-		}
-		for (uint i = 0; i < disabled.size(); i++)
-			spent->erase(disabled[i]);
-	}
+	// the exe creates their objects when they are enabled (0x4201a0)
 	for (uint i = 0; i < icons.size();) {
-		if (!script.isEnabled(icons[i].id) || (spent && spent->contains(icons[i].id))) {
+		if (!script.isEnabled(icons[i].id) || script.isSpent(icons[i].id)) {
 			delete icons[i].graphic;
 			delete icons[i].rollover;
 			icons.remove_at(i);
@@ -335,7 +325,7 @@ void Interface::syncIcons(const Script &script, uint32 classId, Common::Array<Ic
 	const Common::Array<uint32> &order = _classOrder[classId == kClassActionIcon ? 0 : classId == kClassInventory ? 1 : 2];
 	for (uint i = 0; i < order.size(); i++) {
 		uint32 id = order[i];
-		if (!script.isEnabled(id) || (spent && spent->contains(id)))
+		if (!script.isEnabled(id) || script.isSpent(id))
 			continue;
 		bool found = false;
 		for (uint j = 0; j < icons.size() && !found; j++)
@@ -443,16 +433,6 @@ bool Interface::getInventoryRect(uint32 id, Common::Rect *rect) const {
 		}
 	}
 	return false;
-}
-
-void Interface::spendEmotionIcons() {
-	for (uint i = 0; i < _emotions.size(); i++)
-		_spentEmotions[_emotions[i].id] = true;
-}
-
-void Interface::spendActionIcons() {
-	for (uint i = 0; i < _actions.size(); i++)
-		_spentActions[_actions[i].id] = true;
 }
 
 Interface::Hit Interface::hitTest(const Common::Point &pos) const {
