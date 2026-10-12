@@ -23,6 +23,8 @@
 #define XFILES_XFILES_H
 
 #include "common/array.h"
+#include "common/path.h"
+#include "common/str-array.h"
 #include "common/hashmap.h"
 #include "common/random.h"
 #include "common/rect.h"
@@ -196,6 +198,26 @@ private:
 	Common::HashMap<uint32, Sound> _sounds;
 	uint32 _soundView;                    ///< The view the 3D sounds were placed for
 	Common::Point _soundFacing;           ///< The last facing found, kept for views without one
+
+	// Comparison with reference runs of the original (the research repo's
+	// docs/reference-runs.md, "Screenshots"): the xfiles_shots setting names a
+	// folder for screenshots taken at the events xfref.dll takes them at,
+	// xfiles_steps a step list (as Script::step takes) played from the start
+	void scheduleShot(const char *reason, uint32 id, uint32 delay);
+	void updateShots();
+	void saveShot();
+	void runSteps();
+	Common::Path _shotsDir;
+	uint _shots;
+	uint32 _shotDue;                      ///< getMillis() of the pending shot; 0: none
+	Common::String _shotReason;
+	uint32 _shotId;
+	uint32 _shotView;                     ///< The view the last view shot was for
+	bool _shotBox;                        ///< The dialog box was on screen at the last frame
+	Common::StringArray _steps;
+	uint _nextStep;
+	uint32 _waitVideo;                    ///< A wait step waits for this video to end
+	int _waitTimer;                       ///< A timer step waits for this timer to expire; -1: none
 };
 
 extern XFilesEngine *g_engine;

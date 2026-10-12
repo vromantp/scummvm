@@ -139,8 +139,8 @@ public:
 	uint32 getLocation() const { return _location; }
 	uint32 getViewPoint() const { return _viewPoint; }
 	uint32 getView() const { return _view; }
-	/** The view is entered but its activation waits for the playing video. */
-	bool isViewHeld() const { return _viewHeld; }
+	/** The current view has been activated (not just entered, or held while a video plays). */
+	bool isViewActive() const { return _viewActive; }
 	/** Queued videos; the first one is on screen. */
 	const Common::Array<uint32> &getVideoQueue() const { return _videoQueue; }
 	/** How long the first video plays, in ms; 0 for all of it. */
@@ -276,6 +276,7 @@ private:
 	uint32 _node, _location, _viewPoint, _view;
 	Common::Array<uint32> _viewObjects;        ///< Activated with the view, in activation order
 	bool _viewHeld;                            ///< The view is entered but not activated until the video ends
+	bool _viewActive;                          ///< The view's activation has run
 };
 
 } // End of namespace XFiles

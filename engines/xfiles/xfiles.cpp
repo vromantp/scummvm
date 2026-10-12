@@ -25,6 +25,8 @@
 #include "common/file.h"
 #include "common/formats/winexe.h"
 #include "common/system.h"
+#include "common/tokenizer.h"
+#include "image/png.h"
 #include "engines/util.h"
 #include "graphics/cursorman.h"
 #include "graphics/pixelformat.h"
@@ -70,7 +72,7 @@ static const int kMenuNewTop = 80, kMenuNewBottom = 118;
 static const int kMenuQuitTop = 385, kMenuQuitBottom = 420;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
-	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _video(nullptr), _videoStarted(0), _viewId(0), _soundView(0), _dialogBoxView(0),
+	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _video(nullptr), _videoStarted(0), _viewId(0), _soundView(0), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
 	_texts(nullptr), _interface(nullptr), _inventoryVariable(0), _inventoryNone(0), _lastClickTime(0) {
 	g_engine = this;
 	memset(_prefVariables, 0, sizeof(_prefVariables));
@@ -132,8 +134,14 @@ Common::Error XFilesEngine::run() {
 	_interface->init(_texts);
 	syncSoundSettings();
 
+	_shotsDir = ConfMan.getPath("xfiles_shots");
+	_steps = Common::StringTokenizer(ConfMan.get("xfiles_steps")).split();
+	if (!_steps.empty())
+		_mouse = Common::Point(320, 240); // tools/ref/run.ps1 Start-Game: move 320 240
+
 	_video = new Movie();
-	if (playIntro() && runMenu())
+	// A step list starts the game at once, without the intro and the menu
+	if (!_steps.empty() || (playIntro() && runMenu()))
 		runGame();
 	return Common::kNoError;
 }
@@ -146,10 +154,12 @@ XFilesEngine::Input XFilesEngine::pollInput() {
 	input.skip = false;
 	Common::Event event;
 	while (g_system->getEventManager()->pollEvent(event)) {
-		if (event.type == Common::EVENT_LBUTTONDOWN) {
+		if (event.type == Common::EVENT_LBUTTONDOWN && _steps.empty()) {
 			input.click = true;
 			input.pos = event.mouse;
-		} else if (event.type == Common::EVENT_MOUSEMOVE) {
+		} else if (event.type == Common::EVENT_MOUSEMOVE && _steps.empty()) {
+			// A step list (xfiles_steps) keeps the mouse where a reference
+			// run puts it, whatever the real mouse does
 			_mouse = event.mouse;
 		} else if (event.type == Common::EVENT_KEYDOWN && event.kbd.keycode == Common::KEYCODE_ESCAPE) {
 			input.skip = true;
@@ -268,6 +278,105 @@ void XFilesEngine::runGame() {
 		}
 		_captions.drawCard(_screen);
 		present();
+		updateShots();
+		runSteps();
+	}
+}
+
+// -- Comparison with reference runs -------------------------------------------
+
+// The delays xfref.dll waits before its shots: after a view is activated
+// and no video plays, and after the dialog box is drawn
+static const uint32 kShotViewDelay = 1500;
+static const uint32 kShotBoxDelay = 600;
+
+void XFilesEngine::scheduleShot(const char *reason, uint32 id, uint32 delay) {
+	// A later event replaces a pending shot, as in xfref.dll
+	_shotReason = reason;
+	_shotId = id;
+	_shotDue = g_system->getMillis() + delay;
+	if (!_shotDue)
+		_shotDue = 1;
+}
+
+void XFilesEngine::updateShots() {
+	if (_shotsDir.empty())
+		return;
+	// A view counts once it is activated (xfref.dll: obj.activate kind=4),
+	// the box whenever it comes on screen (dbox.show on=1)
+	if (_script->isViewActive() && _script->getView() != _shotView) {
+		_shotView = _script->getView();
+		scheduleShot("view", _shotView, kShotViewDelay);
+	}
+	bool box = _dialogBox.isOpen() && _script->getVideoQueue().empty();
+	if (box && !_shotBox)
+		scheduleShot("dbox", _dialogBox.getCharView(), kShotBoxDelay);
+	_shotBox = box;
+	if (_shotDue && _shotReason == "view" && !_script->getVideoQueue().empty())
+		_shotDue = g_system->getMillis() + kShotViewDelay; // After the video
+	if (_shotDue && (int32)(g_system->getMillis() - _shotDue) >= 0) {
+		saveShot();
+		_shotDue = 0;
+	}
+}
+
+void XFilesEngine::saveShot() {
+	Common::String name = Common::String::format("%04u-%s-%u.png", ++_shots, _shotReason.c_str(), _shotId);
+	Common::DumpFile file;
+	if (!file.open(_shotsDir.join(name), true) || !Image::writePNG(file, _screen))
+		warning("Cannot write the screenshot %s", name.c_str());
+	debugC(1, kDebugScript, "-- shot %s", name.c_str());
+}
+
+void XFilesEngine::runSteps() {
+	// xfref.dll holds input commands while a shot is pending (not while
+	// it waits for a video)
+	const Common::Array<uint32> &queue = _script->getVideoQueue();
+	if (_steps.empty() || (_shotDue && queue.empty()) || _waitTimer >= 0)
+		return;
+	if (_nextStep >= _steps.size()) {
+		// Done: quit once the videos have played
+		if (queue.empty())
+			quitGame();
+		return;
+	}
+	if (_waitVideo) {
+		if (!queue.empty() && queue[0] == _waitVideo)
+			return;
+		_waitVideo = 0;
+	}
+	while (_nextStep < _steps.size()) {
+		const Common::String &step = _steps[_nextStep++];
+		if (step == "wait") {
+			// The end of the playing video, in real time
+			if (!queue.empty()) {
+				_waitVideo = queue[0];
+				return;
+			}
+			continue;
+		}
+		if (step.hasPrefix("timer:")) {
+			// The engine's timers run in real time: wait for this one to
+			// expire, if it runs
+			uint timer = atoi(step.c_str() + 6);
+			if (_script->getTimers().contains(timer)) {
+				_waitTimer = timer;
+				return;
+			}
+			continue;
+		}
+		// A character view clicked opens the dialog box, as handleClick does
+		VCCharView cv;
+		if (step.hasPrefix("click:") && _data->getCharView(atoi(step.c_str() + 6), cv)) {
+			_script->click(cv.id);
+			if (!isHolding())
+				openDialogBox(cv);
+		} else if (step.hasPrefix("ask:")) {
+			askTopic(atoi(step.c_str() + 4));
+		} else {
+			_script->step(step);
+		}
+		return;
 	}
 }
 
@@ -491,7 +600,7 @@ void XFilesEngine::placeSound(Sound &sound) {
 	// Placed before its view is activated, it is silent until the player
 	// moves on (reference run, 2026-10-12: the Field Office ambience at the
 	// start of the game)
-	if (_script->isViewHeld()) {
+	if (!_script->isViewActive()) {
 		sound.movie->setVolume(0);
 		return;
 	}
@@ -595,6 +704,8 @@ void XFilesEngine::updateTimers() {
 	for (uint i = 0; i < expired.size(); i++) {
 		debugC(1, kDebugScript, "-- timer %u expired", expired[i]);
 		_timerStates.erase(expired[i]);
+		if ((int)expired[i] == _waitTimer)
+			_waitTimer = -1;
 		// Icons are left alone: the data disables them when a choice times out
 		_script->expireTimer(expired[i]);
 	}

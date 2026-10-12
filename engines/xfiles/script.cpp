@@ -96,7 +96,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _clipQueued(false), _viewHeld(false), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _clipQueued(false), _viewHeld(false), _viewActive(false), _node(0), _location(0), _viewPoint(0), _view(0) {
 	_jumpCut.first = _jumpCut.later = false;
 	Common::Array<NeoEntry> entries;
 	data.getGam().getObjects(kClassVariable, entries);
@@ -460,8 +460,10 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view) 
 		if (i == 3)
 			deactivateViewObjects();
 	}
-	if (first < 4)
+	if (first < 4) {
 		_viewHeld = false;
+		_viewActive = false;
+	}
 	_node = node;
 	_location = location;
 	_viewPoint = viewPoint;
@@ -491,6 +493,7 @@ void Script::activateView() {
 		_viewHeld = false;
 		log("  == view activated " + getObjectLabel(_data, _view));
 	}
+	_viewActive = true;
 	fire(_view, kEventObjectActivation);
 	activateViewObjects();
 }
