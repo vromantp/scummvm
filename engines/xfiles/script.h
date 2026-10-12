@@ -28,7 +28,14 @@
 
 #include "xfiles/vcdata.h"
 
+namespace Common {
+class WinResources;
+}
+
 namespace XFiles {
+
+/** The phone's VCIFaceLayout, "Phone (On)". */
+static const uint32 kPhoneLayout = 15297;
 
 /** Mode of an asset action (and of ScriptHooks::playAsset). */
 enum AssetMode {
@@ -84,6 +91,8 @@ public:
 
 	/** Where C++ functions and non-blocking media go; nullptr (the default) only logs them. */
 	void setHooks(ScriptHooks *hooks) { _hooks = hooks; }
+	/** The string table of XFilesT.dll, for phone book entries that name a string (may be nullptr). */
+	void setTexts(Common::WinResources *texts) { _texts = texts; }
 
 	/** Fire the title's Object Activation (the game's start). */
 	void start();
@@ -96,6 +105,8 @@ public:
 
 	/** The video on screen ended: fire its Object Deactivation, start the next one. */
 	void finishVideo() { endVideo("ended"); }
+	/** A sound played by an Asset action ended (or was stopped by the engine): its Object Deactivation. */
+	void finishSound(uint32 id) { endSound(id, "ended"); }
 	/** Mouse Click on an object (icon, hotspot, explorable...), if it is enabled. */
 	void click(uint32 id);
 	/** Mouse Double-Click on an object, if it is enabled. */
@@ -186,6 +197,33 @@ public:
 	/** Evidence icons in the evidence kit (EnableKitIcon), in order. */
 	const Common::Array<uint32> &getKitIcons() const { return _kit; }
 
+	/** Value of a string variable: its value names a VCString of the .gam. */
+	Common::String getString(uint32 variableId) const;
+	void setString(uint32 variableId, const Common::String &value);
+
+	/** Text drawn into an interface item (the phone's display). */
+	struct ItemText {
+		Common::U32String text;
+		uint32 color;   ///< RGB
+		bool bold;
+		int size;       ///< Character height in pixels (GDI's -lfHeight)
+	};
+	/** The text of an interface item, or nullptr; drawn from its top left, a line per '\n'. */
+	const ItemText *getItemText(uint32 itemId) const;
+	/** The interface item with the keyboard focus (SetIItemFocus), or 0. */
+	uint32 getFocus() const { return _focus; }
+	/**
+	 * A key went down while an item has the focus: its Key Press triggers,
+	 * with the key's Windows virtual-key code as the event's field.
+	 */
+	void keyPress(uint vk);
+	/**
+	 * Take the phone's buttons pressed since the last call. Each goes up
+	 * (is disabled again) 100 ms after it was pressed: releaseItem().
+	 */
+	void takePressedItems(Common::Array<uint32> &items);
+	void releaseItem(uint32 itemId);
+
 	/**
 	 * What the current view shows when no video plays: the first enabled
 	 * media asset of its list (none if no asset is enabled); background is
@@ -227,6 +265,27 @@ private:
 	void hideLayout(uint32 layoutId);
 	void updateLayoutItem(uint32 itemId, bool enabled);
 	void enableKitIcon(uint32 id);
+	/** RandGen(var, n): a number from 0 to n (0x49f6d0). */
+	void randGen(uint32 variableId, int32 n);
+
+	// Phone (phone.cpp)
+	/** Run one of the Phone hooks (PhoneInit, PhoneButton...). */
+	void callPhone(const VCAction &action, const Common::Array<int32> &args, int event, const EventFields &fields);
+	void phoneInit(uint32 numberVar);
+	void phoneButton(char key, uint32 numberVar, uint32 pressedItem);
+	void phoneClear(uint32 numberVar);
+	void phoneMenuInit(uint32 numberVar);
+	void phoneFlipName(bool back, uint32 numberVar);
+	void phoneSend(uint32 numberVar, uint32 triggerVar, uint32 actionsVar, int event, const EventFields &fields);
+	void phoneKeyPress(uint vk, int event, const EventFields &fields);
+	/** Show the current phone book entry and take its number. */
+	void phoneShowEntry(uint32 numberVar);
+	/** The phone's layout was hidden (0x4c87c0, 0x4c8150). */
+	void phoneClosed();
+	void setPhoneDisplay(const Common::U32String &text);
+	/** DoActionList(trigger, actionList): another trigger's actions. */
+	void runActionList(uint32 actionList, int event, const EventFields &fields);
+	void endSound(uint32 id, const char *how);
 	void queueVideo(uint32 id, uint32 limit, bool loop);
 	void startVideo();
 	/** The video on screen ended or was stopped (how is logged). */
@@ -247,6 +306,7 @@ private:
 
 	const VCData &_data;
 	ScriptHooks *_hooks;
+	Common::WinResources *_texts;
 	Common::HashMap<uint32, int32> _variables;
 	Common::HashMap<uint32, bool> _enabled;    ///< Objects without a VCEnabled are always enabled
 	Common::HashMap<uint32, bool> _spent;      ///< Spent emotion and action icons
@@ -260,6 +320,21 @@ private:
 	uint32 _box;                               ///< Character view whose conversation box is open, or 0
 	Common::Array<Layout> _layouts;
 	Common::Array<uint32> _kit;
+	Common::HashMap<uint32, Common::String> _strings;  ///< VCString values that changed
+	Common::HashMap<uint32, ItemText> _itemTexts;
+	uint32 _focus;
+	uint32 _currNodeVariable;                  ///< RegCurrNode
+	Common::Array<uint32> _pressed;            ///< See takePressedItems()
+	Common::HashMap<uint32, bool> _sounds;     ///< Sounds playing (asset objects active)
+
+	/** The phone's state (XFiles.exe globals 0x6b1900-0x6b190c, list 0x6ba5c8). */
+	struct Phone {
+		Common::Array<uint32> book;   ///< Enabled phone book entries, filled by PhoneMenuInit
+		uint bookSize;                ///< Kept when the book is emptied on closing
+		uint bookIndex;               ///< The entry shown
+		bool showsName;               ///< The display shows an entry, not a dialled number
+		uint32 tone;                  ///< The key tone playing, or 0
+	} _phone;
 	Common::Array<uint32> _videoQueue;
 	struct VideoPlay {
 		uint32 limit;   ///< ms to play, 0 for all

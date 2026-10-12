@@ -10,6 +10,7 @@ MODULE_OBJS = \
 	metaengine.o \
 	movie.o \
 	neoaccess.o \
+	phone.o \
 	pictures.o \
 	script.o \
 	subliminal.o \

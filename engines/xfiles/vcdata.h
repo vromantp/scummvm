@@ -383,6 +383,8 @@ public:
 	 */
 	bool getResourceRef(uint32 id, uint32 &type, uint32 &resource) const;
 	bool getVariable(uint32 id, VCVariable &variable) const;
+	/** Text of a VCString (.gam), the value of a string variable. */
+	bool getString(uint32 id, Common::String &text) const;
 	/** The .hdb object a VCEnabled (.gam) switches, and its initial state. */
 	bool getEnabled(uint32 id, uint32 &target, bool &enabled) const;
 	bool getCharacter(uint32 id, VCCharacter &character) const;

@@ -55,6 +55,10 @@ enum {
 	// Rollover text (Screen_RolloverText 0x437600): Arial 9 (12 px), 2 px
 	// below the icon, centred on it and kept on the screen
 	kTextFontSize = 12,
+	// Item text (the phone's display, 0x4c7f00): Courier New -15 bold, lines
+	// 17 px apart (GDI's DrawText: 17 px for one line, 51 for three)
+	kItemFontSize = 15,
+	kItemLineHeight = 17,
 	kTextGap = 2,
 	kTextMargin = 3,
 	kScreenWidth = 640
@@ -137,7 +141,7 @@ void Interface::Graphic::draw(Graphics::Surface &dst, int x, int y) const {
 // -- Interface ----------------------------------------------------------------
 
 Interface::Interface(const VCData &data, const DiscFiles &files) : _data(data), _files(files), _kitOpen(false),
-	_evidenceRowShown(false), _texts(nullptr), _font(nullptr), _rolloverText(false), _barClosed(false), _barOpen(false),
+	_evidenceRowShown(false), _texts(nullptr), _font(nullptr), _itemFont(nullptr), _rolloverText(false), _barClosed(false), _barOpen(false),
 	_mouseInBar(false), _enteredBar(false), _held(0), _cursorPushed(false) {
 	static const uint32 kClasses[] = { kClassActionIcon, kClassInventory, kClassEmotionIcon };
 	for (uint i = 0; i < ARRAYSIZE(kClasses); i++) {
@@ -158,6 +162,7 @@ Interface::~Interface() {
 	freeIcons(_kit);
 	freeItems();
 	delete _font;
+	delete _itemFont;
 }
 
 void Interface::init(Common::WinResources *texts) {
@@ -165,6 +170,10 @@ void Interface::init(Common::WinResources *texts) {
 #ifdef USE_FREETYPE2
 	// Arial is not available: Liberation Sans has its metrics
 	_font = Graphics::loadTTFFontFromArchive("LiberationSans-Regular.ttf", kTextFontSize, Graphics::kTTFSizeModeCharacter);
+	// Courier New: Liberation Mono has its metrics; GDI draws it without
+	// smoothing
+	_itemFont = Graphics::loadTTFFontFromArchive("LiberationMono-Bold.ttf", kItemFontSize, Graphics::kTTFSizeModeCharacter,
+		0, 0, Graphics::kTTFRenderModeMonochrome);
 #endif
 	if (!_font)
 		warning("Interface: cannot load the rollover text font from fonts.dat");
@@ -375,6 +384,7 @@ void Interface::syncItems(const Script &script) {
 			if (_items[i].graphic)
 				_items[i].graphic->update();
 		}
+		syncItemTexts(script);
 		return;
 	}
 
@@ -391,13 +401,26 @@ void Interface::syncItems(const Script &script) {
 			item.layer = data.layer & 0xff; // only the low byte is the drawing layer
 			item.rect = Common::Rect(data.rect.left, data.rect.top, data.rect.right, data.rect.bottom);
 			item.graphic = loadGraphic(data.assets);
-			// Lower layers first; a later layout's items over an earlier one's
+			// Lower layers are on top: higher ones are drawn first. The phone
+			// shows it: its body is layer 200, the pressed buttons 198-199,
+			// the display and the buttons' hot areas 100, and the full-screen
+			// item that closes it on a click outside 201. A later layout's
+			// items go over an earlier one's.
 			uint pos = _items.size();
-			while (pos > 0 && _items[pos - 1].layer > item.layer)
+			while (pos > 0 && _items[pos - 1].layer < item.layer)
 				pos--;
 			_items.insert_at(pos, item);
 		}
 		debugC(1, kDebugScript, "-- layout #%u shown with %u items", layouts[i].id, layouts[i].items.size());
+	}
+	syncItemTexts(script);
+}
+
+void Interface::syncItemTexts(const Script &script) {
+	for (uint i = 0; i < _items.size(); i++) {
+		const Script::ItemText *text = script.getItemText(_items[i].id);
+		_items[i].text = text ? text->text : Common::U32String();
+		_items[i].textColor = text ? text->color : 0;
 	}
 }
 
@@ -543,7 +566,35 @@ void Interface::draw(Graphics::Surface &dst) const {
 	for (uint i = 0; i < _items.size(); i++) {
 		if (_items[i].graphic)
 			_items[i].graphic->draw(dst, _items[i].rect.left, _items[i].rect.top);
+		if (!_items[i].text.empty())
+			drawItemText(dst, _items[i]);
 	}
+}
+
+void Interface::drawItemText(Graphics::Surface &dst, const Item &item) const {
+	// The phone's display (0x4d6250): left aligned, no wrapping, a line per
+	// newline from the item's top left, clipped to the item
+	if (!_itemFont)
+		return;
+	Common::Rect clip = item.rect;
+	clip.clip(Common::Rect(dst.w, dst.h));
+	if (clip.isEmpty())
+		return;
+	Graphics::Surface area = dst.getSubArea(clip);
+	uint32 color = dst.format.RGBToColor((item.textColor >> 16) & 0xff, (item.textColor >> 8) & 0xff, item.textColor & 0xff);
+	Common::U32StringArray lines;
+	Common::U32String line;
+	for (uint i = 0; i <= item.text.size(); i++) {
+		if (i == item.text.size() || item.text[i] == '\n') {
+			lines.push_back(line);
+			line.clear();
+		} else {
+			line += item.text[i];
+		}
+	}
+	for (uint i = 0; i < lines.size(); i++)
+		_itemFont->drawString(&area, lines[i], item.rect.left - clip.left, item.rect.top - clip.top + i * kItemLineHeight,
+			item.rect.width(), color, Graphics::kTextAlignLeft);
 }
 
 void Interface::drawRolloverText(Graphics::Surface &dst, const Common::Array<Icon> &icons) const {

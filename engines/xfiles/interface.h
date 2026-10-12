@@ -156,7 +156,9 @@ private:
 		uint32 id;
 		uint16 layer;
 		Common::Rect rect;
-		Graphic *graphic;    ///< nullptr if the item shows nothing (or text, not drawn yet)
+		Graphic *graphic;    ///< nullptr if the item shows no picture
+		Common::U32String text;  ///< Text drawn into the item (the phone's display)
+		uint32 textColor;    ///< RGB
 	};
 
 	/** Load the graphic of the first asset of a VCAssetRefList, nullptr if none opens. */
@@ -170,6 +172,8 @@ private:
 	void placeIcons(Common::Array<Icon> &icons, Pane pane, bool captions);
 	void syncItems(const Script &script);
 	void freeItems();
+	void syncItemTexts(const Script &script);
+	void drawItemText(Graphics::Surface &dst, const Item &item) const;
 	void drawIcons(Graphics::Surface &dst, const Common::Array<Icon> &icons) const;
 	void drawRolloverText(Graphics::Surface &dst, const Common::Array<Icon> &icons) const;
 	static void blit(Graphics::Surface &dst, const Graphics::Surface &src, int x, int y);
@@ -185,6 +189,7 @@ private:
 	bool _evidenceRowShown;
 	Common::WinResources *_texts;
 	Graphics::Font *_font;
+	Graphics::Font *_itemFont;                    ///< Text of items: Courier New 15 bold (the phone's display)
 	bool _rolloverText;
 	bool _barClosed;
 	Common::Array<uint32> _layouts;               ///< Shown layouts whose items are loaded

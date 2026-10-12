@@ -555,6 +555,23 @@ bool VCData::getVariable(uint32 id, VCVariable &variable) const {
 	return true;
 }
 
+bool VCData::getString(uint32 id, Common::String &text) const {
+	uint32 classId, m;
+	if (!lookupGam(id, classId, m) || classId != kClassString)
+		return false;
+	// A NUL-terminated string; length 0 for an empty one
+	uint32 ptr = _gam.readUint32(m + 6);
+	uint32 length = _gam.readUint32(m + 10);
+	if (ptr > _gam.getSize() || _gam.getSize() - ptr < length)
+		return false;
+	const char *p = (const char *)_gam.getData() + ptr;
+	uint32 n = 0;
+	while (n < length && p[n])
+		n++;
+	text = Common::String(p, n);
+	return true;
+}
+
 bool VCData::getEnabled(uint32 id, uint32 &target, bool &enabled) const {
 	uint32 classId, m;
 	if (!lookupGam(id, classId, m) || classId != kClassEnabled)

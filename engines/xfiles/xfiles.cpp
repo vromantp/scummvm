@@ -83,7 +83,8 @@ XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : E
 }
 
 XFilesEngine::~XFilesEngine() {
-	stopAllSounds();
+	for (Common::HashMap<uint32, Sound>::iterator it = _sounds.begin(); it != _sounds.end(); ++it)
+		delete it->_value.movie;
 	closeView();
 	delete _interface;
 	delete _video;
@@ -168,9 +169,26 @@ XFilesEngine::Input XFilesEngine::pollInput() {
 			_mouse = event.mouse;
 		} else if (event.type == Common::EVENT_KEYDOWN && event.kbd.keycode == Common::KEYCODE_ESCAPE) {
 			input.skip = true;
+		} else if (event.type == Common::EVENT_KEYDOWN && _script && _steps.empty()) {
+			uint vk = getVirtualKey(event.kbd);
+			if (vk)
+				_script->keyPress(vk);
 		}
 	}
 	return input;
+}
+
+uint XFilesEngine::getVirtualKey(const Common::KeyState &kbd) {
+	// Key Press events carry a Windows virtual-key code
+	if (kbd.keycode >= Common::KEYCODE_0 && kbd.keycode <= Common::KEYCODE_9)
+		return '0' + (kbd.keycode - Common::KEYCODE_0);
+	if (kbd.keycode >= Common::KEYCODE_KP0 && kbd.keycode <= Common::KEYCODE_KP9)
+		return 0x60 + (kbd.keycode - Common::KEYCODE_KP0); // VK_NUMPAD0
+	if (kbd.keycode >= Common::KEYCODE_a && kbd.keycode <= Common::KEYCODE_z)
+		return 'A' + (kbd.keycode - Common::KEYCODE_a);
+	if (kbd.keycode == Common::KEYCODE_RETURN || kbd.keycode == Common::KEYCODE_KP_ENTER)
+		return 0x0d;
+	return 0;
 }
 
 void XFilesEngine::present() {
@@ -261,6 +279,7 @@ bool XFilesEngine::runMenu() {
 void XFilesEngine::runGame() {
 	_script = new Script(*_data);
 	_script->setHooks(this);
+	_script->setTexts(_texts);
 	_script->setRandomSeed(_randomSource.getRandomNumber(0xFFFFFFFF));
 	// A new game starts from XFiles.gam, which allows the head credits
 	// (XFiles.exe Game_Start 0x48cd70)
@@ -528,6 +547,7 @@ void XFilesEngine::playAsset(uint32 id, byte mode, bool positional, int16 x, int
 	sound.y = y;
 	if (!sound.movie->open(_discFiles, asset)) {
 		delete sound.movie;
+		_script->finishSound(id);
 		return;
 	}
 	debugC(1, kDebugScript, "-- sound #%u %s%s", id, asset.files[0].file.c_str(), mode == kModePlayLoop ? ", looped" : "");
@@ -545,9 +565,14 @@ void XFilesEngine::stopSound(uint32 id) {
 }
 
 void XFilesEngine::stopAllSounds() {
-	for (Common::HashMap<uint32, Sound>::iterator it = _sounds.begin(); it != _sounds.end(); ++it)
+	Common::Array<uint32> stopped;
+	for (Common::HashMap<uint32, Sound>::iterator it = _sounds.begin(); it != _sounds.end(); ++it) {
 		delete it->_value.movie;
+		stopped.push_back(it->_key);
+	}
 	_sounds.clear();
+	for (uint i = 0; i < stopped.size(); i++)
+		_script->finishSound(stopped[i]);
 }
 
 void XFilesEngine::updateSounds() {
@@ -562,8 +587,10 @@ void XFilesEngine::updateSounds() {
 		if (it->_value.movie->hasEnded())
 			ended.push_back(it->_key);
 	}
-	for (uint i = 0; i < ended.size(); i++)
+	for (uint i = 0; i < ended.size(); i++) {
 		stopSound(ended[i]);
+		_script->finishSound(ended[i]);
+	}
 }
 
 uint32 XFilesEngine::getNavTarget(uint32 view, uint32 hotSpot) const {
@@ -739,6 +766,23 @@ void XFilesEngine::updateTimers() {
 	}
 	for (uint i = 0; i < stopped.size(); i++)
 		_timerStates.erase(stopped[i]);
+
+	// The phone's buttons go up 100 ms after they were pressed (0x4c8870)
+	Common::Array<uint32> pressed;
+	_script->takePressedItems(pressed);
+	for (uint i = 0; i < pressed.size(); i++) {
+		PressedItem item = { pressed[i], now };
+		_pressedItems.push_back(item);
+	}
+	for (uint i = 0; i < _pressedItems.size(); ) {
+		if (now - _pressedItems[i].since >= kButtonUpDelay) {
+			uint32 id = _pressedItems[i].id;
+			_pressedItems.remove_at(i);
+			_script->releaseItem(id);
+		} else {
+			i++;
+		}
+	}
 
 	for (uint i = 0; i < expired.size(); i++) {
 		debugC(1, kDebugScript, "-- timer %u expired", expired[i]);

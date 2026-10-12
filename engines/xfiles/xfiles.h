@@ -30,6 +30,7 @@
 #include "common/rect.h"
 #include "common/scummsys.h"
 #include "common/error.h"
+#include "common/keyboard.h"
 #include "engines/engine.h"
 #include "graphics/surface.h"
 
@@ -118,6 +119,8 @@ private:
 
 	bool loadDatabases();
 	Input pollInput();
+	/** The Windows virtual-key code of a key, 0 for keys the game does not take. */
+	static uint getVirtualKey(const Common::KeyState &kbd);
 	void present();
 	void blit(const Graphics::Surface &src, int x, int y);
 	Common::Point getBandPosition(const Movie &movie) const;
@@ -203,6 +206,12 @@ private:
 	Interface::Hit _lastClickHit;
 	Interface::Hit _hover;               ///< What the mouse is over, for Roll Into and Roll Out Of
 	Common::HashMap<uint, TimerState> _timerStates;
+	struct PressedItem {
+		uint32 id;
+		uint32 since;
+	};
+	static const uint32 kButtonUpDelay = 100;
+	Common::Array<PressedItem> _pressedItems;     ///< Phone buttons shown pressed (Script::takePressedItems)
 	Common::HashMap<uint32, Sound> _sounds;
 	uint32 _soundView;                    ///< The view the 3D sounds were placed for
 	Common::Point _soundFacing;           ///< The last facing found, kept for views without one

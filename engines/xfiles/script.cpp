@@ -96,8 +96,11 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _clipQueued(false), _viewHeld(false), _viewActive(false), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _focus(0), _currNodeVariable(0), _clipQueued(false), _viewHeld(false), _viewActive(false), _node(0), _location(0), _viewPoint(0), _view(0) {
 	_jumpCut.first = _jumpCut.later = false;
+	_phone.bookSize = _phone.bookIndex = 0;
+	_phone.showsName = false;
+	_phone.tone = 0;
 	Common::Array<NeoEntry> entries;
 	data.getGam().getObjects(kClassVariable, entries);
 	for (uint i = 0; i < entries.size(); i++) {
@@ -125,6 +128,46 @@ bool Script::isEnabled(uint32 id) const {
 
 int32 Script::getVariable(uint32 id) const {
 	return _variables.contains(id) ? _variables[id] : 0;
+}
+
+Common::String Script::getString(uint32 variableId) const {
+	uint32 stringId = getVariable(variableId);
+	Common::String text;
+	if (_strings.contains(stringId))
+		return _strings[stringId];
+	_data.getString(stringId, text);
+	return text;
+}
+
+void Script::setString(uint32 variableId, const Common::String &value) {
+	uint32 stringId = getVariable(variableId);
+	if (stringId)
+		_strings[stringId] = value;
+}
+
+const Script::ItemText *Script::getItemText(uint32 itemId) const {
+	return _itemTexts.contains(itemId) ? &_itemTexts[itemId] : nullptr;
+}
+
+void Script::keyPress(uint vk) {
+	// The focused item's Key Press triggers; the event's field 0 is the key
+	if (!_focus)
+		return;
+	EventFields fields;
+	fields.push_back(vk);
+	fire(_focus, kEventKeyPress, fields);
+}
+
+void Script::takePressedItems(Common::Array<uint32> &items) {
+	items.push_back(_pressed);
+	_pressed.clear();
+}
+
+void Script::releaseItem(uint32 itemId) {
+	// The Enable action PhoneButton queues (0x4c8870, 0x4083d0)
+	log(Common::String::format("  (button #%u up)", itemId));
+	_enabled[itemId] = false;
+	updateLayoutItem(itemId, false);
 }
 
 // -- Triggers and actions -----------------------------------------------------
@@ -329,10 +372,11 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 		// Game_BuildObjects 0x477940)
 		if (_hooks)
 			_hooks->callFunction(a, args);
-	} else if (a.function == "DoActionList" && args.size() >= 2) {
-		Common::Array<uint32> actions;
-		_data.getMembers(args[1], actions);
-		runActions(actions, event, fields);
+	} else if ((a.function == "DoActionList" || a.function == "DoActionListID") && args.size() >= 2) {
+		// DoActionListID takes the two IDs from variables (0x50a200)
+		if (a.function == "DoActionListID")
+			log(Common::String::format("      call %s(%d, %d)", a.function.c_str(), args[0], args[1]));
+		runActionList(args[1], event, fields);
 	} else {
 		// The values of its variable arguments follow, as a reference run
 		// logs them
@@ -344,9 +388,33 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 		log("      call " + describeAction(_data, a.id, event, false) + (values.empty() ? "" : " [" + values + "]"));
 		if (a.function == "EnableKitIcon" && !args.empty())
 			enableKitIcon(args[0]);
+		else if (a.function == "RandGen" && args.size() >= 2 && a.args[0].kind == kOperandVariable)
+			randGen(a.args[0].value, args[1]);
+		else if (a.function == "RegCurrNode" && !a.args.empty() && a.args[0].kind == kOperandVariable)
+			_currNodeVariable = a.args[0].value; // 0x4926a0
+		else if (a.function == "SetIItemFocus" && !args.empty())
+			_focus = args[0];
+		else if (a.function.hasPrefix("Phone"))
+			callPhone(a, args, event, fields);
 		if (_hooks)
 			_hooks->callFunction(a, args);
 	}
+}
+
+void Script::runActionList(uint32 actionList, int event, const EventFields &fields) {
+	Common::Array<uint32> actions;
+	_data.getMembers(actionList, actions);
+	runActions(actions, event, fields);
+}
+
+void Script::randGen(uint32 variableId, int32 n) {
+	// 0x49f6d0: a generator from 0 to n, rolled once
+	Dice dice = newDice(0x49f6f9);
+	int32 value = roll(dice, 0, n);
+	_variables[variableId] = value;
+	Common::U32String name;
+	_data.getVariableName(variableId, name);
+	log(Common::String::format("      %s = %d", name.encode().c_str(), value));
 }
 
 void Script::enableKitIcon(uint32 id) {
@@ -386,13 +454,18 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 	} else if (mode == kModePlayOnce || mode == kModePlayLoop) {
 		Common::String where = sound3D ? Common::String::format(" at (%d, %d)", sound3D->x, sound3D->y) : Common::String();
 		log(Common::String::format("      %s #%u ", kModeNames[mode], id) + file + where + "  \"" + nameOrNone(_data, a.name) + "\"");
+		// A sound (.amv, .mus, .wav) ends on its own; its end or a stop
+		// deactivates its asset object too (0x43a970): see endSound()
+		if (!a.files.empty() && a.files[0].file.hasPrefix("XS:"))
+			_sounds[id] = true;
+		fire(id, kEventObjectActivation);
 		if (_hooks)
 			_hooks->playAsset(id, mode, sound3D != nullptr, sound3D ? sound3D->x : 0, sound3D ? sound3D->y : 0);
-		fire(id, kEventObjectActivation);
 	} else if (mode == kModeStop) {
 		log(Common::String::format("      stop #%u ", id) + file);
 		if (_hooks)
 			_hooks->playAsset(id, mode, false, 0, 0);
+		endSound(id, "stopped");
 		// A video stopped while it plays ends; one still waiting never starts
 		for (uint i = _videoQueue.size(); i-- > 0; ) {
 			if (_videoQueue[i] != id) {
@@ -405,6 +478,14 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 			}
 		}
 	}
+}
+
+void Script::endSound(uint32 id, const char *how) {
+	if (!_sounds.contains(id))
+		return;
+	_sounds.erase(id);
+	log(Common::String::format("  << sound #%u %s", id, how));
+	fire(id, kEventObjectDeactivation);
 }
 
 void Script::queueVideo(uint32 id, uint32 limit, bool loop) {
@@ -867,8 +948,15 @@ void Script::hideLayout(uint32 layoutId) {
 			continue;
 		Common::Array<uint32> items = _layouts[i].items;
 		_layouts.remove_at(i);
-		for (uint j = 0; j < items.size(); j++)
+		for (uint j = 0; j < items.size(); j++) {
 			fire(items[j], kEventObjectDeactivation);
+			_itemTexts.erase(items[j]);
+			if (items[j] == _focus)
+				_focus = 0;
+		}
+		// Code run when some layouts close (0x41f8a5)
+		if (layoutId == kPhoneLayout)
+			phoneClosed();
 		return;
 	}
 }
@@ -1192,6 +1280,10 @@ void Script::step(const Common::String &s) {
 		arg = s.substr(colon + 1);
 	}
 	uint32 id = (uint32)atoi(arg.c_str());
+	// The phone's buttons pressed by the last step go up (100 ms later in the exe)
+	for (uint i = 0; i < _pressed.size(); i++)
+		releaseItem(_pressed[i]);
+	_pressed.clear();
 	if (kind == "wait" && isVideoLooped())
 		log(Common::String::format("  (video #%u loops)", _videoQueue[0]));
 	else if (kind == "wait")
@@ -1212,6 +1304,10 @@ void Script::step(const Common::String &s) {
 		followNav(id);
 	else if (kind == "seed")
 		setFixedSeeds(id);
+	else if (kind == "key")
+		keyPress(id);
+	else if (kind == "end")
+		finishSound(id);
 }
 
 } // End of namespace XFiles
