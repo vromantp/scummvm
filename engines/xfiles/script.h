@@ -174,9 +174,9 @@ public:
 	const Common::Array<uint32> &getKitIcons() const { return _kit; }
 
 	/**
-	 * What the current view shows when no video plays: its enabled media
-	 * assets in list order, of which background is the first enabled still
-	 * (0 if none; later stills are fallbacks and left out).
+	 * What the current view shows when no video plays: the first enabled
+	 * media asset of its list (none if no asset is enabled); background is
+	 * that asset if it is a still, else 0.
 	 */
 	void getViewAssets(Common::Array<uint32> &assets, uint32 &background) const;
 

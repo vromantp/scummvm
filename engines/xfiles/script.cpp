@@ -574,17 +574,18 @@ void Script::getViewAssets(Common::Array<uint32> &assets, uint32 &background) co
 	if (!_data.getView(_view, v))
 		return;
 	_data.getMembers(v.assets, ids);
+	// The view's player (view object +0x148) holds one asset: the first
+	// enabled one of the list, a still or a looping clip. Later ones are
+	// fallbacks (reference run, 2026-10-12: view 889 shows its loop 38812,
+	// never the still 26360 after it)
 	for (uint i = 0; i < ids.size(); i++) {
 		VCAsset asset;
 		if (!_data.getAsset(ids[i], asset) || !isEnabled(ids[i]) || asset.files.empty())
 			continue;
-		if (asset.flags & kAssetStill) {
-			// The first enabled still is the background, later ones are fallbacks
-			if (background)
-				continue;
+		if (asset.flags & kAssetStill)
 			background = ids[i];
-		}
 		assets.push_back(ids[i]);
+		break;
 	}
 }
 

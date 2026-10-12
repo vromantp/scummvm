@@ -564,14 +564,11 @@ void XFilesEngine::syncView() {
 			delete movie;
 			continue;
 		}
-		// The background goes below the overlays, wherever it is in the list
-		if (ids[i] == background) {
+		if (ids[i] == background)
 			movie->showStill();
-			_layers.insert_at(0, movie);
-		} else {
+		else
 			movie->play(asset.flags & kAssetLoop);
-			_layers.push_back(movie);
-		}
+		_layers.push_back(movie);
 	}
 }
 
