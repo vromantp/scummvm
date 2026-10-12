@@ -5,6 +5,7 @@ MODULE_OBJS = \
 	console.o \
 	dialogbox.o \
 	discfiles.o \
+	headcredits.o \
 	interface.o \
 	metaengine.o \
 	movie.o \

@@ -132,6 +132,7 @@ Common::Error XFilesEngine::run() {
 	if (!_texts)
 		warning("Cannot load XFilesT.dll; topics show their authoring names");
 	_interface->init(_texts);
+	_headCredits.load(_discFiles);
 	syncSoundSettings();
 
 	_shotsDir = ConfMan.getPath("xfiles_shots");
@@ -257,12 +258,16 @@ void XFilesEngine::runGame() {
 	_script = new Script(*_data);
 	_script->setHooks(this);
 	_script->setRandomSeed(_randomSource.getRandomNumber(0xFFFFFFFF));
+	// A new game starts from XFiles.gam, which allows the head credits
+	// (XFiles.exe Game_Start 0x48cd70)
+	_headCredits.setEnabled(true);
 	_script->start();
 	while (!shouldQuit()) {
 		Input input = pollInput();
 		updateTimers();
 		updateSounds();
 		_captions.update(g_system->getMillis());
+		_headCredits.update(g_system->getMillis(), _script->getVideoQueue().empty() && !_dialogBox.isOpen());
 		if (!_script->getVideoQueue().empty()) {
 			playQueuedVideo(input);
 		} else {
@@ -277,6 +282,7 @@ void XFilesEngine::runGame() {
 			_dialogBox.draw(_screen, _mouse);
 		}
 		_captions.drawCard(_screen);
+		_headCredits.draw(_screen);
 		present();
 		updateShots();
 		runSteps();
@@ -387,6 +393,8 @@ void XFilesEngine::callFunction(const VCAction &action, const Common::Array<int3
 		startVideoText(action, args);
 	else if (action.function == "RegPreferences")
 		registerPreferences(action);
+	else if (action.function == "RollHdCredits")
+		_headCredits.roll(g_system->getMillis(), getPreference(kPrefSkipIntro));
 	else if (action.function == "StopEnvSounds")
 		stopAllSounds(); // XFiles.exe 0x4cc9c0: stops every playing asset without a picture
 	else
@@ -930,6 +938,7 @@ void XFilesEngine::openDialogBox(const VCCharView &charView) {
 	// DisplayDBox / XFiles.exe 0x481660: only for a character with topics
 	if (!charView.conversations)
 		return;
+	_headCredits.hide(); // DBox_OnActivate 0x4767a0
 	_dialogBox.open(charView.id, Common::Rect(charView.rect.left, charView.rect.top, charView.rect.right, charView.rect.bottom));
 	_dialogBoxView = _script->getView();
 	debugC(1, kDebugScript, "-- dialog box of #%u", charView.id);

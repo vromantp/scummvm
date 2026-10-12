@@ -37,6 +37,7 @@
 #include "xfiles/detection.h"
 #include "xfiles/dialogbox.h"
 #include "xfiles/discfiles.h"
+#include "xfiles/headcredits.h"
 #include "xfiles/interface.h"
 #include "xfiles/script.h"
 
@@ -176,6 +177,7 @@ private:
 	Script *_script;
 	Graphics::Surface _screen;
 	Captions _captions;
+	HeadCredits _headCredits;
 	DialogBox _dialogBox;
 	uint32 _dialogBoxView;                ///< The view the box was opened in
 	Common::WinResources *_texts;         ///< XFilesT.dll: topic texts (string table)
