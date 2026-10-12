@@ -24,6 +24,8 @@
 
 #include "engines/advancedDetector.h"
 
+#define GAMEOPTION_SUBLIMINAL_MESSAGES GUIO_GAMEOPTIONS1
+
 namespace XFiles {
 
 enum XFilesDebugChannels {

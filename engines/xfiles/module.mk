@@ -12,6 +12,7 @@ MODULE_OBJS = \
 	neoaccess.o \
 	pictures.o \
 	script.o \
+	subliminal.o \
 	vcdata.o \
 	vcdump.o \
 	xfiles.o

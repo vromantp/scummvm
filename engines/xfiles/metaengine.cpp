@@ -19,9 +19,26 @@
  *
  */
 
+#include "common/translation.h"
+
 #include "xfiles/metaengine.h"
 #include "xfiles/detection.h"
 #include "xfiles/xfiles.h"
+
+static const ADExtraGuiOptionsMap optionsList[] = {
+	{
+		GAMEOPTION_SUBLIMINAL_MESSAGES,
+		{
+			_s("Subliminal messages"),
+			_s("Flash a word on the screen now and then, as the original's preference does"),
+			"subliminal_messages",
+			false,
+			0,
+			0
+		}
+	},
+	AD_EXTRA_GUI_OPTIONS_TERMINATOR
+};
 
 const char *XFilesMetaEngine::getName() const {
 	return "xfiles";
@@ -30,6 +47,10 @@ const char *XFilesMetaEngine::getName() const {
 Common::Error XFilesMetaEngine::createInstance(OSystem *syst, Engine **engine, const ADGameDescription *desc) const {
 	*engine = new XFiles::XFilesEngine(syst, desc);
 	return Common::kNoError;
+}
+
+const ADExtraGuiOptionsMap *XFilesMetaEngine::getAdvancedExtraGuiOptions() const {
+	return optionsList;
 }
 
 bool XFilesMetaEngine::hasFeature(MetaEngineFeature f) const {

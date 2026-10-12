@@ -40,6 +40,7 @@
 #include "xfiles/headcredits.h"
 #include "xfiles/interface.h"
 #include "xfiles/script.h"
+#include "xfiles/subliminal.h"
 
 namespace Common {
 class WinResources;
@@ -150,6 +151,9 @@ private:
 	void registerPreferences(const VCAction &action);
 	/** A preference's value, 0 before RegPreferences. */
 	bool getPreference(uint index) const;
+	void registerUberVariables(const VCAction &action);
+	/** Loss (0), paranoia (1) or X-track (2), 0 before RegUberVars. */
+	int32 getUberVariable(uint index) const;
 
 	/** A playing sound asset (XS): environments, effects, music. */
 	struct Sound {
@@ -178,11 +182,13 @@ private:
 	Graphics::Surface _screen;
 	Captions _captions;
 	HeadCredits _headCredits;
+	Subliminal _subliminal;
 	DialogBox _dialogBox;
 	uint32 _dialogBoxView;                ///< The view the box was opened in
 	Common::WinResources *_texts;         ///< XFilesT.dll: topic texts (string table)
 	Common::Point _mouse;
 	uint32 _prefVariables[kPrefCount];  ///< From RegPreferences
+	uint32 _uberVariables[3];           ///< iUberLoss, iUberParanoia, iUberXTrack, from RegUberVars
 
 	Movie *_video;                       ///< The play-once video on screen
 	uint32 _videoStarted;                ///< When it started (getMillis)

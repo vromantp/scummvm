@@ -76,6 +76,7 @@ XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : E
 	_texts(nullptr), _interface(nullptr), _inventoryVariable(0), _inventoryNone(0), _lastClickTime(0) {
 	g_engine = this;
 	memset(_prefVariables, 0, sizeof(_prefVariables));
+	memset(_uberVariables, 0, sizeof(_uberVariables));
 	_lastClickHit.kind = Interface::kHitNone;
 	_lastClickHit.id = 0;
 	_hover = _lastClickHit;
@@ -105,6 +106,7 @@ bool XFilesEngine::loadDatabases() {
 }
 
 Common::Error XFilesEngine::run() {
+	ConfMan.registerDefault("subliminal_messages", false);
 	_discFiles.init(Common::FSNode(ConfMan.getPath("path")));
 	if (!loadDatabases())
 		return Common::Error(Common::kReadingFailed, "XFiles.hdb / XFiles.gam");
@@ -133,6 +135,7 @@ Common::Error XFilesEngine::run() {
 		warning("Cannot load XFilesT.dll; topics show their authoring names");
 	_interface->init(_texts);
 	_headCredits.load(_discFiles);
+	_subliminal.load(_discFiles);
 	syncSoundSettings();
 
 	_shotsDir = ConfMan.getPath("xfiles_shots");
@@ -268,6 +271,10 @@ void XFilesEngine::runGame() {
 		updateSounds();
 		_captions.update(g_system->getMillis());
 		_headCredits.update(g_system->getMillis(), _script->getVideoQueue().empty() && !_dialogBox.isOpen());
+		// The words show over a view, the dialog box or the location card,
+		// not over a video alone
+		_subliminal.update(g_system->getMillis(), *_script, getUberVariable(0), getUberVariable(1), getUberVariable(2),
+			_script->getVideoQueue().empty() || _captions.hasCard());
 		if (!_script->getVideoQueue().empty()) {
 			playQueuedVideo(input);
 		} else {
@@ -283,6 +290,7 @@ void XFilesEngine::runGame() {
 		}
 		_captions.drawCard(_screen);
 		_headCredits.draw(_screen);
+		_subliminal.draw(_screen);
 		present();
 		updateShots();
 		runSteps();
@@ -395,6 +403,10 @@ void XFilesEngine::callFunction(const VCAction &action, const Common::Array<int3
 		registerPreferences(action);
 	else if (action.function == "RollHdCredits")
 		_headCredits.roll(g_system->getMillis(), getPreference(kPrefSkipIntro));
+	else if (action.function == "SetStartView" && getPreference(kPrefSubliminalMessages))
+		_subliminal.start(g_system->getMillis()); // Game_BuildObjects 0x477940 calls Prefs_Apply 0x452b20
+	else if (action.function == "RegUberVars")
+		registerUberVariables(action);
 	else if (action.function == "StopEnvSounds")
 		stopAllSounds(); // XFiles.exe 0x4cc9c0: stops every playing asset without a picture
 	else
@@ -459,6 +471,19 @@ void XFilesEngine::registerPreferences(const VCAction &action) {
 		_prefVariables[i] = action.args[i].kind == kOperandVariable ? action.args[i].value : 0;
 	if (_prefVariables[kPrefClosedCaptioning])
 		_script->setVariable(_prefVariables[kPrefClosedCaptioning], ConfMan.getBool("subtitles"));
+	if (_prefVariables[kPrefSubliminalMessages])
+		_script->setVariable(_prefVariables[kPrefSubliminalMessages], ConfMan.getBool("subliminal_messages"));
+}
+
+void XFilesEngine::registerUberVariables(const VCAction &action) {
+	// RegUberVars(iUberLoss, iUberParanoia, iUberXTrack), 0x48ba50: the
+	// subliminal words read them (0x468cf0)
+	for (uint i = 0; i < action.args.size() && i < ARRAYSIZE(_uberVariables); i++)
+		_uberVariables[i] = action.args[i].kind == kOperandVariable ? action.args[i].value : 0;
+}
+
+int32 XFilesEngine::getUberVariable(uint index) const {
+	return _uberVariables[index] ? _script->getVariable(_uberVariables[index]) : 0;
 }
 
 bool XFilesEngine::getPreference(uint index) const {

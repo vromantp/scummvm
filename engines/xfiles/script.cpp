@@ -325,6 +325,10 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 
 	if (a.function == "SetStartView" && args.size() >= 4) {
 		enter(args[0], args[1], args[2], args[3]);
+		// The exe also builds the game objects there (0x486a10 calls
+		// Game_BuildObjects 0x477940)
+		if (_hooks)
+			_hooks->callFunction(a, args);
 	} else if (a.function == "DoActionList" && args.size() >= 2) {
 		Common::Array<uint32> actions;
 		_data.getMembers(args[1], actions);
@@ -1085,11 +1089,11 @@ Script::Dice Script::newDice(uint32 site) {
 	return dice;
 }
 
-int Script::roll(Dice &dice) {
-	// XFiles.exe 0x468df0
+int Script::roll(Dice &dice, int min, int max) {
+	// XFiles.exe 0x468df0 (a negative min is not used)
 	uint32 &x = dice.own ? dice.state : _random;
 	x = x * 0x41C64E6D + 0x3039;
-	return x % 10 + 1;
+	return x % (uint32)(max - min + 1) + min;
 }
 
 bool Script::getStockAtoms(uint32 conversationId, uint32 (&atoms)[kStockAtomCount]) const {

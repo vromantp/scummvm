@@ -134,6 +134,17 @@ public:
 	 * (setRandomSeed).
 	 */
 	void setFixedSeeds(uint32 base);
+	/** A random number generator (Random_Seed 0x468810). */
+	struct Dice {
+		bool own;     ///< Seeded for this use (setFixedSeeds); otherwise it draws from _random
+		uint32 state;
+	};
+	/** The generator XFiles.exe builds at site, the return address of its Random_Seed call. */
+	Dice newDice(uint32 site);
+	/** A number from 1 to 10, as XFiles.exe draws them (0x468df0). */
+	int roll(Dice &dice) { return roll(dice, 1, 10); }
+	/** A number from min to max (min >= 0), as XFiles.exe draws them (0x468df0). */
+	int roll(Dice &dice, int min, int max);
 
 	uint32 getNode() const { return _node; }
 	uint32 getLocation() const { return _location; }
@@ -201,15 +212,6 @@ private:
 	void playAsset(uint32 id, byte mode, const VCAction *sound3D);
 	void playList(uint32 listId);
 	void playStock(uint32 assetId);
-	/** A generator of numbers from 1 to 10 (Random_Seed 0x468810). */
-	struct Dice {
-		bool own;     ///< Seeded for this use (setFixedSeeds); otherwise it draws from _random
-		uint32 state;
-	};
-	/** The generator XFiles.exe builds at site, the return address of its Random_Seed call. */
-	Dice newDice(uint32 site);
-	/** A number from 1 to 10, as XFiles.exe draws them (0x468df0). */
-	int roll(Dice &dice);
 	void playTopic(uint32 conversationId, bool inBox);
 	void activateTopic(uint32 conversationId);
 	void beforeLead();
