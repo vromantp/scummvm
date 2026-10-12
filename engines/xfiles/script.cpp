@@ -291,6 +291,7 @@ void Script::execute(const VCAction &a, int event, const EventFields &fields, Lo
 			Timer &timer = _timers[a.timer];
 			timer.ms = a.ms;
 			timer.serial = ++_timerSerial;
+			timer.periodic = a.periodic;
 			log(Common::String::format("      timer %u started (%u ms%s)", a.timer, a.ms, a.periodic ? ", periodic" : ""));
 		} else {
 			_timers.erase(a.timer);
@@ -619,17 +620,62 @@ void Script::roll(uint32 id, bool into) {
 		fire(id, into ? kEventRollInto : kEventRollOutOf);
 }
 
+bool Script::holdsTimer(uint32 id, uint n) const {
+	// 0x416620, 0x480e70: an object holds the timer IDs that the conditions
+	// of its Timer Expiration actions compare an event field with
+	Common::Array<uint32> triggers;
+	_data.getMembers(getTriggers(id), triggers);
+	for (uint i = 0; i < triggers.size(); i++) {
+		VCTrigger t;
+		if (!_data.getTrigger(triggers[i], t) || t.event != kEventTimerExpiration)
+			continue;
+		for (uint j = 0; j < t.actions.size(); j++) {
+			VCAction a;
+			if (!_data.getAction(t.actions[j], a) || !a.conditional)
+				continue;
+			const VCOperand &lhs = a.condition.lhs, &rhs = a.condition.rhs;
+			const VCOperand *other = lhs.kind == kOperandEvent ? &rhs : rhs.kind == kOperandEvent ? &lhs : nullptr;
+			if (other && (other->kind == kOperandInt || other->kind == kOperandChar) && other->value == n)
+				return true;
+		}
+	}
+	return false;
+}
+
 void Script::expireTimer(uint n) {
+	// 0x42fa20: a periodic timer keeps running, a one-shot timer goes away.
+	// The event reaches every active object in the order of their kinds
+	// (0x41d3b0); one fires its triggers only if it holds the timer (0x41d430).
 	if (!_timers.contains(n))
 		return;
-	_timers.erase(n);
+	if (!_timers[n].periodic)
+		_timers.erase(n);
 	VCTitle title;
 	_data.getTitle(title);
-	const uint32 ids[5] = { _view, _viewPoint, _location, _node, title.id };
+	const uint32 path[5] = { title.id, _node, _location, _viewPoint, _view };
+	Common::Array<uint32> ids(path, 5);
+	const uint32 kinds[3] = { kClassNav, kClassCharView, kClassExplorable };
+	for (int i = 0; i < 3; i++) {
+		for (uint j = 0; j < _viewObjects.size(); j++) {
+			if (_data.getClassOf(_viewObjects[j]) == kinds[i])
+				ids.push_back(_viewObjects[j]);
+		}
+	}
+	for (uint i = 0; i < _layouts.size(); i++)
+		ids.push_back(_layouts[i].items);
+	for (uint i = 0; i < _viewObjects.size(); i++) {
+		if (_data.getClassOf(_viewObjects[i]) == kClassAssetRef)
+			ids.push_back(_viewObjects[i]);
+	}
+	if (!_videoQueue.empty())
+		ids.push_back(_videoQueue[0]);
+
 	EventFields fields;
 	fields.push_back(n);
-	for (int i = 0; i < 5; i++)
-		fire(ids[i], kEventTimerExpiration, fields);
+	for (uint i = 0; i < ids.size(); i++) {
+		if (ids[i] && holdsTimer(ids[i], n))
+			fire(ids[i], kEventTimerExpiration, fields);
+	}
 }
 
 void Script::getBoxTopics(uint32 charViewId, Common::Array<uint32> &topics) const {

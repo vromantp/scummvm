@@ -101,7 +101,10 @@ public:
 	void doubleClick(uint32 id);
 	/** The mouse moved onto (Roll Into) or off (Roll Out Of) an object, if it is enabled. */
 	void roll(uint32 id, bool into);
-	/** Timer n expired: fire Timer Expiration on the scene levels and the title. */
+	/**
+	 * Timer n expired: fire Timer Expiration on every active object that
+	 * holds the timer. A periodic timer keeps running.
+	 */
 	void expireTimer(uint n);
 	/** Follow a VCNav to its view, in the current location. */
 	void followNav(uint32 navId);
@@ -141,6 +144,7 @@ public:
 	struct Timer {
 		uint32 ms;
 		uint32 serial;    ///< Changes each time a timer is (re)started
+		bool periodic;    ///< Restarts when it expires
 	};
 	const Common::HashMap<uint, Timer> &getTimers() const { return _timers; }
 
@@ -207,6 +211,8 @@ private:
 	void activateViewObject(uint32 id);
 	void deactivateViewObject(uint32 id);
 	bool isInView(uint32 id) const;
+	/** Whether the Timer Expiration actions of an object test for timer n. */
+	bool holdsTimer(uint32 id, uint n) const;
 
 	const VCData &_data;
 	ScriptHooks *_hooks;
