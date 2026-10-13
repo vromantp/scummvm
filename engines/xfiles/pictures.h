@@ -22,6 +22,7 @@
 #ifndef XFILES_PICTURES_H
 #define XFILES_PICTURES_H
 
+#include "common/array.h"
 #include "common/scummsys.h"
 
 namespace Graphics {
@@ -40,6 +41,15 @@ class VCData;
  * Returns nullptr if it cannot be read; the caller frees the surface.
  */
 Graphics::Surface *loadPicture(const VCData &data, const DiscFiles &files, uint32 assetId, const Graphics::PixelFormat &format);
+
+/**
+ * Load the frames of a picture asset that spans several entries of its
+ * .pff archive (an animation, such as the Eye cursor), with the durations
+ * the archive gives each frame in ms (0 if it gives none). The caller
+ * frees the surfaces. Returns false if no frame can be read.
+ */
+bool loadFrames(const VCData &data, const DiscFiles &files, uint32 assetId, const Graphics::PixelFormat &format,
+	Common::Array<Graphics::Surface *> &frames, Common::Array<uint32> &durations);
 
 /**
  * Draw a picture with pure blue as the transparent colour (as the dialog

@@ -171,6 +171,12 @@ public:
 	bool isVideoLooped() const { return !_videoPlays.empty() && _videoPlays[0].loop; }
 	bool isEnabled(uint32 id) const;
 	/**
+	 * Whether a Mouse Click trigger of an object runs an action whose
+	 * condition tests a variable and holds now (XFiles.exe 0x4d23c0 asks
+	 * this of iCurrInventory: the object takes the item in hand).
+	 */
+	bool isTestedOnClick(uint32 id, uint32 variable) const;
+	/**
 	 * An emotion or action icon is spent when an icon of its class is
 	 * clicked, and comes back once it is disabled and enabled again.
 	 */

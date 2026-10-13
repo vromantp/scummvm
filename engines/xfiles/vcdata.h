@@ -225,9 +225,9 @@ struct VCNav {
 
 struct VCHotSpot {
 	uint32 id;
-	uint32 name;
+	uint32 cursor;            ///< VCCursor shown over it
 	VCRect rect;
-	uint32 ref;
+	uint32 name;              ///< VCName or 0 (the default hotspots: Left, Right, Forward)
 };
 
 struct VCVariable {

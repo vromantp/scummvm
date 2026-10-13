@@ -194,6 +194,29 @@ void Script::fire(uint32 id, int event, const EventFields &fields) {
 	}
 }
 
+bool Script::isTestedOnClick(uint32 id, uint32 variable) const {
+	// 0x4d2ee0 looks at the conditional actions of each Mouse Click action
+	// list for one with the variable as an operand
+	Common::Array<uint32> triggers;
+	_data.getMembers(getTriggers(id), triggers);
+	for (uint i = 0; i < triggers.size(); i++) {
+		VCTrigger t;
+		if (!_data.getTrigger(triggers[i], t) || t.event != kEventMouseClick)
+			continue;
+		for (uint j = 0; j < t.actions.size(); j++) {
+			VCAction a;
+			if (!_data.getAction(t.actions[j], a) || !a.conditional)
+				continue;
+			const VCExpression &c = a.condition;
+			bool tested = (c.lhs.kind == kOperandVariable && c.lhs.value == variable) ||
+				(c.rhs.kind == kOperandVariable && c.rhs.value == variable);
+			if (tested && test(c, EventFields(), LocalVariables()))
+				return true;
+		}
+	}
+	return false;
+}
+
 void Script::runActions(const Common::Array<uint32> &actions, int event, const EventFields &fields) {
 	LocalVariables locals; // Local variables live for one action list
 	for (uint i = 0; i < actions.size(); i++) {

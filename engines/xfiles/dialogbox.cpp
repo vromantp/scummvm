@@ -192,9 +192,13 @@ Common::Rect DialogBox::getThumbRect() const {
 	return getRect(kScrollX, kScrollY + y, thumb->w, thumb->h);
 }
 
-DialogBox::Hit DialogBox::click(const Common::Point &pos, uint32 &topic) {
+bool DialogBox::contains(const Common::Point &pos) const {
 	const Graphics::Surface *folder = _pictures[kPicTalk];
-	if (!isOpen() || !getRect(0, 0, folder->w, folder->h).contains(pos))
+	return isOpen() && getRect(0, 0, folder->w, folder->h).contains(pos);
+}
+
+DialogBox::Hit DialogBox::click(const Common::Point &pos, uint32 &topic) {
+	if (!contains(pos))
 		return kHitOutside;
 	if (getRect(kCloseX, kCloseY, kCloseW, kCloseH).contains(pos))
 		return kHitClose;

@@ -35,6 +35,7 @@
 #include "graphics/surface.h"
 
 #include "xfiles/captions.h"
+#include "xfiles/cursors.h"
 #include "xfiles/detection.h"
 #include "xfiles/dialogbox.h"
 #include "xfiles/discfiles.h"
@@ -137,6 +138,23 @@ private:
 	void updateInterface();
 	void drawView();
 	void handleClick(const Common::Point &pos);
+
+	/** A view object under the mouse, found in the order clicks take them. */
+	struct ViewHit {
+		enum Kind {
+			kNone,
+			kExplorable,
+			kCharView,
+			kNav
+		} kind;
+		uint32 id;
+		uint32 cursor;    ///< Its VCCursor (a nav's: its hotspot's)
+	};
+
+	ViewHit hitView(const Common::Point &pos) const;
+	void updateCursor();
+	/** The VCCursor to show for what is at a point; 0 for the default cursor. */
+	uint32 getCursorAt(const Common::Point &pos) const;
 	/** The second click of a double-click: Mouse Double-Click instead of Mouse Click. */
 	void handleDoubleClick(const Interface::Hit &hit);
 	void clickInventory(uint32 inventory);
@@ -170,7 +188,7 @@ private:
 	void updateSounds();
 	/** Volume and balance of a 3D sound for the current view. */
 	void placeSound(Sound &sound);
-	/** The target of a view's first nav whose hotspot is named like the given one; 0 if none. */
+	/** The target of a view's first nav whose hotspot has the given one's cursor; 0 if none. */
 	uint32 getNavTarget(uint32 view, uint32 hotSpot) const;
 	/** Position of the viewpoint of the current location that holds a view. */
 	bool getViewPosition(uint32 view, Common::Point &pos) const;
@@ -199,6 +217,7 @@ private:
 	uint32 _viewId;
 	Common::Array<Movie *> _layers;      ///< Background and overlays of the view
 	Interface *_interface;
+	Cursors *_cursors;
 	uint32 _inventoryVariable;           ///< iCurrInventory, from RegCurrInvVar
 	int32 _inventoryNone;                ///< Its value with nothing in hand
 	uint32 _lastClickTime;               ///< For double-clicks

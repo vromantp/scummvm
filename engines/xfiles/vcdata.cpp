@@ -270,9 +270,9 @@ bool VCData::getHotSpot(uint32 id, VCHotSpot &hotSpot) const {
 	if (!getObject(id, kClassHotSpot, m))
 		return false;
 	hotSpot.id = id;
-	hotSpot.name = _hdb.readUint32(m + 6);
+	hotSpot.cursor = _hdb.readUint32(m + 6);
 	readRect(_hdb, m + 10, hotSpot.rect);
-	hotSpot.ref = _hdb.readUint32(m + 18);
+	hotSpot.name = _hdb.readUint32(m + 18);
 	return true;
 }
 

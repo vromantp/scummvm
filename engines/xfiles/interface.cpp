@@ -22,7 +22,6 @@
 #include "common/algorithm.h"
 #include "common/debug.h"
 #include "common/formats/winexe.h"
-#include "graphics/cursorman.h"
 #include "graphics/font.h"
 #include "graphics/fonts/ttf.h"
 #include "graphics/surface.h"
@@ -142,7 +141,7 @@ void Interface::Graphic::draw(Graphics::Surface &dst, int x, int y) const {
 
 Interface::Interface(const VCData &data, const DiscFiles &files) : _data(data), _files(files), _kitOpen(false),
 	_evidenceRowShown(false), _texts(nullptr), _font(nullptr), _itemFont(nullptr), _rolloverText(false), _barClosed(false), _barOpen(false),
-	_mouseInBar(false), _enteredBar(false), _held(0), _cursorPushed(false) {
+	_mouseInBar(false), _enteredBar(false), _held(0) {
 	static const uint32 kClasses[] = { kClassActionIcon, kClassInventory, kClassEmotionIcon };
 	for (uint i = 0; i < ARRAYSIZE(kClasses); i++) {
 		Common::Array<NeoEntry> entries;
@@ -506,30 +505,10 @@ Interface::Hit Interface::hitTest(const Common::Point &pos) const {
 	return hit;
 }
 
-void Interface::setHeld(uint32 inventory) {
-	// Inv_SetHeldCursor (0x4b0710): the item's VCCursor replaces the default
-	// cursor; items without one keep it
-	if (inventory == _held)
-		return;
-	_held = inventory;
-	if (_cursorPushed) {
-		CursorMan.popCursor();
-		_cursorPushed = false;
-	}
+uint32 Interface::getHeldCursor() const {
+	// Inv_SetHeldCursor (0x4b0710): the item's VCCursor (VCIcon +30)
 	VCIcon icon;
-	VCCursor cursor;
-	Common::Array<uint32> assets;
-	if (!inventory || !_data.getIcon(inventory, icon) || !icon.cursor || !_data.getCursor(icon.cursor, cursor) ||
-			!_data.getMembers(cursor.assets, assets) || assets.empty())
-		return;
-	Graphics::Surface *picture = loadPicture(_data, _files, assets[0], _format);
-	if (!picture)
-		return;
-	// Pure blue is transparent, as in the dialog box pictures
-	CursorMan.pushCursor(*picture, cursor.hotX, cursor.hotY, _format.RGBToColor(0, 0, 255));
-	_cursorPushed = true;
-	picture->free();
-	delete picture;
+	return _held && _data.getIcon(_held, icon) ? icon.cursor : 0;
 }
 
 void Interface::blit(Graphics::Surface &dst, const Graphics::Surface &src, int x, int y) {

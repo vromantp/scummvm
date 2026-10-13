@@ -68,6 +68,11 @@ Common::String nameOrNone(const VCData &data, uint32 id) {
 	return data.getName(id, name) ? utf8(name) : Common::String("None");
 }
 
+static Common::String cursorName(const VCData &data, uint32 id) {
+	VCCursor cursor;
+	return data.getCursor(id, cursor) ? nameOrNone(data, cursor.name) : Common::String("None");
+}
+
 Common::String pythonRepr(const Common::U32String &str) {
 	bool hasSingle = false, hasDouble = false;
 	for (uint i = 0; i < str.size(); i++) {
@@ -317,7 +322,7 @@ Common::String dumpSceneTree(const VCData &data, const Common::String &nodeFilte
 						VCHotSpot hotSpot;
 						data.getNav(navs[i], nav);
 						data.getHotSpot(nav.hotSpot, hotSpot);
-						out += (i ? ", " : "  [") + nameOrNone(data, hotSpot.name) + Common::String::format(" -> #%u", nav.target);
+						out += (i ? ", " : "  [") + cursorName(data, hotSpot.cursor) + Common::String::format(" -> #%u", nav.target);
 					}
 					out += navs.empty() ? "\n" : "]\n";
 					if (withTriggers)

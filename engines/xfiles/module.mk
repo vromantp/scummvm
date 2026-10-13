@@ -3,6 +3,7 @@ MODULE := engines/xfiles
 MODULE_OBJS = \
 	captions.o \
 	console.o \
+	cursors.o \
 	dialogbox.o \
 	discfiles.o \
 	headcredits.o \

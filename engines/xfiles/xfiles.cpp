@@ -28,9 +28,7 @@
 #include "common/tokenizer.h"
 #include "image/png.h"
 #include "engines/util.h"
-#include "graphics/cursorman.h"
 #include "graphics/pixelformat.h"
-#include "graphics/wincursor.h"
 
 #include "xfiles/xfiles.h"
 #include "xfiles/console.h"
@@ -73,7 +71,7 @@ static const int kMenuQuitTop = 385, kMenuQuitBottom = 420;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
 	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _video(nullptr), _videoStarted(0), _viewId(0), _soundView(0), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
-	_texts(nullptr), _interface(nullptr), _inventoryVariable(0), _inventoryNone(0), _lastClickTime(0) {
+	_texts(nullptr), _interface(nullptr), _cursors(nullptr), _inventoryVariable(0), _inventoryNone(0), _lastClickTime(0) {
 	g_engine = this;
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	memset(_uberVariables, 0, sizeof(_uberVariables));
@@ -87,6 +85,7 @@ XFilesEngine::~XFilesEngine() {
 		delete it->_value.movie;
 	closeView();
 	delete _interface;
+	delete _cursors;
 	delete _video;
 	delete _texts;
 	delete _script;
@@ -117,10 +116,8 @@ Common::Error XFilesEngine::run() {
 	_screen.create(kScreenWidth, kScreenHeight, g_system->getScreenFormat());
 	setDebugger(new Console());
 
-	Graphics::Cursor *cursor = Graphics::makeDefaultWinCursor();
-	CursorMan.replaceCursor(cursor);
-	delete cursor;
-	CursorMan.showMouse(true);
+	_cursors = new Cursors(*_data, _discFiles);
+	_cursors->init(_screen.format);
 	_captions.loadFonts();
 	_interface = new Interface(*_data, _discFiles);
 	_interface->setFormat(_screen.format);
@@ -310,6 +307,7 @@ void XFilesEngine::runGame() {
 			updateDialogBox();
 			if (input.click)
 				handleClick(input.pos);
+			updateCursor();
 			drawView();
 			_dialogBox.draw(_screen, _mouse);
 		}
@@ -594,8 +592,8 @@ void XFilesEngine::updateSounds() {
 }
 
 uint32 XFilesEngine::getNavTarget(uint32 view, uint32 hotSpot) const {
-	// XFiles.exe matches navs by their hotspot's name: a nav whose own
-	// hotspot is named Forward counts as the forward one
+	// XFiles.exe matches navs by their hotspot's cursor: a nav whose own
+	// hotspot shows the Forward cursor counts as the forward one
 	VCView v;
 	VCHotSpot wanted;
 	Common::Array<uint32> navs;
@@ -604,7 +602,7 @@ uint32 XFilesEngine::getNavTarget(uint32 view, uint32 hotSpot) const {
 	for (uint i = 0; i < navs.size(); i++) {
 		VCNav nav;
 		VCHotSpot h;
-		if (_data->getNav(navs[i], nav) && _data->getHotSpot(nav.hotSpot, h) && h.name == wanted.name)
+		if (_data->getNav(navs[i], nav) && _data->getHotSpot(nav.hotSpot, h) && h.cursor == wanted.cursor)
 			return nav.target;
 	}
 	return 0;
@@ -954,17 +952,47 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 	if (_interface->isModal())
 		return; // A layout has the input
 
+	ViewHit viewHit = hitView(pos);
+	switch (viewHit.kind) {
+	case ViewHit::kExplorable:
+		debugC(1, kDebugScript, "-- click:%u (explorable)", viewHit.id);
+		_script->click(viewHit.id);
+		break;
+	case ViewHit::kCharView: {
+		debugC(1, kDebugScript, "-- click:%u (character view)", viewHit.id);
+		// The view's triggers handle inventory items held over the
+		// character; with nothing in hand the exe opens the dialog box
+		_script->click(viewHit.id);
+		VCCharView cv;
+		if (!isHolding() && _data->getCharView(viewHit.id, cv))
+			openDialogBox(cv);
+		break;
+	}
+	case ViewHit::kNav:
+		_script->step(Common::String::format("nav:%u", viewHit.id));
+		break;
+	default:
+		break;
+	}
+}
+
+XFilesEngine::ViewHit XFilesEngine::hitView(const Common::Point &pos) const {
+	ViewHit hit;
+	hit.kind = ViewHit::kNone;
+	hit.id = 0;
+	hit.cursor = 0;
 	VCView view;
 	if (!_data->getView(_script->getView(), view))
-		return;
+		return hit;
 	Common::Array<uint32> ids;
 	_data->getMembers(view.explorables, ids);
 	for (uint i = 0; i < ids.size(); i++) {
 		VCExplorable e;
 		if (_script->isEnabled(ids[i]) && _data->getExplorable(ids[i], e) && containsPoint(e.rect, pos)) {
-			debugC(1, kDebugScript, "-- click:%u (explorable)", ids[i]);
-			_script->click(ids[i]);
-			return;
+			hit.kind = ViewHit::kExplorable;
+			hit.id = ids[i];
+			hit.cursor = e.cursor;
+			return hit;
 		}
 	}
 	ids.clear();
@@ -972,13 +1000,10 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 	for (uint i = 0; i < ids.size(); i++) {
 		VCCharView cv;
 		if (_script->isEnabled(ids[i]) && _data->getCharView(ids[i], cv) && containsPoint(cv.rect, pos)) {
-			debugC(1, kDebugScript, "-- click:%u (character view)", ids[i]);
-			// The view's triggers handle inventory items held over the
-			// character; with nothing in hand the exe opens the dialog box
-			_script->click(ids[i]);
-			if (!isHolding())
-				openDialogBox(cv);
-			return;
+			hit.kind = ViewHit::kCharView;
+			hit.id = ids[i];
+			hit.cursor = cv.cursor;
+			return hit;
 		}
 	}
 	ids.clear();
@@ -988,9 +1013,49 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 		VCHotSpot hotSpot;
 		if (_script->isEnabled(ids[i]) && _data->getNav(ids[i], nav) && _data->getHotSpot(nav.hotSpot, hotSpot) &&
 				containsPoint(hotSpot.rect, pos)) {
-			_script->step(Common::String::format("nav:%u", ids[i]));
-			return;
+			hit.kind = ViewHit::kNav;
+			hit.id = ids[i];
+			hit.cursor = hotSpot.cursor;
+			return hit;
 		}
+	}
+	return hit;
+}
+
+void XFilesEngine::updateCursor() {
+	// An object shows its VCCursor while the mouse is over it (vtable slot
+	// +0x68, called on Roll Into and Roll Out Of); 0 is the default cursor
+	_cursors->show(getCursorAt(_mouse));
+	_cursors->update();
+}
+
+uint32 XFilesEngine::getCursorAt(const Common::Point &pos) const {
+	uint32 held = isHolding() ? _interface->getHeldCursor() : 0;
+	Interface::Hit hit = _interface->hitTest(pos);
+	if (hit.kind == Interface::kHitItem) {
+		// IfaceItem_ShowCursor (0x4469e0): the item's own, also with an item in hand
+		VCInterfaceItem item;
+		return _data->getInterfaceItem(hit.id, item) ? item.cursor : 0;
+	}
+	if (hit.kind != Interface::kHitNone)
+		return 0; // Icons show the default cursor (0x46e1d0 reads a field that is always 0)
+	if (_dialogBox.contains(pos))
+		return 0; // Topics in the box show the default cursor (0x478940)
+	if (_interface->isModal())
+		return held;
+	ViewHit viewHit = hitView(pos);
+	switch (viewHit.kind) {
+	case ViewHit::kExplorable:
+	case ViewHit::kCharView:
+		// With an item in hand, an object that takes it keeps the item's
+		// cursor (0x46e050, 0x418520), any other shows its own
+		if (held && _script->isTestedOnClick(viewHit.id, _inventoryVariable))
+			return held;
+		return viewHit.cursor;
+	case ViewHit::kNav:
+		return viewHit.cursor; // 0x446aa0: the hotspot's cursor
+	default:
+		return held;
 	}
 }
 

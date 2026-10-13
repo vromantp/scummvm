@@ -46,7 +46,7 @@ class VCData;
 
 /**
  * The interface around the view: the inventory bar with its icons, the
- * emotion and action icons, the item in hand with its cursor, and the
+ * emotion and action icons, the item in hand, and the
  * shown layouts (VCIFaceLayout) with their items.
  *
  * Icons follow the enable flags: an enabled icon is shown (emotion and
@@ -111,9 +111,11 @@ public:
 	/** Close the bar until the mouse leaves it (EvKitIconClick in hidden-bar mode). */
 	void closeBar() { _barClosed = true; }
 
-	/** The VCInventory in hand (0 for none); its cursor replaces the default one. */
-	void setHeld(uint32 inventory);
+	/** The VCInventory in hand (0 for none). */
+	void setHeld(uint32 inventory) { _held = inventory; }
 	uint32 getHeld() const { return _held; }
+	/** The VCCursor of the item in hand; 0 if none. */
+	uint32 getHeldCursor() const;
 
 	/** Layouts that do not take the input: the exe's list (AddIFLExcept, ClearIFLExcept). */
 	void addModalException(uint32 layout);
@@ -201,7 +203,6 @@ private:
 	bool _mouseInBar;
 	bool _enteredBar;
 	uint32 _held;
-	bool _cursorPushed;
 };
 
 } // End of namespace XFiles

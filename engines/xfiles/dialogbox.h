@@ -73,6 +73,8 @@ public:
 
 	/** A click at pos; topic is set for kHitTopic. */
 	Hit click(const Common::Point &pos, uint32 &topic);
+	/** Whether a point is on the open box. */
+	bool contains(const Common::Point &pos) const;
 	void draw(Graphics::Surface &dst, const Common::Point &mouse) const;
 
 private:
