@@ -53,6 +53,10 @@ enum StatementOp {
 
 static const char *const kModeNames[] = { "preload", "play_once", "play_loop", "stop", "unload" };
 
+/** PDAEscape's action lists (XFiles.exe 0x47d090): escape on (argument 1) or off. */
+static const uint32 kPDAEscapeOnActions = 75533;
+static const uint32 kPDAEscapeOffActions = 75530;
+
 /** Offset of the VCTriggerList field in each class that owns triggers (VCAssetRef: see VCAsset::triggers). */
 static uint32 getTriggerOffset(uint32 classId) {
 	switch (classId) {
@@ -346,11 +350,17 @@ void Script::execute(const VCAction &a, int event, const EventFields &fields, Lo
 	}
 	case kActionAsset:
 	case kActionSound3D: {
-		Common::Array<uint32> assets;
-		_data.getMembers(a.assetList, assets);
-		for (uint i = 0; i < assets.size(); i++) {
-			if (isEnabled(assets[i]))
-				playAsset(assets[i], a.mode, a.type == kActionSound3D ? &a : nullptr);
+		// XFiles.exe Action_DoAsset 0x47a4e0: play once and play loop play
+		// only the list's first enabled asset (0x41fe60); a stop stops every
+		// asset of the list, enabled or not
+		const VCAction *sound3D = a.type == kActionSound3D ? &a : nullptr;
+		if (a.mode == kModeStop) {
+			Common::Array<uint32> assets;
+			_data.getMembers(a.assetList, assets);
+			for (uint i = 0; i < assets.size(); i++)
+				playAsset(assets[i], a.mode, sound3D);
+		} else if (uint32 asset = firstEnabled(a.assetList)) {
+			playAsset(asset, a.mode, sound3D);
 		}
 		break;
 	}
@@ -417,6 +427,10 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 			_currNodeVariable = a.args[0].value; // 0x4926a0
 		else if (a.function == "SetIItemFocus" && !args.empty())
 			_focus = args[0];
+		else if (a.function == "RegViewState" && !a.args.empty() && a.args[0].kind == kOperandVariable)
+			_variables[a.args[0].value] = 0; // 0x47e9d0 clears the variable it registers
+		else if (a.function == "PDAEscape" && !args.empty())
+			runActionList(args[0] == 1 ? kPDAEscapeOnActions : kPDAEscapeOffActions, event, fields);
 		else if (a.function.hasPrefix("Phone"))
 			callPhone(a, args, event, fields);
 		if (_hooks)
@@ -633,12 +647,15 @@ void Script::activateViewObjects() {
 }
 
 void Script::deactivateViewObjects() {
-	// After its own triggers, the view deactivates its navs, character views
-	// and explorables (0x438770); the asset it showed is left alone
+	// After its own triggers, the view stops the asset it showed, which fires
+	// that asset's Object Deactivation (reference run manual1, 2026-10-13:
+	// view 1214's background 38994 disables the explorables its activation
+	// enabled), then deactivates its navs, character views and explorables
+	// (0x438770)
 	Common::Array<uint32> ids = _viewObjects;
 	_viewObjects.clear();
-	const uint32 kinds[3] = { kClassNav, kClassCharView, kClassExplorable };
-	for (int i = 0; i < 3; i++) {
+	const uint32 kinds[4] = { kClassAssetRef, kClassNav, kClassCharView, kClassExplorable };
+	for (int i = 0; i < 4; i++) {
 		for (uint j = 0; j < ids.size(); j++) {
 			if (_data.getClassOf(ids[j]) == kinds[i])
 				fire(ids[j], kEventObjectDeactivation);
@@ -1158,14 +1175,24 @@ uint32 Script::getViewLoop() const {
 	return 0;
 }
 
-void Script::playList(uint32 listId) {
+uint32 Script::firstEnabled(uint32 listId) const {
+	// XFiles.exe 0x41fe60: the first member that is enabled (or has no
+	// enabled state), 0 if there is none
 	Common::Array<uint32> assets;
 	if (!listId || !_data.getMembers(listId, assets))
-		return;
+		return 0;
 	for (uint i = 0; i < assets.size(); i++) {
 		if (isEnabled(assets[i]))
-			playAsset(assets[i], kModePlayOnce, nullptr);
+			return assets[i];
 	}
+	return 0;
+}
+
+void Script::playList(uint32 listId) {
+	// A topic's question, answer and atom lists each play one asset
+	// (Topic_Play 0x4e9080 through 0x41fe60)
+	if (uint32 asset = firstEnabled(listId))
+		playAsset(asset, kModePlayOnce, nullptr);
 }
 
 void Script::playStock(uint32 assetId) {

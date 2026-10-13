@@ -254,6 +254,7 @@ private:
 	void callFunction(const VCAction &action, int event, const EventFields &fields, const LocalVariables &locals);
 
 	void playAsset(uint32 id, byte mode, const VCAction *sound3D);
+	uint32 firstEnabled(uint32 listId) const;
 	void playList(uint32 listId);
 	void playStock(uint32 assetId);
 	void playTopic(uint32 conversationId, bool inBox);
