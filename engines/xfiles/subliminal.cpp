@@ -59,19 +59,20 @@ enum {
 	kGrey = 0x32
 };
 
-Subliminal::Subliminal() : _strings(nullptr), _font(nullptr), _running(false), _next(0) {
+Subliminal::Subliminal() : _dll(nullptr), _strings(nullptr), _font(nullptr), _running(false), _next(0) {
 }
 
 Subliminal::~Subliminal() {
 	delete _strings;
+	delete _dll;
 	delete _font;
 }
 
 bool Subliminal::load(const DiscFiles &files) {
 	// Slot +0xc names the DLL, which 0x45be60 loads with LoadLibrary
-	Common::SeekableReadStream *dll = files.openFile(0, "XFilesS.dll");
-	if (dll)
-		_strings = Common::WinResources::createFromEXE(dll);
+	_dll = files.openFile(0, "XFilesS.dll");
+	if (_dll)
+		_strings = Common::WinResources::createFromEXE(_dll);
 #ifdef USE_FREETYPE2
 	// Courier New's metrics
 	_font = Graphics::loadTTFFontFromArchive("LiberationMono-Regular.ttf", kFontSize, Graphics::kTTFSizeModeCharacter);

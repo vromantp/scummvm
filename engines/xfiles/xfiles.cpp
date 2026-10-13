@@ -71,7 +71,7 @@ static const int kMenuQuitTop = 385, kMenuQuitBottom = 420;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
 	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _video(nullptr), _videoStarted(0), _viewId(0), _soundView(0), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
-	_texts(nullptr), _interface(nullptr), _cursors(nullptr), _inventoryVariable(0), _inventoryNone(0), _lastClickTime(0) {
+	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _inventoryVariable(0), _inventoryNone(0), _lastClickTime(0) {
 	g_engine = this;
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	memset(_uberVariables, 0, sizeof(_uberVariables));
@@ -88,6 +88,7 @@ XFilesEngine::~XFilesEngine() {
 	delete _cursors;
 	delete _video;
 	delete _texts;
+	delete _textsDll;
 	delete _script;
 	delete _data;
 	_screen.free();
@@ -124,11 +125,11 @@ Common::Error XFilesEngine::run() {
 	if (!_dialogBox.load(*_data, _discFiles, _screen.format))
 		warning("Cannot load the dialog box pictures from x.pff");
 	// The language DLL with the topic texts (the exe loads it with LoadLibrary)
-	Common::SeekableReadStream *texts = _discFiles.openFile(0, "XFilesT.dll");
-	if (!texts)
-		texts = _discFiles.openFile(1, "XFilesT.dll");
-	if (texts)
-		_texts = Common::WinResources::createFromEXE(texts);
+	_textsDll = _discFiles.openFile(0, "XFilesT.dll");
+	if (!_textsDll)
+		_textsDll = _discFiles.openFile(1, "XFilesT.dll");
+	if (_textsDll)
+		_texts = Common::WinResources::createFromEXE(_textsDll);
 	if (!_texts)
 		warning("Cannot load XFilesT.dll; topics show their authoring names");
 	_interface->init(_texts);

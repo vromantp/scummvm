@@ -64,6 +64,7 @@ public:
 	void draw(Graphics::Surface &dst) const;
 
 private:
+	Common::SeekableReadStream *_dll;  ///< XFilesC.dll; the resources read it lazily, so it lives as long as _strings
 	Common::WinResources *_strings;
 	Graphics::Font *_font;
 	bool _enabled;

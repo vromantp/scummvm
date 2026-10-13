@@ -55,21 +55,22 @@ enum {
 	kBottom = 330 - 5
 };
 
-HeadCredits::HeadCredits() : _strings(nullptr), _font(nullptr), _enabled(false), _rolling(false), _shownAny(false),
-	_index(-1), _next(0), _hideAt(0) {
+HeadCredits::HeadCredits() : _dll(nullptr), _strings(nullptr), _font(nullptr), _enabled(false), _rolling(false),
+	_shownAny(false), _index(-1), _next(0), _hideAt(0) {
 }
 
 HeadCredits::~HeadCredits() {
 	delete _strings;
+	delete _dll;
 	delete _font;
 }
 
 bool HeadCredits::load(const DiscFiles &files) {
 	// The exe loads XFilesC.dll with LoadLibrary and registers Hcd.ttr with
 	// AddFontResource
-	Common::SeekableReadStream *dll = files.openFile(0, "XFilesC.dll");
-	if (dll)
-		_strings = Common::WinResources::createFromEXE(dll);
+	_dll = files.openFile(0, "XFilesC.dll");
+	if (_dll)
+		_strings = Common::WinResources::createFromEXE(_dll);
 #ifdef USE_FREETYPE2
 	Common::SeekableReadStream *font = files.openFile(0, "Hcd.ttr");
 	if (font)

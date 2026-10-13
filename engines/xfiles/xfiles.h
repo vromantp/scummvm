@@ -206,6 +206,7 @@ private:
 	Subliminal _subliminal;
 	DialogBox _dialogBox;
 	uint32 _dialogBoxView;                ///< The view the box was opened in
+	Common::SeekableReadStream *_textsDll; ///< XFilesT.dll; _texts reads it lazily, so it lives as long as _texts
 	Common::WinResources *_texts;         ///< XFilesT.dll: topic texts (string table)
 	Common::Point _mouse;
 	uint32 _prefVariables[kPrefCount];  ///< From RegPreferences
