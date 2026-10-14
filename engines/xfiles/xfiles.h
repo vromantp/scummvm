@@ -219,8 +219,6 @@ private:
 	Common::Array<Movie *> _layers;      ///< Background and overlays of the view
 	Interface *_interface;
 	Cursors *_cursors;
-	uint32 _inventoryVariable;           ///< iCurrInventory, from RegCurrInvVar
-	int32 _inventoryNone;                ///< Its value with nothing in hand
 	uint32 _lastClickTime;               ///< For double-clicks
 	Common::Point _lastClickPos;
 	Interface::Hit _lastClickHit;

@@ -71,7 +71,7 @@ static const int kMenuQuitTop = 385, kMenuQuitBottom = 420;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
 	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _video(nullptr), _videoStarted(0), _viewId(0), _soundView(0), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
-	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _inventoryVariable(0), _inventoryNone(0), _lastClickTime(0) {
+	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0) {
 	g_engine = this;
 	_loadedSave = false;
 	memset(_prefVariables, 0, sizeof(_prefVariables));
@@ -477,17 +477,8 @@ void XFilesEngine::callFunction(const VCAction &action, const Common::Array<int3
 
 void XFilesEngine::callInventoryFunction(const VCAction &action, const Common::Array<int32> &args) {
 	const Common::String &name = action.function;
-	if (name == "RegCurrInvVar" && action.args.size() >= 2 && action.args[0].kind == kOperandVariable) {
-		// RegCurrInvVar(iCurrInventory, Inventory_None), 0x458e60: the
-		// variable starts as "nothing in hand"
-		_inventoryVariable = action.args[0].value;
-		_inventoryNone = args[1];
-		_script->setVariable(_inventoryVariable, _inventoryNone);
-	} else if (name == "OnInvClick" && args.size() >= 1) {
-		// Inv_Select (0x49b410): the item's value goes into the variable
-		if (_inventoryVariable && _script->getVariable(_inventoryVariable) != args[0])
-			_script->setVariable(_inventoryVariable, args[0]);
-	} else if (name == "OnIntInvClick") {
+	// RegCurrInvVar and OnInvClick are handled by Script (iCurrInventory)
+	if (name == "OnIntInvClick") {
 		// Interface items (PDA, phone) are not held (0x467fb0)
 		_interface->setHeld(0);
 	} else if (name == "SelectInv" && args.size() >= 1) {
@@ -888,7 +879,7 @@ void XFilesEngine::updateInterface() {
 }
 
 bool XFilesEngine::isHolding() const {
-	return _inventoryVariable && _script->getVariable(_inventoryVariable) != _inventoryNone;
+	return _script->isHolding();
 }
 
 void XFilesEngine::putBack() {
@@ -897,7 +888,7 @@ void XFilesEngine::putBack() {
 	if (!isHolding())
 		return;
 	debugC(1, kDebugScript, "-- #%u put back", _interface->getHeld());
-	_script->setVariable(_inventoryVariable, _inventoryNone);
+	_script->clearHeldItem();
 	_interface->setHeld(0);
 }
 
@@ -1088,7 +1079,7 @@ uint32 XFilesEngine::getCursorAt(const Common::Point &pos) const {
 	case ViewHit::kCharView:
 		// With an item in hand, an object that takes it keeps the item's
 		// cursor (0x46e050, 0x418520), any other shows its own
-		if (held && _script->isTestedOnClick(viewHit.id, _inventoryVariable))
+		if (held && _script->isTestedOnClick(viewHit.id, _script->getHeldVariable()))
 			return held;
 		return viewHit.cursor;
 	case ViewHit::kNav:

@@ -100,7 +100,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _inboxTop(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _inboxTop(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	_jumpCut.first = _jumpCut.later = false;
 	_phone.bookSize = _phone.bookIndex = 0;
 	_phone.showsName = false;
@@ -457,7 +457,16 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 			isIItemHeld(a.args[1].value, args[0]);
 		else if (a.function == "RegCurrNode" && !a.args.empty() && a.args[0].kind == kOperandVariable)
 			_currNodeVariable = a.args[0].value; // 0x4926a0
-		else if (a.function == "SetIItemFocus" && !args.empty())
+		else if (a.function == "RegCurrInvVar" && args.size() >= 2 && a.args[0].kind == kOperandVariable) {
+			// 0x458e60: the variable starts as "nothing in hand"
+			_heldVariable = a.args[0].value;
+			_heldNone = args[1];
+			_variables[_heldVariable] = _heldNone;
+		} else if (a.function == "OnInvClick" && !args.empty()) {
+			// Inv_Select 0x49b410: the item's value goes into the variable
+			if (_heldVariable)
+				_variables[_heldVariable] = args[0];
+		} else if (a.function == "SetIItemFocus" && !args.empty())
 			_focus = args[0];
 		else if (a.function == "RegViewState" && !a.args.empty() && a.args[0].kind == kOperandVariable)
 			_variables[a.args[0].value] = 0; // 0x47e9d0 clears the variable it registers
@@ -470,6 +479,15 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 		if (_hooks)
 			_hooks->callFunction(a, args);
 	}
+}
+
+bool Script::isHolding() const {
+	return _heldVariable && getVariable(_heldVariable) != _heldNone;
+}
+
+void Script::clearHeldItem() {
+	if (_heldVariable)
+		_variables[_heldVariable] = _heldNone;
 }
 
 void Script::runActionList(uint32 actionList, int event, const EventFields &fields) {

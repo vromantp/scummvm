@@ -201,6 +201,12 @@ public:
 	const Common::Array<uint32> &getEmailsRead() const { return _emailsRead; }
 	const Common::Array<uint32> &getEmailsPending() const { return _emailPending; }
 	void setVariable(uint32 id, int32 value) { _variables[id] = value; }
+	/** The variable registered by RegCurrInvVar (iCurrInventory); 0 before it. */
+	uint32 getHeldVariable() const { return _heldVariable; }
+	/** An item is in hand: iCurrInventory is not Inventory_None. */
+	bool isHolding() const;
+	/** The held-item object's deactivation (XFiles.exe 0x437c20): iCurrInventory is Inventory_None again. */
+	void clearHeldItem();
 
 	struct Timer {
 		uint32 ms;
@@ -377,6 +383,8 @@ private:
 	Common::HashMap<uint32, ItemText> _itemTexts;
 	uint32 _focus;
 	uint32 _currNodeVariable;                  ///< RegCurrNode
+	uint32 _heldVariable;                      ///< RegCurrInvVar: iCurrInventory
+	int32 _heldNone;                           ///< Its Inventory_None value
 	Common::Array<uint32> _pressed;            ///< See takePressedItems()
 	uint32 _held;                              ///< The interface item the mouse button is down on (press()), 0 for none
 	Common::HashMap<uint32, bool> _sounds;     ///< Sounds playing (asset objects active)
