@@ -178,6 +178,21 @@ public:
 	 */
 	void snapshot(VCSave &save) const;
 
+	/** What a save holds besides the VCSave: the values the game changed. */
+	struct SavedValues {
+		Common::Array<uint32> variables;   ///< Pairs (VCVariable ID, value)
+		Common::Array<uint32> enabled;     ///< Pairs (VCEnabled ID, flag)
+		Common::Array<uint32> stringIds;   ///< VCString IDs of the strings that changed
+		Common::StringArray strings;       ///< Their values
+	};
+	/** Every variable, enable flag and changed string now. */
+	void getSaved(SavedValues &values) const;
+	/**
+	 * Put the values of a save over those of the .gam; call before restore(), on a Script that
+	 * has not started. Unknown IDs are ignored.
+	 */
+	void applySaved(const SavedValues &values);
+
 	/**
 	 * The value RegPreferences writes into a preference variable (Preference
 	 * enum) when the hooks do not answer: the registry's value in a run that

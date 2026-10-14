@@ -1209,6 +1209,51 @@ void Script::snapshot(VCSave &save) const {
 	}
 }
 
+void Script::getSaved(SavedValues &values) const {
+	values = SavedValues();
+	Common::Array<NeoEntry> entries;
+	_data.getGam().getObjects(kClassVariable, entries);
+	for (uint i = 0; i < entries.size(); i++) {
+		values.variables.push_back(entries[i].key);
+		values.variables.push_back((uint32)getVariable(entries[i].key));
+	}
+	entries.clear();
+	_data.getGam().getObjects(kClassEnabled, entries);
+	for (uint i = 0; i < entries.size(); i++) {
+		uint32 target;
+		bool enabled;
+		if (_data.getEnabled(entries[i].key, target, enabled)) {
+			values.enabled.push_back(entries[i].key);
+			values.enabled.push_back(isEnabled(target));
+		}
+	}
+	// In the order of the IDs, so the same game gives the same bytes
+	Common::Array<uint32> ids;
+	for (Common::HashMap<uint32, Common::String>::const_iterator it = _strings.begin(); it != _strings.end(); ++it)
+		ids.push_back(it->_key);
+	Common::sort(ids.begin(), ids.end());
+	for (uint i = 0; i < ids.size(); i++) {
+		values.stringIds.push_back(ids[i]);
+		values.strings.push_back(_strings.getVal(ids[i]));
+	}
+}
+
+void Script::applySaved(const SavedValues &values) {
+	for (uint i = 0; i + 2 <= values.variables.size(); i += 2) {
+		VCVariable v;
+		if (_data.getVariable(values.variables[i], v))
+			_variables[v.id] = (int32)values.variables[i + 1];
+	}
+	for (uint i = 0; i + 2 <= values.enabled.size(); i += 2) {
+		uint32 target;
+		bool enabled;
+		if (_data.getEnabled(values.enabled[i], target, enabled))
+			_enabled[target] = values.enabled[i + 1] != 0;
+	}
+	for (uint i = 0; i < values.stringIds.size() && i < values.strings.size(); i++)
+		_strings[values.stringIds[i]] = values.strings[i];
+}
+
 void Script::click(uint32 id) {
 	_box = 0; // a click outside the box closes it
 	if (!isEnabled(id)) {

@@ -14,6 +14,7 @@ MODULE_OBJS = \
 	phone.o \
 	pda.o \
 	pictures.o \
+	saveload.o \
 	script.o \
 	subliminal.o \
 	vcdata.o \

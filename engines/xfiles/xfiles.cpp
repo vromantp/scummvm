@@ -445,31 +445,38 @@ void XFilesEngine::startNewGame() {
 	_script->start();
 }
 
+void XFilesEngine::restoreGame(const VCSave &save) {
+	_script->restore(save);
+	// The view's clip plays from the saved time (0x51d200), the head
+	// credits roll again if they were rolling, from the last credit
+	// shown (0x4a80a0); the dialog box that was open is created again
+	if (save.clip)
+		_pendingClipTime = save.clipTime;
+	if (save.credits != -1) {
+		_headCredits.setEnabled(true);
+		_headCredits.roll(gameMillis(), getPreference(kPrefSkipIntro), save.credits);
+	}
+	VCCharView boxView;
+	if (save.dialogBox && _data->getCharView(save.dialogBox, boxView))
+		openDialogBox(boxView);
+}
+
 void XFilesEngine::runGame() {
 	createScript();
-	if (_loadedSave) {
-		_script->restore(_save);
-		// The view's clip plays from the saved time (0x51d200), the head
-		// credits roll again if they were rolling, from the last credit
-		// shown (0x4a80a0); the dialog box that was open is created again
-		if (_save.clip)
-			_pendingClipTime = _save.clipTime;
-		if (_save.credits != -1) {
-			_headCredits.setEnabled(true);
-			_headCredits.roll(gameMillis(), getPreference(kPrefSkipIntro), _save.credits);
-		}
-		VCCharView boxView;
-		if (_save.dialogBox && _data->getCharView(_save.dialogBox, boxView))
-			openDialogBox(boxView);
-	} else {
+	if (_loadedSave)
+		restoreGame(_save);
+	else
 		startNewGame();
-	}
 	// Fast-forward (xfiles_fastforward): the steps run in the script alone,
 	// as vc_sim.py runs them, so nothing plays and no time passes; the
 	// game goes on from where they end
 	for (uint i = 0; i < _fastForward.size(); i++)
 		_script->step(_fastForward[i]);
 	while (!shouldQuit()) {
+		// A load queued by loadGameStream (from the global main menu, from the
+		// steps) runs here, between two frames
+		if (_pendingLoad.valid)
+			applyPendingLoad();
 		Input input = pollInput();
 		// The X corner and Escape open the menu, not during a video
 		if (input.escape && !_menuOpen && _script->getVideoQueue().empty())
@@ -520,11 +527,31 @@ void XFilesEngine::runGame() {
 }
 
 void XFilesEngine::restartGame() {
-	// New from the menu: Game_Start (0x48cd70) destroys every timer, stops the
-	// head credits and the subliminal words, removes the sounds and videos and
-	// opens the state database again, so the game starts from the unchanged
-	// XFiles.gam
+	// New from the menu
 	debugC(1, kDebugScript, "-- new game");
+	if (!teardownGame())
+		return;
+	createScript();
+	startNewGame();
+}
+
+void XFilesEngine::applyPendingLoad() {
+	// Loading is Game_Start (0x48cd70) with a .X: the same teardown, then the
+	// restore with the saved values over a fresh XFiles.gam
+	debugC(1, kDebugScript, "-- load");
+	PendingLoad load = _pendingLoad;
+	_pendingLoad = PendingLoad();
+	if (!teardownGame())
+		return;
+	createScript();
+	_script->applySaved(load.values);
+	restoreGame(load.save);
+}
+
+bool XFilesEngine::teardownGame() {
+	// Game_Start (0x48cd70) destroys every timer, stops the head credits and
+	// the subliminal words, removes the sounds and videos and opens the state
+	// database again, so the game starts from the unchanged XFiles.gam
 	closeMenu();
 	_menuOpen = false;
 	_timerStates.clear();
@@ -537,6 +564,7 @@ void XFilesEngine::restartGame() {
 	_dialogBoxView = 0;
 	_captions.reset();
 	_headCredits.reset();
+	_headCredits.setEnabled(false); // only a new game, or a restore with the credits rolling, allows them
 	_subliminal.stop();
 	_lastClickTime = 0;
 	_lastClickHit.kind = Interface::kHitNone;
@@ -565,7 +593,7 @@ void XFilesEngine::restartGame() {
 		if (!loadDatabases(false)) {
 			warning("Cannot load XFiles.gam again");
 			quitGame();
-			return;
+			return false;
 		}
 	}
 	_cursors = new Cursors(*_data, _discFiles);
@@ -573,8 +601,7 @@ void XFilesEngine::restartGame() {
 	_interface = new Interface(*_data, _discFiles);
 	_interface->setFormat(_screen.format);
 	_interface->init(_texts);
-	createScript();
-	startNewGame();
+	return true;
 }
 
 // -- Comparison with reference runs -------------------------------------------
@@ -676,6 +703,14 @@ void XFilesEngine::runSteps() {
 			if (!file.open(Common::Path(step.substr(6), '/'), true) || file.write(json.c_str(), json.size()) != json.size())
 				warning("Cannot write the state to %s", step.c_str() + 6);
 			continue;
+		}
+		if (step.hasPrefix("savegame:") || step.hasPrefix("loadgame:")) {
+			// Engine only: save to or load from a ScummVM slot (the load runs at the start of the next frame)
+			int slot = atoi(step.c_str() + 9);
+			Common::Error error = step[0] == 's' ? saveGameState(slot, "step") : loadGameState(slot);
+			if (error.getCode() != Common::kNoError)
+				warning("%s failed: %s", step.c_str(), error.getDesc().c_str());
+			return;
 		}
 		if (step == "escape") {
 			// Engine only: the Escape key

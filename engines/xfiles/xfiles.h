@@ -76,6 +76,11 @@ public:
 	 */
 	void fillSnapshot(VCSave &save);
 
+	// Saves (saveload.cpp): the original's save content in ScummVM's stream
+	Common::Error saveGameStream(Common::WriteStream *stream, bool isAutosave = false) override;
+	/** Parses the save and queues the load, which runs at the start of the next frame. */
+	Common::Error loadGameStream(Common::SeekableReadStream *stream) override;
+
 	// ScriptHooks
 	bool callFunction(const VCAction &action, const Common::Array<int32> &args) override;
 	void playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) override;
@@ -135,6 +140,12 @@ private:
 	void startNewGame();
 	/** Game_Start's teardown, then a fresh game from XFiles.gam. */
 	void restartGame();
+	/** Game_Start's teardown: the running game goes, XFiles.gam is the database again. false: it cannot be read. */
+	bool teardownGame();
+	/** Continue from a save: the original's restore (Script::restore) and the engine's parts of it. */
+	void restoreGame(const VCSave &save);
+	/** A queued load (loadGameStream): teardown, a new Script with the saved values, restore. */
+	void applyPendingLoad();
 
 	// The main menu, also the one the X corner opens during play
 	void startMenu();
@@ -285,6 +296,14 @@ private:
 	Common::StringArray _steps;
 	bool _loadedSave;                     ///< xfiles_save: the game continues from an original .X save
 	VCSave _save;
+	/** A load read by loadGameStream, waiting for the frame boundary. */
+	struct PendingLoad {
+		PendingLoad() : valid(false) {}
+		bool valid;
+		Script::SavedValues values;
+		VCSave save;
+	};
+	PendingLoad _pendingLoad;
 	Common::StringArray _fastForward;     ///< xfiles_fastforward: steps run headless before the game starts
 	uint _nextStep;
 	uint32 _waitVideo;                    ///< A wait step waits for this video to end
