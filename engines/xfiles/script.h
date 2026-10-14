@@ -450,6 +450,7 @@ private:
 	uint32 _currNodeVariable;                  ///< RegCurrNode
 	uint32 _heldVariable;                      ///< RegCurrInvVar: iCurrInventory
 	int32 _heldNone;                           ///< Its Inventory_None value
+	uint32 _heldCursorItem;                    ///< Inv_Held() + 4 (0x6b8974): the VCInventory ID whose cursor is held
 	Common::Array<uint32> _pressed;            ///< See takePressedItems()
 	uint32 _held;                              ///< The interface item the mouse button is down on (press()), 0 for none
 	Common::HashMap<uint32, bool> _sounds;     ///< Sounds playing (asset objects active)

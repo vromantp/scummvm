@@ -100,7 +100,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _inboxTop(0), _pdaFontSize(12), _pdaLayout(false), _scrollItem(0), _addressIndex(0), _noteDay(0), _noteDays(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _inboxTop(0), _pdaFontSize(12), _pdaLayout(false), _scrollItem(0), _addressIndex(0), _noteDay(0), _noteDays(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	_jumpCut.first = _jumpCut.later = false;
 	_phone.bookSize = _phone.bookIndex = 0;
 	_phone.showsName = false;
@@ -351,7 +351,7 @@ void Script::execute(const VCAction &a, int event, const EventFields &fields, Lo
 			if (!a.value)
 				_spent.erase(target);
 			// The held item disabled goes back (0x436c20)
-			if (!a.value && isHolding() && (uint32)getVariable(_heldVariable) == target)
+			if (!a.value && _heldCursorItem && _heldCursorItem == target)
 				putBack();
 			// An evidence icon gets its object when it is enabled (0x4201a0),
 			// firing its Object Activation; disabling removes its kit icon too
@@ -476,8 +476,14 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 				selectInventory(args[0]);
 		} else if (a.function == "DeselectInv" && !args.empty()) {
 			// 0x50a570: 0 puts back any item, else only that one
-			if (args[0] == 0 || (isHolding() && getVariable(_heldVariable) == args[0]))
+			if (args[0] == 0 || _heldCursorItem == (uint32)args[0])
 				putBack();
+		} else if (a.function == "OnIntInvClick") {
+			// 0x467fb0: the PDA and phone icons never set iCurrInventory;
+			// this only clears the held cursor (Inv_SetHeldCursor(0))
+			_heldCursorItem = 0;
+			if (_hooks)
+				_hooks->heldItemChanged(0);
 		} else if (a.function == "SetIItemFocus" && !args.empty())
 			_focus = args[0];
 		else if (a.function == "RegViewState" && !a.args.empty() && a.args[0].kind == kOperandVariable)
@@ -510,8 +516,9 @@ void Script::putBack() {
 	// deactivation (0x437c20) resets the variable
 	if (!isHolding())
 		return;
-	debugC(1, kDebugScript, "-- #%d put back", getVariable(_heldVariable));
+	debugC(1, kDebugScript, "-- #%u put back", _heldCursorItem);
 	clearHeldItem();
+	_heldCursorItem = 0; // Inv_SetHeldCursor(0)
 	if (_hooks)
 		_hooks->heldItemChanged(0);
 }
@@ -524,9 +531,10 @@ bool Script::hasInventoryIcon(uint32 id) const {
 }
 
 void Script::selectInventory(uint32 id) {
-	if (isHolding() && (uint32)getVariable(_heldVariable) == id)
+	if (_heldCursorItem == id)
 		return;
 	putBack();
+	_heldCursorItem = id; // Inv_SetHeldCursor, before the Mouse Click triggers
 	if (_hooks)
 		_hooks->heldItemChanged(id);
 	debugC(1, kDebugScript, "-- click:%u (inventory)", id);
@@ -1554,6 +1562,8 @@ void Script::step(const Common::String &s) {
 		log(Common::String::format("  (video #%u loops)", _videoQueue[0]));
 	else if (kind == "wait")
 		finishVideo();
+	else if (kind == "click" && _data.getClassOf(id) == kClassInventory)
+		selectInventory(id); // an inventory icon takes its cursor (0x49c180)
 	else if (kind == "click")
 		click(id);
 	else if (kind == "press")

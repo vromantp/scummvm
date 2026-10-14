@@ -488,11 +488,8 @@ void XFilesEngine::callFunction(const VCAction &action, const Common::Array<int3
 
 void XFilesEngine::callInventoryFunction(const VCAction &action, const Common::Array<int32> &args) {
 	const Common::String &name = action.function;
-	// RegCurrInvVar and OnInvClick are handled by Script (iCurrInventory)
-	if (name == "OnIntInvClick") {
-		// Interface items (PDA, phone) are not held (0x467fb0)
-		_interface->setHeld(0);
-	} else if (name == "RollOnEvKit" && args.size() >= 2) {
+	// RegCurrInvVar, OnInvClick and OnIntInvClick are handled by Script (iCurrInventory)
+	if (name == "RollOnEvKit" && args.size() >= 2) {
 		// 0x4efda0: nothing while that item is in hand; open the kit above
 		// the item's icon, or close it once the mouse has left it
 		Common::Rect from;
