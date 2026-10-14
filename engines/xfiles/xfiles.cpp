@@ -189,6 +189,9 @@ XFilesEngine::Input XFilesEngine::pollInput() {
 			// A step list (xfiles_steps) keeps the mouse where a reference
 			// run puts it, whatever the real mouse does
 			_mouse = event.mouse;
+		} else if (event.type == Common::EVENT_RBUTTONDOWN) {
+			// The exe ends the playing video on a right-click as on a natural end
+			input.skip = true;
 		} else if (event.type == Common::EVENT_KEYDOWN && event.kbd.keycode == Common::KEYCODE_ESCAPE) {
 			input.skip = true;
 		} else if (event.type == Common::EVENT_KEYDOWN && _script && _steps.empty()) {
