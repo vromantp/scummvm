@@ -978,20 +978,22 @@ void Script::showLayout(uint32 layoutId) {
 	}
 	_layouts.push_back(shown);
 
-	// The objects are queued in the exe's order: each goes before the first
-	// one of an equal or higher layer (low byte of the layer word), so layers
-	// ascend and, within a layer, later items come first (reference run
-	// pda-usage-run1: 14 groups in 6 layouts). Layer 0 keeps the layout's order
-	// (the letter, drawer and cabinets of manual1). Not explained: layout
-	// 34010's three layer 102 items, which are in layout order too
+	// The exe appends the objects in layout order to a list kept sorted by
+	// layer (low byte of the layer word): an item goes to the end if its layer
+	// is not below the last one's, else before the first item of an equal or
+	// higher layer. That reproduces all 15 layout shows of the runs
+	// pda-usage-run1 and manual1 (layer 0 ties, layout 34010, the save screen)
 	Common::Array<uint32> order;
 	Common::Array<byte> layers;
 	for (uint i = 0; i < shown.items.size(); i++) {
 		VCInterfaceItem item;
 		byte layer = _data.getInterfaceItem(shown.items[i], item) ? item.layer & 0xff : 0;
-		uint at = 0;
-		while (at < layers.size() && (layers[at] < layer || (layer == 0 && layers[at] == 0)))
-			at++;
+		uint at = layers.size();
+		if (at && layers[at - 1] > layer) {
+			at = 0;
+			while (layers[at] < layer)
+				at++;
+		}
 		order.insert_at(at, shown.items[i]);
 		layers.insert_at(at, layer);
 	}
