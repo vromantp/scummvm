@@ -100,7 +100,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _inboxTop(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _inboxTop(0), _pdaFontSize(12), _pdaLayout(false), _scrollItem(0), _addressIndex(0), _noteDay(0), _noteDays(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	_jumpCut.first = _jumpCut.later = false;
 	_phone.bookSize = _phone.bookIndex = 0;
 	_phone.showsName = false;
@@ -474,7 +474,10 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 			runActionList(args[0] == 1 ? kPDAEscapeOnActions : kPDAEscapeOffActions, event, fields);
 		else if (a.function.hasPrefix("Phone"))
 			callPhone(a, args, event, fields);
-		else if (a.function.contains("Email") || a.function == "DisplayInBox" || a.function == "InitEmailRead")
+		else if (a.function.contains("Email") || a.function == "DisplayInBox" || a.function == "InitEmailRead" ||
+				a.function == "MainScroll" || a.function == "ScrollTextKill" || a.function.hasPrefix("PDAInitAddr") ||
+				a.function == "PDAFlipAddr" || a.function == "NotePadInit" || a.function == "NoteFlipDay" ||
+				a.function == "EnablePDANote" || a.function == "EnableAllNotes")
 			callEmail(a, args, event, fields);
 		if (_hooks)
 			_hooks->callFunction(a, args);
@@ -889,6 +892,7 @@ void Script::restore(const VCSave &save) {
 	_emails = save.emails;
 	_emailsRead = save.emailsRead;
 	_emailPending = save.emailsPending;
+	_notes = save.notes;
 	_inventory = save.inventory;
 	_evidence = save.evidence;
 	_kit = save.kit;

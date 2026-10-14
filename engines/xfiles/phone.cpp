@@ -134,11 +134,8 @@ void Script::setPhoneDisplay(const Common::U32String &text) {
 		_itemTexts.erase(kPhoneDisplay);
 		return;
 	}
-	ItemText &t = _itemTexts[kPhoneDisplay];
-	t.text = text;
-	t.color = kPhoneTextColor;
-	t.bold = true;
-	t.size = kPhoneTextSize;
+	// Not wrapped, bold, a line per newline; 17 px lines
+	setItemText(kPhoneDisplay, text, kPhoneTextSize, true, kPhoneTextColor, kAlignLeft, false, 0);
 }
 
 void Script::phoneInit(uint32 numberVar) {
@@ -217,13 +214,7 @@ void Script::phoneShowEntry(uint32 numberVar) {
 	// then the number; the number is its last 10 characters
 	uint32 entry = _phone.book[_phone.bookIndex];
 	Common::U32String text;
-	uint32 type, resource;
-	if (_data.getResourceRef(entry, type, resource)) {
-		if (_texts && type == 6)
-			text = _texts->loadString(resource).decode(Common::kWindows1252);
-	} else {
-		_data.getText(entry, text);
-	}
+	getTextAsset(entry, text);
 	Common::U32String lines;
 	for (uint i = 0; i < text.size(); i++) {
 		if (text[i] != '\r')

@@ -101,6 +101,7 @@ public:
 	// ScriptHooks
 	void callFunction(const VCAction &action, const Common::Array<int32> &args) override;
 	void playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) override;
+	bool readAssetFile(uint32 id, Common::Array<byte> &data) override;
 
 protected:
 	Common::Error run() override;

@@ -434,6 +434,11 @@ void XFilesEngine::runSteps() {
 			}
 			continue;
 		}
+		if (step == "shot") {
+			// The input command shot of xfref.dll: a screenshot now
+			scheduleShot("shot", 0, 100);
+			return;
+		}
 		if (step.hasPrefix("timer:")) {
 			// The engine's timers run in real time: wait for this one to
 			// expire, if it runs
@@ -586,6 +591,20 @@ void XFilesEngine::playAsset(uint32 id, byte mode, bool positional, int16 x, int
 		placeSound(sound);
 	sound.movie->play(mode == kModePlayLoop);
 	_sounds[id] = sound;
+}
+
+bool XFilesEngine::readAssetFile(uint32 id, Common::Array<byte> &data) {
+	// A file asset on the hard disk or a disc (an e-mail's text, XT:<id>.xtx)
+	VCAsset asset;
+	if (!_data->getAsset(id, asset) || asset.files.empty())
+		return false;
+	Common::SeekableReadStream *file = _discFiles.openFile(asset.files[0].disc, asset.files[0].file);
+	if (!file)
+		return false;
+	data.resize(file->size());
+	bool ok = data.empty() || file->read(&data[0], data.size()) == data.size();
+	delete file;
+	return ok;
 }
 
 void XFilesEngine::stopSound(uint32 id) {

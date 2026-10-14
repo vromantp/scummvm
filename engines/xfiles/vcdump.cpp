@@ -378,6 +378,7 @@ Common::String dumpState(const VCData &data, const Script &script) {
 	out += jsonList("emails", script.getEmails());
 	out += jsonList("emails_read", script.getEmailsRead());
 	out += jsonList("emails_pending", script.getEmailsPending());
+	out += jsonList("pda_notes", script.getPDANotes());
 	out += jsonList("inventory", script.getInventory());
 	// Running timers: number -> [ms, periodic]
 	out += ",\n \"timers\": {";

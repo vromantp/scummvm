@@ -25,6 +25,8 @@
 #include "common/array.h"
 #include "common/hashmap.h"
 #include "common/str.h"
+#include "common/str-array.h"
+#include "common/ustr.h"
 
 #include "xfiles/vcdata.h"
 
@@ -61,6 +63,8 @@ public:
 	 * positional: a 3D Sound action, at (x, y) on the viewpoint grid.
 	 */
 	virtual void playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) {}
+	/** The bytes of the file of a file asset (an e-mail's text), false if there is none. */
+	virtual bool readAssetFile(uint32 id, Common::Array<byte> &data) { return false; }
 };
 
 /**
@@ -200,6 +204,8 @@ public:
 	const Common::Array<uint32> &getEmails() const { return _emails; }
 	const Common::Array<uint32> &getEmailsRead() const { return _emailsRead; }
 	const Common::Array<uint32> &getEmailsPending() const { return _emailPending; }
+	/** The notepad's notes (VCPDANotes), for the state dump. */
+	const Common::Array<uint32> &getPDANotes() const { return _notes; }
 	void setVariable(uint32 id, int32 value) { _variables[id] = value; }
 	/** The variable registered by RegCurrInvVar (iCurrInventory); 0 before it. */
 	uint32 getHeldVariable() const { return _heldVariable; }
@@ -242,14 +248,24 @@ public:
 	Common::String getString(uint32 variableId) const;
 	void setString(uint32 variableId, const Common::String &value);
 
-	/** Text drawn into an interface item (the phone's display). */
+	/** Horizontal alignment of an item text (SetIItemText's c, l, r). */
+	enum TextAlign {
+		kAlignLeft,
+		kAlignCenter,
+		kAlignRight
+	};
+	/** Text drawn into an interface item (the phone's display, the PDA's texts). */
 	struct ItemText {
-		Common::U32String text;
+		Common::U32StringArray lines;  ///< Laid out lines
 		uint32 color;   ///< RGB
 		bool bold;
 		int size;       ///< Character height in pixels (GDI's -lfHeight)
+		int lineHeight; ///< Pixels from one line to the next
+		TextAlign align;
+		bool shadow;    ///< A black pass at (+1, +1) first
+		uint firstLine; ///< Scrolled text: the first line drawn at the item's top
 	};
-	/** The text of an interface item, or nullptr; drawn from its top left, a line per '\n'. */
+	/** The text of an interface item, or nullptr; drawn from the item's top left and clipped to it. */
 	const ItemText *getItemText(uint32 itemId) const;
 	/** The interface item with the keyboard focus (SetIItemFocus), or 0. */
 	uint32 getFocus() const { return _focus; }
@@ -318,6 +334,33 @@ private:
 	void displayInBox(int32 value);
 	void initEmailRead(int32 item, int32 email);
 	void setItemEnabled(uint32 item, bool enabled);
+	/** Lay out and set the text of an item (0x4be2c0); wrapWidth 0: a line per newline only. */
+	void setItemText(uint32 item, const Common::U32String &text, int size, bool bold, uint32 color, TextAlign align,
+		bool shadow, int wrapWidth);
+	/** PDA text: Courier New, regular, black, left, no shadow, wrapped at width (0x4be2c0). */
+	void setPDAText(uint32 item, const Common::U32String &text, int size, bool doubleWidth);
+	/** The text of a text asset (or a string of XFilesT.dll), false if it has none. */
+	bool getTextAsset(uint32 entry, Common::U32String &text);
+	/** Lines of an e-mail's file (To, From, Subject, body), empty if it has none; cached. */
+	const Common::U32StringArray &getEmailLines(uint32 email);
+	/** The text of a file asset: Windows-1252, carriage returns dropped. */
+	bool readTextFile(uint32 asset, Common::U32String &text);
+	void showInboxTexts();
+	void setScrollText(uint32 item, const Common::U32String &text, int size);
+	void mainScroll(int32 n);
+	void pdaInitAddr();
+	void pdaFlipAddr(int32 n);
+	void showAddress();
+	void buildAddressList();
+	void enablePDANote(uint32 id);
+	void enableAllNotes();
+	void notePadInit();
+	void noteFlipDay(int32 n);
+	void showNoteDay();
+	void showNoteDayText();
+	void showNoteMarker();
+	bool hasNote(uint32 id) const;
+	bool dayHasNote(uint day, uint32 note) const;
 
 	// Phone (phone.cpp)
 	/** Run one of the Phone hooks (PhoneInit, PhoneButton...). */
@@ -411,6 +454,14 @@ private:
 	};
 	Common::Array<InboxRow> _inboxRows;
 	uint _inboxTop;
+	int _pdaFontSize;                          ///< EmailInit(c): 12 for 'P', else 14
+	bool _pdaLayout;                           ///< EmailInit('P'): the PDA's item tables
+	Common::HashMap<uint32, Common::U32StringArray> _emailLines;  ///< Lines of the e-mail files read
+	uint32 _scrollItem;                        ///< The item of the scroll text (0x42ca30), or 0
+	Common::Array<uint32> _addressList;        ///< Enabled assets of item 45307 (0x6b8390)
+	uint _addressIndex;                        ///< 0x6b16b0
+	Common::Array<uint32> _notes;              ///< VCPDANotes
+	uint _noteDay, _noteDays;                  ///< 0x6b1a4c, 0x6b1a54
 
 	/** FixJumpCut(first, later) of a topic's Object Activation (0x47ca30). */
 	struct JumpCut {

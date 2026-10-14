@@ -28,6 +28,8 @@
 #include "common/ustr.h"
 #include "graphics/pixelformat.h"
 
+#include "xfiles/script.h"
+
 namespace Common {
 class WinResources;
 }
@@ -159,8 +161,8 @@ private:
 		uint16 layer;
 		Common::Rect rect;
 		Graphic *graphic;    ///< nullptr if the item shows no picture
-		Common::U32String text;  ///< Text drawn into the item (the phone's display)
-		uint32 textColor;    ///< RGB
+		bool hasText;
+		Script::ItemText text;   ///< Text drawn into the item (the phone's display, the PDA's texts)
 	};
 
 	/** Load the graphic of the first asset of a VCAssetRefList, nullptr if none opens. */
@@ -176,6 +178,8 @@ private:
 	void freeItems();
 	void syncItemTexts(const Script &script);
 	void drawItemText(Graphics::Surface &dst, const Item &item) const;
+	/** Courier New 400 or 700 at a character height, from Liberation Mono (kept); nullptr if unavailable. */
+	Graphics::Font *getItemFont(int size, bool bold) const;
 	void drawIcons(Graphics::Surface &dst, const Common::Array<Icon> &icons) const;
 	void drawRolloverText(Graphics::Surface &dst, const Common::Array<Icon> &icons) const;
 	static void blit(Graphics::Surface &dst, const Graphics::Surface &src, int x, int y);
@@ -192,7 +196,7 @@ private:
 	bool _inventorySeeded;                         ///< The restored inventory order has been used
 	Common::WinResources *_texts;
 	Graphics::Font *_font;
-	Graphics::Font *_itemFont;                    ///< Text of items: Courier New 15 bold (the phone's display)
+	mutable Common::HashMap<uint, Graphics::Font *> _itemFonts;  ///< Text of items per (size, bold)
 	bool _rolloverText;
 	bool _barClosed;
 	Common::Array<uint32> _layouts;               ///< Shown layouts whose items are loaded
