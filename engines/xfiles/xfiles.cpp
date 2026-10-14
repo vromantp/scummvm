@@ -65,12 +65,23 @@ static const uint32 kIntroAssets[] = { 56003, 56002, 19668, 56001 };
 static const uint32 kMenuXAsset = 49583;
 static const uint32 kMenuEntriesAsset = 49587;
 
-// Main menu entries: vertical extent of New and Quit in the entries movie
-static const int kMenuNewTop = 80, kMenuNewBottom = 118;
-static const int kMenuQuitTop = 385, kMenuQuitBottom = 420;
+// Main menu: the click sound (PrefClick.amv)
+static const uint32 kMenuClickAsset = 67518;
+
+// Main menu entries (MainMenu_OnMouseClick, XFiles.exe): all from x 472 to 638
+// (exclusive); the vertical extent of each, in the order of enum MenuEntry
+static const int kMenuEntriesRight = 638;
+static const int kMenuEntryRows[][2] = {
+	{78, 114}, {126, 162}, {175, 211}, {225, 261}, {275, 311}, {330, 366}, {385, 421}};
+static const char *const kMenuEntryNames[] = {"new", "load", "save", "previous", "options", "help", "quit"};
+
+// The X corner, XCorner_ctor's rectangle (right and bottom exclusive)
+static const int kMenuCornerLeft = 501, kMenuCornerBottom = 34;
+// Its cursor, the VCCursor named "X"
+static const uint32 kXCursor = 25541;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
-	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _video(nullptr), _videoStarted(0), _viewId(0), _soundView(0), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
+	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuOpen(false), _paused(false), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _soundView(0), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
 	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0) {
 	g_engine = this;
 	_loadedSave = false;
@@ -85,6 +96,7 @@ XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : E
 XFilesEngine::~XFilesEngine() {
 	for (Common::HashMap<uint32, Sound>::iterator it = _sounds.begin(); it != _sounds.end(); ++it)
 		delete it->_value.movie;
+	closeMenu();
 	closeView();
 	delete _interface;
 	delete _cursors;
@@ -96,13 +108,13 @@ XFilesEngine::~XFilesEngine() {
 	_screen.free();
 }
 
-bool XFilesEngine::loadDatabases() {
+bool XFilesEngine::loadDatabases(bool fromSave) {
 	Common::File hdb, gam;
 	if (!hdb.open("XFiles.hdb"))
 		return false;
 	// xfiles_save names an original .X save: it takes the place of XFiles.gam
 	// (it is a copy of it) and the game continues from it
-	Common::Path savePath = ConfMan.getPath("xfiles_save");
+	Common::Path savePath = fromSave ? ConfMan.getPath("xfiles_save") : Common::Path();
 	Common::SeekableReadStream *saveStream = nullptr;
 	if (!savePath.empty()) {
 		saveStream = Common::FSNode(savePath).createReadStream();
@@ -131,7 +143,7 @@ bool XFilesEngine::loadDatabases() {
 Common::Error XFilesEngine::run() {
 	ConfMan.registerDefault("subliminal_messages", false);
 	_discFiles.init(Common::FSNode(ConfMan.getPath("path")));
-	if (!loadDatabases())
+	if (!loadDatabases(true))
 		return Common::Error(Common::kReadingFailed, "XFiles.hdb / XFiles.gam");
 
 	Graphics::PixelFormat format(2, 5, 6, 5, 0, 11, 5, 0, 0);
@@ -178,6 +190,7 @@ XFilesEngine::Input XFilesEngine::pollInput() {
 	Input input;
 	input.click = false;
 	input.skip = false;
+	input.escape = false;
 	Common::Event event;
 	while (g_system->getEventManager()->pollEvent(event)) {
 		if (event.type == Common::EVENT_LBUTTONDOWN && _steps.empty()) {
@@ -195,6 +208,7 @@ XFilesEngine::Input XFilesEngine::pollInput() {
 			input.skip = true;
 		} else if (event.type == Common::EVENT_KEYDOWN && event.kbd.keycode == Common::KEYCODE_ESCAPE) {
 			input.skip = true;
+			input.escape = true;
 		} else if (event.type == Common::EVENT_KEYDOWN && _script && _steps.empty()) {
 			uint vk = getVirtualKey(event.kbd);
 			if (vk)
@@ -269,46 +283,168 @@ bool XFilesEngine::playIntro() {
 }
 
 bool XFilesEngine::runMenu() {
-	// Only New and Quit work; the X loop (49585) and name (49589) movies and
-	// the entries' help texts are not shown.
-	Movie x, entries;
-	if (openMovie(x, kMenuXAsset))
-		x.play(false);
-	if (openMovie(entries, kMenuEntriesAsset))
-		entries.play(false);
-
+	// The start-up menu: only New and Quit work; the X loop (49585) and name
+	// (49589) movies and the entries' help texts are not shown.
+	startMenu();
 	while (!shouldQuit()) {
 		Input input = pollInput();
-		if (input.click && input.pos.x >= kMenuEntriesLeft) {
-			if (input.pos.y >= kMenuNewTop && input.pos.y < kMenuNewBottom)
+		if (input.click) {
+			MenuEntry entry = clickMenu(input.pos);
+			if (entry == kMenuNew) {
+				closeMenu();
 				return true;
-			if (input.pos.y >= kMenuQuitTop && input.pos.y < kMenuQuitBottom) {
+			}
+			if (entry == kMenuQuit) {
 				quitGame();
-				return false;
+				break;
 			}
 		}
-		x.update();
-		entries.update();
-		if (!entries.hasEnded() && entries.getCurFrame() >= kMenuEntriesShown)
-			entries.stop();
-
-		_screen.fillRect(Common::Rect(_screen.w, _screen.h), 0);
-		blit(x.getFrame(), 0, 0);
-		blit(entries.getFrame(), kMenuEntriesLeft, 0);
+		updateMenu();
+		drawMenu();
 		present();
 	}
+	closeMenu();
 	return false;
+}
+
+void XFilesEngine::startMenu() {
+	closeMenu();
+	_menuX = new Movie();
+	_menuEntries = new Movie();
+	if (openMovie(*_menuX, kMenuXAsset))
+		_menuX->play(false);
+	if (openMovie(*_menuEntries, kMenuEntriesAsset))
+		_menuEntries->play(false);
+}
+
+void XFilesEngine::closeMenu() {
+	delete _menuX;
+	delete _menuEntries;
+	delete _menuClick;
+	_menuX = _menuEntries = _menuClick = nullptr;
+}
+
+void XFilesEngine::updateMenu() {
+	_menuX->update();
+	_menuEntries->update();
+	if (!_menuEntries->hasEnded() && _menuEntries->getCurFrame() >= kMenuEntriesShown)
+		_menuEntries->stop();
+	if (_menuClick) {
+		_menuClick->update();
+		if (_menuClick->hasEnded()) {
+			delete _menuClick;
+			_menuClick = nullptr;
+		}
+	}
+}
+
+void XFilesEngine::drawMenu() {
+	_screen.fillRect(Common::Rect(_screen.w, _screen.h), 0);
+	blit(_menuX->getFrame(), 0, 0);
+	blit(_menuEntries->getFrame(), kMenuEntriesLeft, 0);
+}
+
+XFilesEngine::MenuEntry XFilesEngine::hitMenu(const Common::Point &pos) const {
+	if (pos.x < kMenuEntriesLeft || pos.x >= kMenuEntriesRight)
+		return kMenuNone;
+	for (int i = 0; i < kMenuEntryCount; i++) {
+		if (pos.y >= kMenuEntryRows[i][0] && pos.y < kMenuEntryRows[i][1])
+			return (MenuEntry)i;
+	}
+	return kMenuNone;
+}
+
+XFilesEngine::MenuEntry XFilesEngine::clickMenu(const Common::Point &pos) {
+	MenuEntry entry = hitMenu(pos);
+	if (entry == kMenuNone)
+		return entry; // A click outside the entries does nothing
+	debugC(1, kDebugScript, "-- menu %s", kMenuEntryNames[entry]);
+	// Every entry plays PrefClick.amv (the exe also plays the entry's highlight)
+	delete _menuClick;
+	_menuClick = new Movie();
+	if (openMovie(*_menuClick, kMenuClickAsset)) {
+		_menuClick->play(false);
+	} else {
+		delete _menuClick;
+		_menuClick = nullptr;
+	}
+	return entry;
+}
+
+void XFilesEngine::menuChoice(MenuEntry entry) {
+	switch (entry) {
+	case kMenuPrevious:
+		closeMenu();
+		_menuOpen = false;
+		pauseGame(false);
+		break;
+	case kMenuQuit:
+		quitGame();
+		break;
+	case kMenuNew:
+		restartGame();
+		break;
+	default:
+		break; // Load, Save, Options and Help are not implemented (B-061)
+	}
+}
+
+void XFilesEngine::openGameMenu() {
+	// XCorner_OpenMenu: the held item goes back, the scene is suspended and
+	// the menu shows; the dialog box stays open behind it
+	if (_menuOpen)
+		return;
+	if (isHolding())
+		putBack();
+	pauseGame(true);
+	_menuOpen = true;
+	startMenu();
+	debugC(1, kDebugScript, "-- menu open");
+}
+
+uint32 XFilesEngine::gameMillis() const {
+	return (_paused ? _pauseStart : g_system->getMillis()) - _pausedTotal;
+}
+
+void XFilesEngine::pauseGame(bool pause) {
+	// Scene_SuspendAll: the media pause (Media_PauseAll) and the game's
+	// timed objects stop, so everything goes on where it was
+	if (pause == _paused)
+		return;
+	if (pause) {
+		_pauseStart = g_system->getMillis();
+	} else {
+		uint32 paused = g_system->getMillis() - _pauseStart;
+		_pausedTotal += paused;
+		debugC(1, kDebugScript, "-- game resumed after %u ms", paused);
+	}
+	_paused = pause;
+	if (_video)
+		_video->pause(pause);
+	for (uint i = 0; i < _layers.size(); i++)
+		_layers[i]->pause(pause);
+	for (Common::HashMap<uint32, Sound>::iterator it = _sounds.begin(); it != _sounds.end(); ++it)
+		it->_value.movie->pause(pause);
 }
 
 // -- The game -----------------------------------------------------------------
 
-void XFilesEngine::runGame() {
+void XFilesEngine::createScript() {
 	_script = new Script(*_data);
 	_script->setHooks(this);
 	_script->setTexts(_texts);
 	_script->setRandomSeed(_randomSource.getRandomNumber(0xFFFFFFFF));
+}
+
+void XFilesEngine::startNewGame() {
 	// A new game starts from XFiles.gam, which allows the head credits
 	// (XFiles.exe Game_Start 0x48cd70)
+	_headCredits.setEnabled(true);
+	_script->start();
+}
+
+void XFilesEngine::runGame() {
+	createScript();
 	if (_loadedSave) {
 		_script->restore(_save);
 		// The view's clip plays from the saved time (0x51d200), the head
@@ -318,14 +454,13 @@ void XFilesEngine::runGame() {
 			_pendingClipTime = _save.clipTime;
 		if (_save.credits != -1) {
 			_headCredits.setEnabled(true);
-			_headCredits.roll(g_system->getMillis(), getPreference(kPrefSkipIntro), _save.credits);
+			_headCredits.roll(gameMillis(), getPreference(kPrefSkipIntro), _save.credits);
 		}
 		VCCharView boxView;
 		if (_save.dialogBox && _data->getCharView(_save.dialogBox, boxView))
 			openDialogBox(boxView);
 	} else {
-		_headCredits.setEnabled(true);
-		_script->start();
+		startNewGame();
 	}
 	// Fast-forward (xfiles_fastforward): the steps run in the script alone,
 	// as vc_sim.py runs them, so nothing plays and no time passes; the
@@ -334,13 +469,30 @@ void XFilesEngine::runGame() {
 		_script->step(_fastForward[i]);
 	while (!shouldQuit()) {
 		Input input = pollInput();
+		// The X corner and Escape open the menu, not during a video
+		if (input.escape && !_menuOpen && _script->getVideoQueue().empty())
+			openGameMenu();
+		if (_menuOpen) {
+			updateMenu();
+			if (input.click)
+				menuChoice(clickMenu(input.pos));
+			if (_menuOpen) {
+				_cursors->show(0);
+				_cursors->update();
+				drawMenu();
+			}
+			present();
+			updateShots();
+			runSteps();
+			continue;
+		}
 		updateTimers();
 		updateSounds();
-		_captions.update(g_system->getMillis());
-		_headCredits.update(g_system->getMillis(), _script->getVideoQueue().empty() && !_dialogBox.isOpen());
+		_captions.update(gameMillis());
+		_headCredits.update(gameMillis(), _script->getVideoQueue().empty() && !_dialogBox.isOpen());
 		// The words show over a view, the dialog box or the location card,
 		// not over a video alone
-		_subliminal.update(g_system->getMillis(), *_script, getUberVariable(0), getUberVariable(1), getUberVariable(2),
+		_subliminal.update(gameMillis(), *_script, getUberVariable(0), getUberVariable(1), getUberVariable(2),
 			_script->getVideoQueue().empty() || _captions.hasCard());
 		if (!_script->getVideoQueue().empty()) {
 			playQueuedVideo(input);
@@ -363,6 +515,64 @@ void XFilesEngine::runGame() {
 		updateShots();
 		runSteps();
 	}
+}
+
+void XFilesEngine::restartGame() {
+	// New from the menu: Game_Start (0x48cd70) destroys every timer, stops the
+	// head credits and the subliminal words, removes the sounds and videos and
+	// opens the state database again, so the game starts from the unchanged
+	// XFiles.gam
+	debugC(1, kDebugScript, "-- new game");
+	closeMenu();
+	_menuOpen = false;
+	_timerStates.clear();
+	_pressedItems.clear();
+	stopAllSounds();
+	_video->close();
+	_videoStarted = 0;
+	closeView();
+	_dialogBox.close();
+	_dialogBoxView = 0;
+	_captions.reset();
+	_headCredits.reset();
+	_subliminal.stop();
+	_lastClickTime = 0;
+	_lastClickHit.kind = Interface::kHitNone;
+	_lastClickHit.id = 0;
+	_hover = _lastClickHit;
+	_pendingClipTime = -1;
+	_soundView = 0;
+	_shotDue = 0;
+	_shotView = 0;
+	_shotBox = false;
+	_waitVideo = 0;
+	_waitTimer = -1;
+	pauseGame(false);
+
+	delete _script;
+	_script = nullptr;
+	delete _interface;
+	_interface = nullptr;
+	delete _cursors;
+	_cursors = nullptr;
+	if (_loadedSave) {
+		// The save is a modified copy of XFiles.gam: read the original again
+		delete _data;
+		_data = nullptr;
+		_loadedSave = false;
+		if (!loadDatabases(false)) {
+			warning("Cannot load XFiles.gam again");
+			quitGame();
+			return;
+		}
+	}
+	_cursors = new Cursors(*_data, _discFiles);
+	_cursors->init(_screen.format);
+	_interface = new Interface(*_data, _discFiles);
+	_interface->setFormat(_screen.format);
+	_interface->init(_texts);
+	createScript();
+	startNewGame();
 }
 
 // -- Comparison with reference runs -------------------------------------------
@@ -442,6 +652,25 @@ void XFilesEngine::runSteps() {
 			scheduleShot("shot", 0, 100);
 			return;
 		}
+		if (step.hasPrefix("xclick:")) {
+			// Engine only: a click at a screen position (the menu's while it is up)
+			int x = 0, y = 0;
+			if (sscanf(step.c_str() + 7, "%d,%d", &x, &y) == 2) {
+				Common::Point pos(x, y);
+				_mouse = pos;
+				if (_menuOpen)
+					menuChoice(clickMenu(pos));
+				else if (queue.empty())
+					handleClick(pos);
+			}
+			return;
+		}
+		if (step == "escape") {
+			// Engine only: the Escape key
+			if (!_menuOpen && queue.empty())
+				openGameMenu();
+			return;
+		}
 		if (step.hasPrefix("timer:")) {
 			// The engine's timers run in real time: wait for this one to
 			// expire, if it runs
@@ -475,9 +704,9 @@ void XFilesEngine::callFunction(const VCAction &action, const Common::Array<int3
 	else if (action.function == "RegPreferences")
 		registerPreferences(action);
 	else if (action.function == "RollHdCredits")
-		_headCredits.roll(g_system->getMillis(), getPreference(kPrefSkipIntro));
+		_headCredits.roll(gameMillis(), getPreference(kPrefSkipIntro));
 	else if (action.function == "SetStartView" && getPreference(kPrefSubliminalMessages))
-		_subliminal.start(g_system->getMillis()); // Game_BuildObjects 0x477940 calls Prefs_Apply 0x452b20
+		_subliminal.start(gameMillis()); // Game_BuildObjects 0x477940 calls Prefs_Apply 0x452b20
 	else if (action.function == "RegUberVars")
 		registerUberVariables(action);
 	else
@@ -555,7 +784,7 @@ void XFilesEngine::startVideoText(const VCAction &action, const Common::Array<in
 		warning("StartVideoText: bad arguments in #%u", action.id);
 		return;
 	}
-	_captions.startCard(Captions::formatCard(location, args[1], args[2], args[3] == 1), g_system->getMillis());
+	_captions.startCard(Captions::formatCard(location, args[1], args[2], args[3] == 1), gameMillis());
 }
 
 // -- Sound --------------------------------------------------------------------
@@ -782,13 +1011,13 @@ void XFilesEngine::playQueuedVideo(const Input &input) {
 			return;
 		}
 		_video->play(_script->isVideoLooped());
-		_videoStarted = g_system->getMillis();
+		_videoStarted = gameMillis();
 	}
 	// A piece of the view's loop between conversation clips plays for a
 	// fixed time (Script::queueViewLoop); a looping clip plays until a Stop
 	// action stops it
 	uint32 limit = _script->getVideoLimit();
-	if ((input.skip && !_script->isVideoLooped()) || (limit && g_system->getMillis() - _videoStarted >= limit))
+	if ((input.skip && !_script->isVideoLooped()) || (limit && gameMillis() - _videoStarted >= limit))
 		_video->stop();
 	_video->update();
 
@@ -805,7 +1034,7 @@ void XFilesEngine::playQueuedVideo(const Input &input) {
 
 void XFilesEngine::updateTimers() {
 	// Timers run in real time; Script only knows they were started
-	uint32 now = g_system->getMillis();
+	uint32 now = gameMillis();
 	const Common::HashMap<uint, Script::Timer> &timers = _script->getTimers();
 	Common::Array<uint> expired, stopped;
 	for (Common::HashMap<uint, Script::Timer>::const_iterator it = timers.begin(); it != timers.end(); ++it) {
@@ -951,13 +1180,17 @@ void XFilesEngine::drawView() {
 	_interface->draw(_screen);
 }
 
+static bool inMenuCorner(const Common::Point &pos) {
+	return pos.x >= kMenuCornerLeft && pos.x < kScreenWidth && pos.y >= 0 && pos.y < kMenuCornerBottom;
+}
+
 static bool containsPoint(const VCRect &r, const Common::Point &pos) {
 	return pos.x >= r.left && pos.x < r.right && pos.y >= r.top && pos.y < r.bottom;
 }
 
 void XFilesEngine::handleClick(const Common::Point &pos) {
 	Interface::Hit hit = _interface->hitTest(pos);
-	uint32 now = g_system->getMillis();
+	uint32 now = gameMillis();
 	bool doubleClick = now - _lastClickTime <= kDoubleClickMs && hit.kind != Interface::kHitNone &&
 		hit.kind == _lastClickHit.kind && hit.id == _lastClickHit.id &&
 		ABS(pos.x - _lastClickPos.x) <= kDoubleClickDistance && ABS(pos.y - _lastClickPos.y) <= kDoubleClickDistance;
@@ -972,6 +1205,13 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 	if (hit.kind == Interface::kHitItem) {
 		debugC(1, kDebugScript, "-- click:%u (interface item)", hit.id);
 		_script->press(hit.id);
+		return;
+	}
+
+	// The X corner (kind 26) comes after the interface items, before the
+	// dialog box and the modal layouts
+	if (hit.kind == Interface::kHitNone && !_dialogBox.contains(pos) && inMenuCorner(pos)) {
+		openGameMenu();
 		return;
 	}
 
@@ -1103,6 +1343,8 @@ uint32 XFilesEngine::getCursorAt(const Common::Point &pos) const {
 		return 0; // Icons show the default cursor (0x46e1d0 reads a field that is always 0)
 	if (_dialogBox.contains(pos))
 		return 0; // Topics in the box show the default cursor (0x478940)
+	if (inMenuCorner(pos))
+		return kXCursor; // The X corner object (slot +0x68 looks up the VCCursor "X")
 	if (_interface->isModal())
 		return held;
 	ViewHit viewHit = hitView(pos);

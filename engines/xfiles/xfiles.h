@@ -89,6 +89,20 @@ private:
 		bool click;
 		Common::Point pos;
 		bool skip;
+		bool escape;
+	};
+
+	/** The main menu's entries, in order from the top. */
+	enum MenuEntry {
+		kMenuNone = -1,
+		kMenuNew,
+		kMenuLoad,
+		kMenuSave,
+		kMenuPrevious,
+		kMenuOptions,
+		kMenuHelp,
+		kMenuQuit,
+		kMenuEntryCount
 	};
 
 	struct TimerState {
@@ -96,7 +110,8 @@ private:
 		uint32 started;
 	};
 
-	bool loadDatabases();
+	/** Load XFiles.hdb and the game state; fromSave: xfiles_save takes the place of XFiles.gam. */
+	bool loadDatabases(bool fromSave);
 	Input pollInput();
 	/** The Windows virtual-key code of a key, 0 for keys the game does not take. */
 	static uint getVirtualKey(const Common::KeyState &kbd);
@@ -108,6 +123,29 @@ private:
 	bool playIntro();
 	bool runMenu();
 	void runGame();
+	void createScript();
+	/** The new-game half of runGame (Game_Start, XFiles.exe 0x48cd70). */
+	void startNewGame();
+	/** Game_Start's teardown, then a fresh game from XFiles.gam. */
+	void restartGame();
+
+	// The main menu, also the one the X corner opens during play
+	void startMenu();
+	void closeMenu();
+	void updateMenu();
+	void drawMenu();
+	MenuEntry hitMenu(const Common::Point &pos) const;
+	/** A click on the menu: the entry hit (it plays its sound), kMenuNone if none. */
+	MenuEntry clickMenu(const Common::Point &pos);
+	/** What an entry does while the menu is open over the game. */
+	void menuChoice(MenuEntry entry);
+	/** XCorner_OpenMenu (0x4ab9e0): put the item back, pause, show the menu. */
+	void openGameMenu();
+
+	/** The game's own clock: getMillis() without the time spent paused. */
+	uint32 gameMillis() const;
+	/** Freeze or resume the game's time, its videos and sounds. */
+	void pauseGame(bool pause);
 
 	void playQueuedVideo(const Input &input);
 	void updateTimers();
@@ -188,6 +226,13 @@ private:
 	Common::SeekableReadStream *_textsDll; ///< XFilesT.dll; _texts reads it lazily, so it lives as long as _texts
 	Common::WinResources *_texts;         ///< XFilesT.dll: topic texts (string table)
 	Common::Point _mouse;
+	Movie *_menuX;                        ///< The main menu's movies (49583 the X, 49587 the entries)
+	Movie *_menuEntries;
+	Movie *_menuClick;                    ///< The click sound of an entry
+	bool _menuOpen;                       ///< The menu is up over the running game
+	bool _paused;
+	uint32 _pauseStart;                   ///< getMillis() when the game was paused
+	uint32 _pausedTotal;                  ///< Milliseconds the game spent paused before
 	uint32 _prefVariables[kPrefCount];  ///< From RegPreferences
 	uint32 _uberVariables[3];           ///< iUberLoss, iUberParanoia, iUberXTrack, from RegUberVars
 
