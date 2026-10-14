@@ -101,6 +101,14 @@ void HeadCredits::hide() {
 	_hideAt = 0;
 }
 
+void HeadCredits::reset() {
+	// Game_Start stops the credits; the new game's roll starts as at first
+	_rolling = false;
+	_shownAny = false;
+	_index = -1;
+	hide();
+}
+
 void HeadCredits::update(uint32 now, bool canShow) {
 	// 0x401ee0, every frame
 	if (!_rolling)

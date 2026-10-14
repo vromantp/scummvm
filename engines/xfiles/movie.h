@@ -69,6 +69,8 @@ public:
 	void update();
 	/** Stop at once, keeping the last frame. */
 	void stop();
+	/** Pause or resume a playing movie (the game's pause); the time it was paused does not count. */
+	void pause(bool pause);
 	bool hasEnded() const { return _ended; }
 	int getCurFrame() const;
 
@@ -100,6 +102,7 @@ private:
 	uint32 _startMs, _endMs;
 	bool _loop;
 	bool _ended;
+	bool _paused;         ///< pause() paused the decoder
 };
 
 } // End of namespace XFiles

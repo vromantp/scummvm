@@ -42,7 +42,7 @@ Audio::Mixer::SoundType Movie::getSoundType(const Common::String &file) {
 	return Audio::Mixer::kSpeechSoundType;
 }
 
-Movie::Movie() : _decoder(nullptr), _assetId(0), _startMs(0), _endMs(0), _loop(false), _ended(false) {
+Movie::Movie() : _decoder(nullptr), _assetId(0), _startMs(0), _endMs(0), _loop(false), _ended(false), _paused(false) {
 	_format = g_system->getScreenFormat();
 }
 
@@ -82,6 +82,7 @@ void Movie::close() {
 	_frame.free();
 	_assetId = 0;
 	_ended = false;
+	_paused = false;
 }
 
 void Movie::play(bool loop, int32 fromMs) {
@@ -138,6 +139,16 @@ void Movie::stop() {
 	if (_decoder && _decoder->isPlaying())
 		_decoder->pauseVideo(true);
 	_ended = true;
+}
+
+void Movie::pause(bool pause) {
+	if (!_decoder || pause == _paused)
+		return;
+	// A stopped movie or a still is not playing
+	if (pause && (_ended || !_decoder->isPlaying()))
+		return;
+	_paused = pause;
+	_decoder->pauseVideo(pause);
 }
 
 int Movie::getCurFrame() const {

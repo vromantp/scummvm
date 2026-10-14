@@ -60,6 +60,8 @@ public:
 	void roll(uint32 now, bool skipIntro, int first = -1);
 	/** Take the credit on screen away now; the next one still comes. */
 	void hide();
+	/** Stop rolling and forget what came (a new game). */
+	void reset();
 	/**
 	 * Show and take away the credits; now in ms. canShow is false while a
 	 * play-once clip plays or the dialog box is open.

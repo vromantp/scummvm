@@ -59,6 +59,8 @@ public:
 	/** Type the card on and take it away after its time; now in ms. */
 	void update(uint32 now);
 	bool hasCard() const { return _cardState != kCardNone; }
+	/** Take the card away (a new game). */
+	void reset() { _cardState = kCardNone; }
 
 	/** Draw the card, with its bottom left corner in the view band. */
 	void drawCard(Graphics::Surface &dst) const;
