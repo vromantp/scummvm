@@ -65,6 +65,12 @@ public:
 	const Graphics::Surface *getSurface() const override { return _outputSurface; }
 	const Graphics::Palette &getPalette() const override { return _palette; }
 
+	/**
+	 * Keep the alpha plane of 32-bit planar pictures: the surface is then
+	 * ARGB32 instead of RGB24. Off by default; call before loadStream().
+	 */
+	void setKeepAlpha(bool keep) { _keepAlpha = keep; }
+
 	struct PixMap {
 		uint32 baseAddr;
 		uint16 rowBytes;
@@ -94,6 +100,7 @@ private:
 	Graphics::Surface *_outputSurface;
 	bool _continueParsing;
 	int _version;
+	bool _keepAlpha;
 
 	// Utility Functions
 	void unpackBitsRectOrRgn(Common::SeekableReadStream &stream, bool compressed, bool hasRegion);
