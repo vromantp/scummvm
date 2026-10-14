@@ -73,6 +73,7 @@ XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : E
 	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _video(nullptr), _videoStarted(0), _viewId(0), _soundView(0), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
 	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _inventoryVariable(0), _inventoryNone(0), _lastClickTime(0) {
 	g_engine = this;
+	_loadedSave = false;
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	memset(_uberVariables, 0, sizeof(_uberVariables));
 	_lastClickHit.kind = Interface::kHitNone;
@@ -96,11 +97,31 @@ XFilesEngine::~XFilesEngine() {
 
 bool XFilesEngine::loadDatabases() {
 	Common::File hdb, gam;
-	if (!hdb.open("XFiles.hdb") || !gam.open("XFiles.gam"))
+	if (!hdb.open("XFiles.hdb"))
 		return false;
+	// xfiles_save names an original .X save: it takes the place of XFiles.gam
+	// (it is a copy of it) and the game continues from it
+	Common::Path savePath = ConfMan.getPath("xfiles_save");
+	Common::SeekableReadStream *saveStream = nullptr;
+	if (!savePath.empty()) {
+		saveStream = Common::FSNode(savePath).createReadStream();
+		if (!saveStream) {
+			warning("Cannot open the save %s", savePath.toString().c_str());
+			return false;
+		}
+	} else if (!gam.open("XFiles.gam")) {
+		return false;
+	}
 	_data = new VCData();
-	if (!_data->load(hdb, gam))
+	bool loaded = _data->load(hdb, saveStream ? *saveStream : (Common::SeekableReadStream &)gam);
+	delete saveStream;
+	if (!loaded)
 		return false;
+	_loadedSave = !savePath.empty() && _data->getSave(_save);
+	if (!savePath.empty() && !_loadedSave) {
+		warning("%s is not a save", savePath.toString().c_str());
+		return false;
+	}
 	debugC(1, kDebugDatabase, "Loaded %u classes from XFiles.hdb, %u from XFiles.gam",
 		_data->getHdb().getClasses().size(), _data->getGam().getClasses().size());
 	return true;
@@ -145,7 +166,7 @@ Common::Error XFilesEngine::run() {
 
 	_video = new Movie();
 	// A step list starts the game at once, without the intro and the menu
-	if (!_steps.empty() || !_fastForward.empty() || (playIntro() && runMenu()))
+	if (!_steps.empty() || !_fastForward.empty() || _loadedSave || (playIntro() && runMenu()))
 		runGame();
 	return Common::kNoError;
 }
@@ -284,8 +305,12 @@ void XFilesEngine::runGame() {
 	_script->setRandomSeed(_randomSource.getRandomNumber(0xFFFFFFFF));
 	// A new game starts from XFiles.gam, which allows the head credits
 	// (XFiles.exe Game_Start 0x48cd70)
-	_headCredits.setEnabled(true);
-	_script->start();
+	if (_loadedSave) {
+		_script->restore(_save);
+	} else {
+		_headCredits.setEnabled(true);
+		_script->start();
+	}
 	// Fast-forward (xfiles_fastforward): the steps run in the script alone,
 	// as vc_sim.py runs them, so nothing plays and no time passes; the
 	// game goes on from where they end

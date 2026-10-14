@@ -96,6 +96,13 @@ public:
 
 	/** Fire the title's Object Activation (the game's start). */
 	void start();
+	/**
+	 * Continue from a save (VCData::getSave) instead of start(): the data is
+	 * a save, so variables and enable flags are already its own. Restores the
+	 * position, the history, the e-mail lists, the inventory and evidence
+	 * lists, the kit, the timers and the sounds playing.
+	 */
+	void restore(const VCSave &save);
 
 	/**
 	 * Run one vc_sim.py step: wait, click:ID, timer:N, nav:ID, goto:ID or
@@ -209,6 +216,12 @@ public:
 	};
 	/** Shown layouts, oldest first. */
 	const Common::Array<Layout> &getLayouts() const { return _layouts; }
+	/** The inventory in the order of the save (empty unless restored). */
+	const Common::Array<uint32> &getInventory() const { return _inventory; }
+	/** Evidence icons outside the kit as restored from a save: (VCEvidenceIcon, shown) pairs. */
+	const Common::Array<uint32> &getEvidence() const { return _evidence; }
+	/** Conversations asked, with repeats, as restored from a save. */
+	const Common::Array<uint32> &getHistory() const { return _history; }
 	/** Evidence icons in the evidence kit (EnableKitIcon), in order. */
 	const Common::Array<uint32> &getKitIcons() const { return _kit; }
 
@@ -346,6 +359,8 @@ private:
 	uint32 _box;                               ///< Character view whose conversation box is open, or 0
 	Common::Array<Layout> _layouts;
 	Common::Array<uint32> _kit;
+	Common::Array<uint32> _inventory, _evidence, _history;
+	bool _restoring;                           ///< restore() is running: Object Activation does not fire
 	Common::HashMap<uint32, Common::String> _strings;  ///< VCString values that changed
 	Common::HashMap<uint32, ItemText> _itemTexts;
 	uint32 _focus;

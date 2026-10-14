@@ -581,6 +581,49 @@ bool VCData::getEnabled(uint32 id, uint32 &target, bool &enabled) const {
 	return true;
 }
 
+/** The u32 list of the blob whose (offset, length) is at mark; the lists are little-endian. */
+static void readBlobList(const NeoFile &db, uint32 mark, Common::Array<uint32> &list) {
+	uint32 offset = db.readUint32(mark), length = db.readUint32(mark + 4);
+	list.clear();
+	for (uint32 i = 0; i + 4 <= length; i += 4) {
+		uint32 at = offset + i;
+		list.push_back(db.readByte(at) | db.readByte(at + 1) << 8 | db.readByte(at + 2) << 16 | (uint32)db.readByte(at + 3) << 24);
+	}
+}
+
+bool VCData::getSave(VCSave &save) const {
+	Common::Array<NeoEntry> states;
+	if (!_gam.getObjects(kClassGameState, states) || states.empty())
+		return false;
+	uint32 m = states[0].mark;
+	for (int i = 0; i < 4; i++)
+		save.position[i] = _gam.readUint32(m + 6 + 4 * i);
+	save.positionMode = _gam.readSint16(m + 130);
+
+	static const uint32 kListClasses[5] = { kClassConversationHistory, kClassPDANotes, kClassEmail, kClassEmailRead, kClassEmailPending };
+	Common::Array<uint32> *lists[5] = { &save.history, &save.notes, &save.emails, &save.emailsRead, &save.emailsPending };
+	for (int i = 0; i < 5; i++) {
+		uint32 classId, mark;
+		lists[i]->clear();
+		if (lookupGam(_gam.readUint32(m + 22 + 4 * i), classId, mark) && classId == kListClasses[i])
+			readBlobList(_gam, mark + 6, *lists[i]);
+	}
+	save.disc = (int32)_gam.readUint32(m + 42);
+	save.hintList = _gam.readUint32(m + 50);
+	save.hintTrigger = _gam.readUint32(m + 54);
+	save.hintGlow = (int32)_gam.readUint32(m + 58);
+	readBlobList(_gam, m + 66, save.sounds);
+	readBlobList(_gam, m + 74, save.inventory);
+	readBlobList(_gam, m + 82, save.evidence);
+	readBlobList(_gam, m + 90, save.kit);
+	readBlobList(_gam, m + 98, save.timers);
+	save.clip = _gam.readUint32(m + 113);
+	save.clipTime = (int32)_gam.readUint32(m + 118);
+	save.dialogBox = _gam.readUint32(m + 122);
+	save.layout = _gam.readUint32(m + 126);
+	return true;
+}
+
 // -- Characters, conversations, icons, interface ------------------------------
 
 bool VCData::getCharacter(uint32 id, VCCharacter &character) const {

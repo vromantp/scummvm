@@ -100,7 +100,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _focus(0), _held(0), _currNodeVariable(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _inboxTop(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoring(false), _focus(0), _held(0), _currNodeVariable(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _inboxTop(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	_jumpCut.first = _jumpCut.later = false;
 	_phone.bookSize = _phone.bookIndex = 0;
 	_phone.showsName = false;
@@ -189,6 +189,8 @@ uint32 Script::getTriggers(uint32 id) const {
 }
 
 void Script::fire(uint32 id, int event, const EventFields &fields) {
+	if (_restoring && event == kEventObjectActivation)
+		return;
 	_fireDepth++;
 	fireTriggers(id, event, fields);
 	_fireDepth--;
@@ -830,6 +832,48 @@ void Script::start() {
 	}
 	log("== start: " + nameOrNone(_data, title.name));
 	fire(title.id, kEventObjectActivation);
+}
+
+void Script::restore(const VCSave &save) {
+	// Game_BuildObjects (0x477940) rebuilds the objects from VCGameState; the
+	// position comes first (docs/formats/saves.md, VCGameState)
+	_restoring = save.positionMode == 1;
+	if (save.positionMode == 2)
+		warning("Script: save position mode 2 (the pending Set View) is not restored as the exe does");
+	log("== restore");
+	enter(save.position[0], save.position[1], save.position[2], save.position[3]);
+	_restoring = false;
+
+	_history = save.history;
+	_asked.clear();
+	for (uint i = 0; i < save.history.size(); i++)
+		_asked[save.history[i]]++;
+	_emails = save.emails;
+	_emailsRead = save.emailsRead;
+	_emailPending = save.emailsPending;
+	_inventory = save.inventory;
+	_evidence = save.evidence;
+	_kit = save.kit;
+
+	// A running timer stores its remaining time; a stopped one is not modelled
+	for (uint i = 0; i + 3 <= save.timers.size(); i += 3) {
+		if (save.timers[i + 2])
+			continue;
+		Timer timer = { save.timers[i + 1], ++_timerSerial, false };
+		_timers[save.timers[i]] = timer;
+	}
+
+	// Sounds playing are kind 27 sound objects: no Object Activation
+	for (uint i = 0; i + 3 <= save.sounds.size(); i += 3) {
+		uint32 id = save.sounds[i];
+		VCAsset a;
+		if (!_data.getAsset(id, a))
+			continue;
+		_sounds[id] = true;
+		log(Common::String::format("  restored sound #%u", id));
+		if (_hooks)
+			_hooks->playAsset(id, (a.flags & kAssetLoop) ? kModePlayLoop : kModePlayOnce, false, 0, 0);
+	}
 }
 
 void Script::click(uint32 id) {

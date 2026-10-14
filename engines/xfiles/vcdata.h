@@ -79,7 +79,14 @@ enum VCClassId {
 	kClassTriggerList = 82,
 	kClassVariable = 83,
 	kClassStdAction = 84,
-	kClassStdActionList = 85
+	kClassStdActionList = 85,
+	kClassConversationHistory = 86,
+	kClassGameState = 87,
+	kClassPDANotes = 88,
+	kClassPhoto = 89,
+	kClassEmail = 90,
+	kClassEmailRead = 91,
+	kClassEmailPending = 92
 };
 
 /** Class name as registered by XFiles.exe, or nullptr. */
@@ -334,6 +341,27 @@ struct VCAsset {
 	Common::Array<VCMediaFile> files;
 };
 
+/** What a .X save holds besides the variables and enable flags (VCGameState and the lists it names). */
+struct VCSave {
+	uint32 position[4];              ///< VCNode, VCLocaton, VCViewPoint, VCView
+	int16 positionMode;              ///< 0 the start view, 1 the current view, 2 from the pending Set View
+	Common::Array<uint32> history;   ///< VCConversation IDs asked
+	Common::Array<uint32> notes;     ///< VCPDANotes
+	Common::Array<uint32> emails, emailsRead, emailsPending;
+	int32 disc;
+	uint32 hintList, hintTrigger;
+	int32 hintGlow;
+	Common::Array<uint32> sounds;    ///< Triples (VCAssetRef, by action, time)
+	Common::Array<uint32> inventory; ///< VCInventory IDs, in order
+	Common::Array<uint32> evidence;  ///< Pairs (VCEvidenceIcon, shown), outside the kit
+	Common::Array<uint32> kit;       ///< VCEvidenceIcon IDs in the kit
+	Common::Array<uint32> timers;    ///< Triples (timer, time, stopped)
+	uint32 clip;                     ///< VCAssetRef playing in the current view, or 0
+	int32 clipTime;
+	uint32 dialogBox;                ///< VCCharView whose box was open, or 0
+	uint32 layout;                   ///< Full-screen interface layout shown, or 0
+};
+
 /**
  * Both databases of one installation (XFiles.hdb and XFiles.gam, or a save
  * instead of the .gam), with the class decoders.
@@ -383,6 +411,8 @@ public:
 	 */
 	bool getResourceRef(uint32 id, uint32 &type, uint32 &resource) const;
 	bool getVariable(uint32 id, VCVariable &variable) const;
+	/** The save's VCGameState (the .gam has none): false if the database is not a save. */
+	bool getSave(VCSave &save) const;
 	/** Text of a VCString (.gam), the value of a string variable. */
 	bool getString(uint32 id, Common::String &text) const;
 	/** The .hdb object a VCEnabled (.gam) switches, and its initial state. */
