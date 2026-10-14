@@ -100,7 +100,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _focus(0), _currNodeVariable(0), _clipQueued(false), _viewHeld(false), _viewActive(false), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _focus(0), _currNodeVariable(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _node(0), _location(0), _viewPoint(0), _view(0) {
 	_jumpCut.first = _jumpCut.later = false;
 	_phone.bookSize = _phone.bookIndex = 0;
 	_phone.showsName = false;
@@ -189,6 +189,16 @@ uint32 Script::getTriggers(uint32 id) const {
 }
 
 void Script::fire(uint32 id, int event, const EventFields &fields) {
+	_fireDepth++;
+	fireTriggers(id, event, fields);
+	_fireDepth--;
+	// XFiles.exe carries out a pending travel (0x493090) once the event queue
+	// is empty: after the action list and the triggers it set off
+	while (_fireDepth == 0 && _travelPending)
+		travel();
+}
+
+void Script::fireTriggers(uint32 id, int event, const EventFields &fields) {
 	Common::Array<uint32> triggers;
 	_data.getMembers(getTriggers(id), triggers);
 	for (uint i = 0; i < triggers.size(); i++) {
@@ -419,7 +429,12 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 				values += Common::String::format("%s%d", values.empty() ? "" : ", ", args[i]);
 		}
 		log("      call " + describeAction(_data, a.id, event, false) + (values.empty() ? "" : " [" + values + "]"));
-		if (a.function == "EnableKitIcon" && !args.empty())
+		if (a.function == "SwapDisc" && args.size() >= 4) {
+			// The last call in an event wins (0x4cfc70 replaces the pending travel)
+			for (int i = 0; i < 4; i++)
+				_travelTo[i] = args[i];
+			_travelPending = true;
+		} else if (a.function == "EnableKitIcon" && !args.empty())
 			enableKitIcon(args[0]);
 		else if (a.function == "RandGen" && args.size() >= 2 && a.args[0].kind == kOperandVariable)
 			randGen(a.args[0].value, args[1]);
@@ -568,11 +583,23 @@ void Script::endVideo(const char *how) {
 
 // -- Navigation ---------------------------------------------------------------
 
-void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view) {
+void Script::travel() {
+	// 0x5068b0, 0x493090: all four old objects are deactivated, whatever the
+	// new path shares, then the new four are activated. The exe also hides the
+	// inventory, AI, emotion, idea and action icons and clears the letterbox
+	// tint; the engine does not model those yet
+	_travelPending = false;
+	// A SwapDisc in the triggers of the travel waits for it to finish
+	_fireDepth++;
+	enter(_travelTo[0], _travelTo[1], _travelTo[2], _travelTo[3], true);
+	_fireDepth--;
+}
+
+void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, bool deactivateAll) {
 	const uint32 newPath[4] = { node, location, viewPoint, view };
 	const uint32 oldPath[4] = { _node, _location, _viewPoint, _view };
 	int first = 0;
-	while (first < 4 && oldPath[first] == newPath[first])
+	while (!deactivateAll && first < 4 && oldPath[first] == newPath[first])
 		first++;
 	for (int i = 3; i >= first; i--) {
 		// A view still held (below) was never activated: entering another

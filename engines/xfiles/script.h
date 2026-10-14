@@ -247,6 +247,7 @@ private:
 
 	uint32 getTriggers(uint32 id) const;
 	void fire(uint32 id, int event, const EventFields &fields = EventFields());
+	void fireTriggers(uint32 id, int event, const EventFields &fields);
 	void runActions(const Common::Array<uint32> &actions, int event, const EventFields &fields);
 	void execute(const VCAction &action, int event, const EventFields &fields, LocalVariables &locals);
 	int32 getValue(const VCOperand &operand, const EventFields &fields, const LocalVariables &locals) const;
@@ -297,7 +298,8 @@ private:
 	void startVideo();
 	/** The video on screen ended or was stopped (how is logged). */
 	void endVideo(const char *how);
-	void enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view);
+	void enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, bool deactivateAll = false);
+	void travel();
 	void showView();
 	/** Activate what the current view shows: its first asset, character views, navs, explorables. */
 	void activateView();
@@ -359,6 +361,9 @@ private:
 	bool _clipQueued;                          ///< A clip after the question is queued (topic +0x150)
 	uint32 _node, _location, _viewPoint, _view;
 	Common::Array<uint32> _viewObjects;        ///< Activated with the view, in activation order
+	uint _fireDepth;                           ///< Nesting of fire(): a pending travel runs when it returns to 0
+	bool _travelPending;                       ///< SwapDisc was called in this event (0x6b19a8)
+	uint32 _travelTo[4];                       ///< Node, location, viewpoint and view of the pending travel
 	bool _viewHeld;                            ///< The view is entered but not activated until the video ends
 	bool _viewActive;                          ///< The view's activation has run
 };
