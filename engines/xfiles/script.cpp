@@ -433,12 +433,15 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 		// Game_BuildObjects 0x477940)
 		if (_hooks)
 			_hooks->callFunction(a, args);
+		logHook(a.function, true);
 	} else if ((a.function == "DoActionList" || a.function == "DoActionListID") && args.size() >= 2) {
 		// DoActionListID takes the two IDs from variables (0x50a200)
 		if (a.function == "DoActionListID")
 			log(Common::String::format("      call %s(%d, %d)", a.function.c_str(), args[0], args[1]));
 		runActionList(args[1], event, fields);
+		logHook(a.function, true);
 	} else {
+		bool handled = true;
 		// The values of its variable arguments follow, as a reference run
 		// logs them
 		Common::String values;
@@ -495,16 +498,33 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 		else if (a.function == "PDAEscape" && !args.empty())
 			runActionList(args[0] == 1 ? kPDAEscapeOnActions : kPDAEscapeOffActions, event, fields);
 		else if (a.function.hasPrefix("Phone"))
-			callPhone(a, args, event, fields);
+			handled = callPhone(a, args, event, fields);
 		else if (a.function.contains("Email") || a.function == "DisplayInBox" || a.function == "InitEmailRead" ||
 				a.function == "MainScroll" || a.function == "ScrollTextKill" || a.function.hasPrefix("PDAInitAddr") ||
 				a.function == "PDAFlipAddr" || a.function == "NotePadInit" || a.function == "NoteFlipDay" ||
 				a.function == "EnablePDANote" || a.function == "EnableAllNotes" || a.function == "ScrollTextList" ||
 				a.function == "ScrollTextInit")
-			callEmail(a, args, event, fields);
-		if (_hooks)
-			_hooks->callFunction(a, args);
+			handled = callEmail(a, args, event, fields);
+		else
+			handled = false;
+		if (_hooks && _hooks->callFunction(a, args))
+			handled = true;
+		logHook(a.function, handled);
 	}
+}
+
+void Script::logHook(const Common::String &name, bool handled) {
+	// Hooks the engine only logs on purpose: the menu's Save, Load, Options and Help (B-061, B-063) and
+	// PhoneDestroy, which only frees the display's font
+	static const char *const kLogged[] = { "ReturnMainMenu", "ReturnFromHelp", "SaveGameState", "SaveKeyPress",
+		"SaveLoadComit", "SaveLoadInit", "SaveSlotSelect", "PhoneDestroy" };
+	const char *status = handled ? "handled" : "unknown";
+	for (uint i = 0; i < ARRAYSIZE(kLogged); i++) {
+		if (!handled && name == kLogged[i])
+			status = "logged";
+	}
+	// Level 2 and not log(): vcdump's sim has no hooks, and its logs stay as they are (tools/hook_coverage.py)
+	debugC(2, kDebugScript, "hook %s %s", name.c_str(), status);
 }
 
 bool Script::isHolding() const {

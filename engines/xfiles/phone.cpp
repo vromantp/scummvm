@@ -110,8 +110,9 @@ static uint32 getVariableArg(const VCAction &a, uint i) {
 	return i < a.args.size() && a.args[i].kind == kOperandVariable ? a.args[i].value : 0;
 }
 
-void Script::callPhone(const VCAction &a, const Common::Array<int32> &args, int event, const EventFields &fields) {
+bool Script::callPhone(const VCAction &a, const Common::Array<int32> &args, int event, const EventFields &fields) {
 	const Common::String &name = a.function;
+	bool handled = true;
 	if (name == "PhoneInit")
 		phoneInit(getVariableArg(a, 0));
 	else if (name == "PhoneButton" && args.size() >= 3)
@@ -126,7 +127,9 @@ void Script::callPhone(const VCAction &a, const Common::Array<int32> &args, int 
 		phoneSend(getVariableArg(a, 0), getVariableArg(a, 1), getVariableArg(a, 2), event, fields);
 	else if (name == "PhoneKeyPress" && !args.empty())
 		phoneKeyPress(args[0], event, fields);
-	// PhoneDestroy only frees the display's font
+	else
+		handled = false; // PhoneDestroy only frees the display's font
+	return handled;
 }
 
 void Script::setPhoneDisplay(const Common::U32String &text) {

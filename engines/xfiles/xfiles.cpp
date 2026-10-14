@@ -698,7 +698,7 @@ void XFilesEngine::runSteps() {
 
 // -- C++ functions ------------------------------------------------------------
 
-void XFilesEngine::callFunction(const VCAction &action, const Common::Array<int32> &args) {
+bool XFilesEngine::callFunction(const VCAction &action, const Common::Array<int32> &args) {
 	if (action.function == "StartVideoText")
 		startVideoText(action, args);
 	else if (action.function == "RegPreferences")
@@ -710,10 +710,11 @@ void XFilesEngine::callFunction(const VCAction &action, const Common::Array<int3
 	else if (action.function == "RegUberVars")
 		registerUberVariables(action);
 	else
-		callInventoryFunction(action, args);
+		return callInventoryFunction(action, args);
+	return true;
 }
 
-void XFilesEngine::callInventoryFunction(const VCAction &action, const Common::Array<int32> &args) {
+bool XFilesEngine::callInventoryFunction(const VCAction &action, const Common::Array<int32> &args) {
 	const Common::String &name = action.function;
 	// RegCurrInvVar, OnInvClick and OnIntInvClick are handled by Script (iCurrInventory)
 	if (name == "RollOnEvKit" && args.size() >= 2) {
@@ -721,7 +722,7 @@ void XFilesEngine::callInventoryFunction(const VCAction &action, const Common::A
 		// the item's icon, or close it once the mouse has left it
 		Common::Rect from;
 		if ((uint32)args[0] == _interface->getHeld())
-			return;
+			return true;
 		if (args[1] && _interface->getInventoryRect(args[0], &from))
 			_interface->openKit(from);
 		else if (!args[1] && !_interface->isMouseInKit())
@@ -737,7 +738,10 @@ void XFilesEngine::callInventoryFunction(const VCAction &action, const Common::A
 		_interface->addModalException(args[0]);
 	} else if (name == "ClearIFLExcept") {
 		_interface->clearModalExceptions();
+	} else {
+		return false;
 	}
+	return true;
 }
 
 void XFilesEngine::registerPreferences(const VCAction &action) {

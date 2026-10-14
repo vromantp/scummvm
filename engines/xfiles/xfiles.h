@@ -70,7 +70,7 @@ public:
 	Script *getScript() { return _script; }
 
 	// ScriptHooks
-	void callFunction(const VCAction &action, const Common::Array<int32> &args) override;
+	bool callFunction(const VCAction &action, const Common::Array<int32> &args) override;
 	void playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) override;
 	void restoreSound(uint32 id, bool loop, uint32 startMs) override;
 	bool readAssetFile(uint32 id, Common::Array<byte> &data) override;
@@ -178,7 +178,7 @@ private:
 	bool isHolding() const;
 	/** Put the item in hand back into the bar (Inv_PutBack, XFiles.exe 0x429f00). */
 	void putBack();
-	void callInventoryFunction(const VCAction &action, const Common::Array<int32> &args);
+	bool callInventoryFunction(const VCAction &action, const Common::Array<int32> &args);
 	void openDialogBox(const VCCharView &charView);
 	/** Close the box if its character left the view, and update its topics. */
 	void updateDialogBox();

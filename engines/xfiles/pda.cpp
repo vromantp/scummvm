@@ -165,8 +165,9 @@ static void listRemove(Common::Array<uint32> &list, uint32 id) {
 		list.erase(it);
 }
 
-void Script::callEmail(const VCAction &a, const Common::Array<int32> &args, int event, const EventFields &fields) {
+bool Script::callEmail(const VCAction &a, const Common::Array<int32> &args, int event, const EventFields &fields) {
 	const Common::String &name = a.function;
+	bool handled = true;
 	if (name == "ScrollTextList" && args.size() >= 5) {
 		scrollTextList(args[0], args[1], args[2], args[3], args[4]);
 	} else if (name == "ScrollTextInit" && !args.empty()) {
@@ -222,7 +223,10 @@ void Script::callEmail(const VCAction &a, const Common::Array<int32> &args, int 
 		notePadInit();
 	} else if (name == "NoteFlipDay" && !args.empty()) {
 		noteFlipDay(args[0]);
+	} else {
+		handled = false;
 	}
+	return handled;
 }
 
 void Script::displayInBox(int32 value) {

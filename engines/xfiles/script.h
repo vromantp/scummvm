@@ -85,8 +85,11 @@ class ScriptHooks {
 public:
 	virtual ~ScriptHooks() {}
 
-	/** A C++ Function action other than SetStartView and DoActionList; args are the evaluated operands. */
-	virtual void callFunction(const VCAction &action, const Common::Array<int32> &args) {}
+	/**
+	 * A C++ Function action other than DoActionList; args are the evaluated operands.
+	 * Returns whether the engine acted on it (the hook coverage, tools/hook_coverage.py).
+	 */
+	virtual bool callFunction(const VCAction &action, const Common::Array<int32> &args) { return false; }
 	/**
 	 * A play, loop or stop of an asset that is not a blocking video.
 	 * positional: a 3D Sound action, at (x, y) on the viewpoint grid.
@@ -379,6 +382,7 @@ private:
 	void execute(const VCAction &action, int event, const EventFields &fields, LocalVariables &locals);
 	int32 getValue(const VCOperand &operand, const EventFields &fields, const LocalVariables &locals) const;
 	bool test(const VCExpression &condition, const EventFields &fields, const LocalVariables &locals) const;
+	void logHook(const Common::String &name, bool handled);
 	void callFunction(const VCAction &action, int event, const EventFields &fields, const LocalVariables &locals);
 
 	void playAsset(uint32 id, byte mode, const VCAction *sound3D);
@@ -405,7 +409,7 @@ private:
 
 	// PDA e-mail (pda.cpp)
 	/** Run one of the e-mail hooks (SendEmail, DisplayInBox...). */
-	void callEmail(const VCAction &action, const Common::Array<int32> &args, int event, const EventFields &fields);
+	bool callEmail(const VCAction &action, const Common::Array<int32> &args, int event, const EventFields &fields);
 	void displayInBox(int32 value);
 	void initEmailRead(int32 item, int32 email);
 	void setItemEnabled(uint32 item, bool enabled);
@@ -442,7 +446,7 @@ private:
 
 	// Phone (phone.cpp)
 	/** Run one of the Phone hooks (PhoneInit, PhoneButton...). */
-	void callPhone(const VCAction &action, const Common::Array<int32> &args, int event, const EventFields &fields);
+	bool callPhone(const VCAction &action, const Common::Array<int32> &args, int event, const EventFields &fields);
 	void phoneInit(uint32 numberVar);
 	void phoneButton(char key, uint32 numberVar, uint32 pressedItem);
 	void phoneClear(uint32 numberVar);
