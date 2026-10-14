@@ -351,11 +351,15 @@ struct VCSave {
 	int32 disc;
 	uint32 hintList, hintTrigger;
 	int32 hintGlow;
+	int32 credits;                   ///< Head credits scroll position, -1 when not rolling
+	byte flashlight[3];              ///< SetFLightProps
+	byte tint;                       ///< Letterbox tint on
+	byte tintColor[3];
 	Common::Array<uint32> sounds;    ///< Triples (VCAssetRef, by action, time)
 	Common::Array<uint32> inventory; ///< VCInventory IDs, in order
 	Common::Array<uint32> evidence;  ///< Pairs (VCEvidenceIcon, shown), outside the kit
 	Common::Array<uint32> kit;       ///< VCEvidenceIcon IDs in the kit
-	Common::Array<uint32> timers;    ///< Triples (timer, time, stopped)
+	Common::Array<uint32> timers;    ///< Triples (timer, time, periodic)
 	uint32 clip;                     ///< VCAssetRef playing in the current view, or 0
 	int32 clipTime;
 	uint32 dialogBox;                ///< VCCharView whose box was open, or 0

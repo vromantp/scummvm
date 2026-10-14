@@ -189,6 +189,7 @@ private:
 	bool _kitOpen;
 	Common::Rect _kitFrom;                        ///< The inventory icon the kit opened from
 	bool _evidenceRowShown;
+	bool _inventorySeeded;                         ///< The restored inventory order has been used
 	Common::WinResources *_texts;
 	Graphics::Font *_font;
 	Graphics::Font *_itemFont;                    ///< Text of items: Courier New 15 bold (the phone's display)

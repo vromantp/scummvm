@@ -612,6 +612,12 @@ bool VCData::getSave(VCSave &save) const {
 	save.hintList = _gam.readUint32(m + 50);
 	save.hintTrigger = _gam.readUint32(m + 54);
 	save.hintGlow = (int32)_gam.readUint32(m + 58);
+	save.credits = (int32)_gam.readUint32(m + 62);
+	for (int i = 0; i < 3; i++) {
+		save.flashlight[i] = _gam.readByte(m + 106 + i);
+		save.tintColor[i] = _gam.readByte(m + 110 + i);
+	}
+	save.tint = _gam.readByte(m + 109);
 	readBlobList(_gam, m + 66, save.sounds);
 	readBlobList(_gam, m + 74, save.inventory);
 	readBlobList(_gam, m + 82, save.evidence);

@@ -307,6 +307,16 @@ void XFilesEngine::runGame() {
 	// (XFiles.exe Game_Start 0x48cd70)
 	if (_loadedSave) {
 		_script->restore(_save);
+		// The head credits roll again if they were rolling (from the first
+		// credit: the scroll position is not kept); the dialog box that was
+		// open is created again
+		if (_save.credits != -1) {
+			_headCredits.setEnabled(true);
+			_headCredits.roll(g_system->getMillis(), getPreference(kPrefSkipIntro));
+		}
+		VCCharView boxView;
+		if (_save.dialogBox && _data->getCharView(_save.dialogBox, boxView))
+			openDialogBox(boxView);
 	} else {
 		_headCredits.setEnabled(true);
 		_script->start();

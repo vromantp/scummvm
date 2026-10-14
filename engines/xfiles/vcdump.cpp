@@ -378,6 +378,17 @@ Common::String dumpState(const VCData &data, const Script &script) {
 	out += jsonList("emails", script.getEmails());
 	out += jsonList("emails_read", script.getEmailsRead());
 	out += jsonList("emails_pending", script.getEmailsPending());
+	out += jsonList("inventory", script.getInventory());
+	// Running timers: number -> [ms, periodic]
+	out += ",\n \"timers\": {";
+	const Common::HashMap<uint, Script::Timer> &timers = script.getTimers();
+	Common::Array<uint> numbers;
+	for (Common::HashMap<uint, Script::Timer>::const_iterator it = timers.begin(); it != timers.end(); ++it)
+		numbers.push_back(it->_key);
+	Common::sort(numbers.begin(), numbers.end());
+	for (uint i = 0; i < numbers.size(); i++)
+		out += Common::String::format("%s\"%u\": [%u, %d]", i ? ", " : "", numbers[i], timers.getVal(numbers[i]).ms, timers.getVal(numbers[i]).periodic ? 1 : 0);
+	out += "}";
 	out += Common::String::format(",\n \"game_state\": {\"position\": [%u, %u, %u, %u]}\n}\n", script.getNode(),
 		script.getLocation(), script.getViewPoint(), script.getView());
 	return out;

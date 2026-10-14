@@ -140,7 +140,7 @@ void Interface::Graphic::draw(Graphics::Surface &dst, int x, int y) const {
 // -- Interface ----------------------------------------------------------------
 
 Interface::Interface(const VCData &data, const DiscFiles &files) : _data(data), _files(files), _kitOpen(false),
-	_evidenceRowShown(false), _texts(nullptr), _font(nullptr), _itemFont(nullptr), _rolloverText(false), _barClosed(false), _barOpen(false),
+	_evidenceRowShown(false), _inventorySeeded(false), _texts(nullptr), _font(nullptr), _itemFont(nullptr), _rolloverText(false), _barClosed(false), _barOpen(false),
 	_mouseInBar(false), _enteredBar(false), _held(0) {
 	static const uint32 kClasses[] = { kClassActionIcon, kClassInventory, kClassEmotionIcon };
 	for (uint i = 0; i < ARRAYSIZE(kClasses); i++) {
@@ -330,6 +330,18 @@ void Interface::syncIcons(const Script &script, uint32 classId, Common::Array<Ic
 			i++;
 		}
 	}
+	// A restored game starts with the inventory in the order of the save,
+	// without the enable check (Game_BuildObjects 0x477940); icons enabled
+	// later join at the end as usual
+	if (classId == kClassInventory && !_inventorySeeded && script.isRestored()) {
+		const Common::Array<uint32> &saved = script.getInventory();
+		for (uint i = 0; i < saved.size(); i++) {
+			debugC(1, kDebugScript, "-- icon #%u shown (saved order)", saved[i]);
+			icons.push_back(makeIcon(saved[i]));
+		}
+	}
+	if (classId == kClassInventory)
+		_inventorySeeded = true;
 	const Common::Array<uint32> &order = _classOrder[classId == kClassActionIcon ? 0 : classId == kClassInventory ? 1 : 2];
 	for (uint i = 0; i < order.size(); i++) {
 		uint32 id = order[i];

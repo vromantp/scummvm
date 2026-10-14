@@ -100,7 +100,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoring(false), _focus(0), _held(0), _currNodeVariable(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _inboxTop(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _inboxTop(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	_jumpCut.first = _jumpCut.later = false;
 	_phone.bookSize = _phone.bookIndex = 0;
 	_phone.showsName = false;
@@ -188,8 +188,21 @@ uint32 Script::getTriggers(uint32 id) const {
 	return offset ? _data.getHdb().readUint32(mark + offset) & 0xffffff : 0;
 }
 
+bool Script::firesOnRestore(uint32 id) const {
+	// Obj_OnActivate while a restore runs (docs/formats/saves.md): mode 1
+	// fires none, mode 2 only objects of kind 3 (viewpoint), 4 (view), 5 (nav),
+	// 6 (character view) and 20 (explorable), other modes all
+	if (_restoreMode == 1)
+		return false;
+	if (_restoreMode != 2)
+		return true;
+	uint32 classId = _data.getClassOf(id);
+	return classId == kClassViewPoint || classId == kClassView || classId == kClassNav || classId == kClassCharView ||
+		classId == kClassExplorable;
+}
+
 void Script::fire(uint32 id, int event, const EventFields &fields) {
-	if (_restoring && event == kEventObjectActivation)
+	if (_restoreMode >= 0 && event == kEventObjectActivation && !firesOnRestore(id))
 		return;
 	_fireDepth++;
 	fireTriggers(id, event, fields);
@@ -835,14 +848,21 @@ void Script::start() {
 }
 
 void Script::restore(const VCSave &save) {
-	// Game_BuildObjects (0x477940) rebuilds the objects from VCGameState; the
-	// position comes first (docs/formats/saves.md, VCGameState)
-	_restoring = save.positionMode == 1;
-	if (save.positionMode == 2)
-		warning("Script: save position mode 2 (the pending Set View) is not restored as the exe does");
+	// SetStartView (0x486a10) takes the save's position and Game_BuildObjects
+	// (0x477940) rebuilds the objects from VCGameState, in the order below
+	// (docs/formats/saves.md, "How the game restores a save"). The position
+	// mode decides which Object Activation fires while the list is activated.
+	_restoreMode = save.positionMode;
+	_restored = true;
+	_restoredSave = save;
 	log("== restore");
+	// The travel gets the save's disc (+42) the way SwapDisc's does
+	if (save.disc >= 1)
+		_disc = save.disc;
+	log(Common::String::format("  disc %d", _disc));
 	enter(save.position[0], save.position[1], save.position[2], save.position[3]);
-	_restoring = false;
+	if (save.clip)
+		log(Common::String::format("  clip #%u at time %d in the view (not seeked)", save.clip, save.clipTime));
 
 	_history = save.history;
 	_asked.clear();
@@ -855,25 +875,51 @@ void Script::restore(const VCSave &save) {
 	_evidence = save.evidence;
 	_kit = save.kit;
 
-	// A running timer stores its remaining time; a stopped one is not modelled
-	for (uint i = 0; i + 3 <= save.timers.size(); i += 3) {
-		if (save.timers[i + 2])
-			continue;
-		Timer timer = { save.timers[i + 1], ++_timerSerial, false };
-		_timers[save.timers[i]] = timer;
-	}
+	// 1. The full-screen layout (Layout_SetAsView)
+	if (save.layout)
+		showLayout(save.layout);
 
-	// Sounds playing are kind 27 sound objects: no Object Activation
+	// 2. Sounds playing are kind 27 sound objects: no Object Activation. The
+	// play position (3rd value) is logged: the movie player cannot seek
 	for (uint i = 0; i + 3 <= save.sounds.size(); i += 3) {
 		uint32 id = save.sounds[i];
 		VCAsset a;
 		if (!_data.getAsset(id, a))
 			continue;
 		_sounds[id] = true;
-		log(Common::String::format("  restored sound #%u", id));
+		log(Common::String::format("  restored sound #%u at %u", id, save.sounds[i + 2]));
 		if (_hooks)
 			_hooks->playAsset(id, (a.flags & kAssetLoop) ? kModePlayLoop : kModePlayOnce, false, 0, 0);
 	}
+
+	// 3. Every timer is a Timer action Start (0x4a1250) with the saved number,
+	// time and periodic bit: a one-shot timer restarts with its remaining time
+	for (uint i = 0; i + 3 <= save.timers.size(); i += 3) {
+		Timer timer = { save.timers[i + 1], ++_timerSerial, save.timers[i + 2] != 0 };
+		_timers[save.timers[i]] = timer;
+		log(Common::String::format("      timer %u started (%u ms%s)", save.timers[i], timer.ms, timer.periodic ? ", periodic" : ""));
+	}
+
+	// 7. Evidence: EvIcons_SetRowShown(0), then each icon outside the kit; a
+	// shown one is shown and sets the row shown. Kit icons are not shown.
+	_evidenceRowShown = false;
+	for (uint i = 0; i + 2 <= save.evidence.size(); i += 2) {
+		if (save.evidence[i + 1]) {
+			_evidenceRowShown = true;
+			log(Common::String::format("  evidence icon #%u shown", save.evidence[i]));
+		}
+	}
+
+	// 8. Not modelled by the engine: kept in the restored save and logged
+	if (save.hintList || save.hintTrigger || save.hintGlow)
+		log(Common::String::format("  hint list #%u trigger #%u glow %d (not applied)", save.hintList, save.hintTrigger, save.hintGlow));
+	if (save.credits != -1)
+		log(Common::String::format("  credits at %d", save.credits));
+	log(Common::String::format("  flashlight %u %u %u, letterbox tint %u (%u %u %u) (not applied)", save.flashlight[0], save.flashlight[1],
+		save.flashlight[2], save.tint, save.tintColor[0], save.tintColor[1], save.tintColor[2]));
+	if (save.dialogBox)
+		log(Common::String::format("  dialog box of #%u", save.dialogBox));
+	_restoreMode = -1;
 }
 
 void Script::click(uint32 id) {

@@ -216,6 +216,13 @@ public:
 	};
 	/** Shown layouts, oldest first. */
 	const Common::Array<Layout> &getLayouts() const { return _layouts; }
+	/** Disc in use: 1 at the start, the save's (+42) after a restore. */
+	int32 getDisc() const { return _disc; }
+	/** Whether restore() ran, and the save it continued from (parts the engine applies or only logs). */
+	bool isRestored() const { return _restored; }
+	const VCSave &getRestoredSave() const { return _restoredSave; }
+	/** Whether the row of collected evidence is shown (a restore sets it; the engine does not draw it). */
+	bool isEvidenceRowShown() const { return _evidenceRowShown; }
 	/** The inventory in the order of the save (empty unless restored). */
 	const Common::Array<uint32> &getInventory() const { return _inventory; }
 	/** Evidence icons outside the kit as restored from a save: (VCEvidenceIcon, shown) pairs. */
@@ -360,7 +367,12 @@ private:
 	Common::Array<Layout> _layouts;
 	Common::Array<uint32> _kit;
 	Common::Array<uint32> _inventory, _evidence, _history;
-	bool _restoring;                           ///< restore() is running: Object Activation does not fire
+	bool firesOnRestore(uint32 id) const;
+	int _restoreMode;                          ///< Position mode while restore() runs, else -1: which Object Activation fires
+	int32 _disc;                               ///< Disc in use (VCGameState +42)
+	bool _evidenceRowShown;                    ///< EvIcons_SetRowShown, set by a shown evidence icon of a restore
+	VCSave _restoredSave;                      ///< The save restore() continued from
+	bool _restored;
 	Common::HashMap<uint32, Common::String> _strings;  ///< VCString values that changed
 	Common::HashMap<uint32, ItemText> _itemTexts;
 	uint32 _focus;
