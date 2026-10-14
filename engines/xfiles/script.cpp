@@ -100,7 +100,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _focus(0), _currNodeVariable(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _inboxTop(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _focus(0), _held(0), _currNodeVariable(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _inboxTop(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	_jumpCut.first = _jumpCut.later = false;
 	_phone.bookSize = _phone.bookIndex = 0;
 	_phone.showsName = false;
@@ -438,6 +438,8 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 			enableKitIcon(args[0]);
 		else if (a.function == "RandGen" && args.size() >= 2 && a.args[0].kind == kOperandVariable)
 			randGen(a.args[0].value, args[1]);
+		else if (a.function == "IsIItemHeld" && args.size() >= 2 && a.args[1].kind == kOperandVariable)
+			isIItemHeld(a.args[1].value, args[0]);
 		else if (a.function == "RegCurrNode" && !a.args.empty() && a.args[0].kind == kOperandVariable)
 			_currNodeVariable = a.args[0].value; // 0x4926a0
 		else if (a.function == "SetIItemFocus" && !args.empty())
@@ -843,6 +845,16 @@ void Script::click(uint32 id) {
 		spendIcons(classId);
 }
 
+void Script::press(uint32 id) {
+	// A mouse-down on an interface item captures it until the button goes up (0x441480 clears it)
+	_held = _data.getClassOf(id) == kClassInterfaceItem ? id : 0;
+	click(id);
+}
+
+void Script::release() {
+	_held = 0;
+}
+
 void Script::spendIcons(uint32 classId) {
 	Common::Array<NeoEntry> entries;
 	_data.getHdb().getObjects(classId, entries);
@@ -887,14 +899,16 @@ bool Script::holdsTimer(uint32 id, uint n) const {
 	return false;
 }
 
-void Script::expireTimer(uint n) {
+void Script::expireTimer(uint n, bool stale) {
 	// 0x42fa20: a periodic timer keeps running, a one-shot timer goes away.
 	// The event reaches every active object in the order of their kinds
 	// (0x41d3b0); one fires its triggers only if it holds the timer (0x41d430).
-	if (!_timers.contains(n))
+	if (_timers.contains(n)) {
+		if (!_timers[n].periodic)
+			_timers.erase(n);
+	} else if (!stale) {
 		return;
-	if (!_timers[n].periodic)
-		_timers.erase(n);
+	}
 	VCTitle title;
 	_data.getTitle(title);
 	const uint32 path[5] = { title.id, _node, _location, _viewPoint, _view };
@@ -1389,12 +1403,16 @@ void Script::step(const Common::String &s) {
 		finishVideo();
 	else if (kind == "click")
 		click(id);
+	else if (kind == "press")
+		press(id);
+	else if (kind == "release")
+		release();
 	else if (kind == "dclick")
 		doubleClick(id);
 	else if (kind == "rollin" || kind == "rollout")
 		roll(id, kind == "rollin");
 	else if (kind == "timer")
-		expireTimer(id);
+		expireTimer(id, true); // pda-usage-run1: expiries queued before a stop still run
 	else if (kind == "ask")
 		ask(id);
 	else if (kind == "goto")

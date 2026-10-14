@@ -146,4 +146,12 @@ void Script::initEmailRead(int32 item, int32 email) {
 	}
 }
 
+void Script::isIItemHeld(uint32 variableId, int32 item) {
+	// 0x4b3850: 1 when the object the last mouse-down captured is the interface item
+	_variables[variableId] = _held && _held == (uint32)item ? 1 : 0;
+	Common::U32String name;
+	_data.getVariableName(variableId, name);
+	log(Common::String::format("      %s = %d", name.encode().c_str(), _variables[variableId]));
+}
+
 } // End of namespace XFiles

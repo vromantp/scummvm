@@ -109,6 +109,10 @@ public:
 	void finishSound(uint32 id) { endSound(id, "ended"); }
 	/** Mouse Click on an object (icon, hotspot, explorable...), if it is enabled. */
 	void click(uint32 id);
+	/** Mouse-down on an interface item: the click, and the item stays held (IsIItemHeld) until release(). */
+	void press(uint32 id);
+	/** The mouse button goes up. */
+	void release();
 	/** Mouse Double-Click on an object, if it is enabled. */
 	void doubleClick(uint32 id);
 	/** The mouse moved onto (Roll Into) or off (Roll Out Of) an object, if it is enabled. */
@@ -117,7 +121,8 @@ public:
 	 * Timer n expired: fire Timer Expiration on every active object that
 	 * holds the timer. A periodic timer keeps running.
 	 */
-	void expireTimer(uint n);
+	/** A timer expires; a step list may also replay an expiry already queued when the timer was stopped (stale). */
+	void expireTimer(uint n, bool stale = false);
 	/** Follow a VCNav to its view, in the current location. */
 	void followNav(uint32 navId);
 	/** Follow the shortest path of enabled navs to a view in the current location. */
@@ -279,6 +284,7 @@ private:
 	void enableKitIcon(uint32 id);
 	/** RandGen(var, n): a number from 0 to n (0x49f6d0). */
 	void randGen(uint32 variableId, int32 n);
+	void isIItemHeld(uint32 variableId, int32 item);
 
 	// PDA e-mail (pda.cpp)
 	/** Run one of the e-mail hooks (SendEmail, DisplayInBox...). */
@@ -345,6 +351,7 @@ private:
 	uint32 _focus;
 	uint32 _currNodeVariable;                  ///< RegCurrNode
 	Common::Array<uint32> _pressed;            ///< See takePressedItems()
+	uint32 _held;                              ///< The interface item the mouse button is down on (press()), 0 for none
 	Common::HashMap<uint32, bool> _sounds;     ///< Sounds playing (asset objects active)
 
 	/** The phone's state (XFiles.exe globals 0x6b1900-0x6b190c, list 0x6ba5c8). */

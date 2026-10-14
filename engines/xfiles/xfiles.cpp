@@ -161,6 +161,9 @@ XFilesEngine::Input XFilesEngine::pollInput() {
 		if (event.type == Common::EVENT_LBUTTONDOWN && _steps.empty()) {
 			input.click = true;
 			input.pos = event.mouse;
+		} else if (event.type == Common::EVENT_LBUTTONUP && _steps.empty()) {
+			if (_script)
+				_script->release();
 		} else if (event.type == Common::EVENT_MOUSEMOVE && _steps.empty()) {
 			// A step list (xfiles_steps) keeps the mouse where a reference
 			// run puts it, whatever the real mouse does
@@ -910,7 +913,7 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 
 	if (hit.kind == Interface::kHitItem) {
 		debugC(1, kDebugScript, "-- click:%u (interface item)", hit.id);
-		_script->click(hit.id);
+		_script->press(hit.id);
 		return;
 	}
 
