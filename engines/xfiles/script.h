@@ -63,6 +63,11 @@ public:
 	 * positional: a 3D Sound action, at (x, y) on the viewpoint grid.
 	 */
 	virtual void playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) {}
+	/**
+	 * A sound playing in a restored save: it plays (and a loop loops) from
+	 * startMs in its file (the sound's in point, 0x4a88d0).
+	 */
+	virtual void restoreSound(uint32 id, bool loop, uint32 startMs) {}
 	/** The bytes of the file of a file asset (an e-mail's text), false if there is none. */
 	virtual bool readAssetFile(uint32 id, Common::Array<byte> &data) { return false; }
 };

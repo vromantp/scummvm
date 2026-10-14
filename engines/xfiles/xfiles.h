@@ -101,6 +101,7 @@ public:
 	// ScriptHooks
 	void callFunction(const VCAction &action, const Common::Array<int32> &args) override;
 	void playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) override;
+	void restoreSound(uint32 id, bool loop, uint32 startMs) override;
 	bool readAssetFile(uint32 id, Common::Array<byte> &data) override;
 
 protected:
@@ -187,6 +188,8 @@ private:
 	void stopSound(uint32 id);
 	void stopAllSounds();
 	void updateSounds();
+	/** Start a sound; startMs != 0 is its in point (where a loop goes back to). */
+	void startSound(uint32 id, bool loop, bool positional, int16 x, int16 y, uint32 startMs);
 	/** Volume and balance of a 3D sound for the current view. */
 	void placeSound(Sound &sound);
 	/** The target of a view's first nav whose hotspot has the given one's cursor; 0 if none. */
@@ -216,6 +219,7 @@ private:
 	Movie *_video;                       ///< The play-once video on screen
 	uint32 _videoStarted;                ///< When it started (getMillis)
 	Common::Array<uint32> _viewAssets;   ///< What the view layers show
+	int32 _pendingClipTime;              ///< A restored save's clip time for the first view played; -1 if none
 	uint32 _viewId;
 	Common::Array<Movie *> _layers;      ///< Background and overlays of the view
 	Interface *_interface;

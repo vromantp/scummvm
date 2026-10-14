@@ -52,8 +52,12 @@ public:
 
 	/** A new game allows the credits; a restored one only if they were rolling. */
 	void setEnabled(bool enabled) { _enabled = enabled; }
-	/** RollHdCredits(): start unless disabled or rolling; skipIntro is the preference. */
-	void roll(uint32 now, bool skipIntro);
+	/**
+	 * RollHdCredits(): start unless disabled or rolling; skipIntro is the preference.
+	 * first >= 1: the string to show first (a restored save's last credit,
+	 * 0x4a80a0), instead of 4 or 1.
+	 */
+	void roll(uint32 now, bool skipIntro, int first = -1);
 	/** Take the credit on screen away now; the next one still comes. */
 	void hide();
 	/**

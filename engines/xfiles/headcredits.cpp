@@ -82,12 +82,13 @@ bool HeadCredits::load(const DiscFiles &files) {
 	return _strings && _font;
 }
 
-void HeadCredits::roll(uint32 now, bool skipIntro) {
+void HeadCredits::roll(uint32 now, bool skipIntro, int first) {
 	// RollHdCredits (0x45aab0) and its start (0x45be60)
 	if (!_enabled || _rolling || !_strings)
 		return;
 	_rolling = true;
-	_index = _shownAny || skipIntro ? kFirstCredit - 1 : kFirstCreditAfterIntro - 1;
+	bool fromStart = _shownAny || skipIntro;
+	_index = first >= 1 ? first - 1 : (fromStart ? kFirstCredit : kFirstCreditAfterIntro) - 1;
 	_next = now + kCreditPeriod;
 	_hideAt = 0;
 	_text.clear();

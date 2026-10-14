@@ -57,7 +57,12 @@ public:
 	uint32 getAssetId() const { return _assetId; }
 
 	/** Play from the start time to the end time (or the end of the file). */
-	void play(bool loop);
+	void play(bool loop, int32 fromMs = -1);
+	/**
+	 * Move the in point before play(): the first play and a loop both start
+	 * at startMs (a restored sound, 0x4a88d0), the end time stays.
+	 */
+	void setStart(uint32 startMs) { _startMs = startMs; }
 	/** Decode the single frame at the start time. */
 	bool showStill();
 	/** Decode a frame if one is due; handle looping and the end. */

@@ -74,6 +74,7 @@ XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : E
 	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0) {
 	g_engine = this;
 	_loadedSave = false;
+	_pendingClipTime = -1;
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	memset(_uberVariables, 0, sizeof(_uberVariables));
 	_lastClickHit.kind = Interface::kHitNone;
@@ -310,12 +311,14 @@ void XFilesEngine::runGame() {
 	// (XFiles.exe Game_Start 0x48cd70)
 	if (_loadedSave) {
 		_script->restore(_save);
-		// The head credits roll again if they were rolling (from the first
-		// credit: the scroll position is not kept); the dialog box that was
-		// open is created again
+		// The view's clip plays from the saved time (0x51d200), the head
+		// credits roll again if they were rolling, from the last credit
+		// shown (0x4a80a0); the dialog box that was open is created again
+		if (_save.clip)
+			_pendingClipTime = _save.clipTime;
 		if (_save.credits != -1) {
 			_headCredits.setEnabled(true);
-			_headCredits.roll(g_system->getMillis(), getPreference(kPrefSkipIntro));
+			_headCredits.roll(g_system->getMillis(), getPreference(kPrefSkipIntro), _save.credits);
 		}
 		VCCharView boxView;
 		if (_save.dialogBox && _data->getCharView(_save.dialogBox, boxView))
@@ -570,6 +573,14 @@ void XFilesEngine::playAsset(uint32 id, byte mode, bool positional, int16 x, int
 		stopSound(id);
 		return;
 	}
+	startSound(id, mode == kModePlayLoop, positional, x, y, 0);
+}
+
+void XFilesEngine::restoreSound(uint32 id, bool loop, uint32 startMs) {
+	startSound(id, loop, false, 0, 0, startMs);
+}
+
+void XFilesEngine::startSound(uint32 id, bool loop, bool positional, int16 x, int16 y, uint32 startMs) {
 	// Overlays and backgrounds come from the view's asset list; this only
 	// handles sounds
 	VCAsset asset;
@@ -586,10 +597,13 @@ void XFilesEngine::playAsset(uint32 id, byte mode, bool positional, int16 x, int
 		_script->finishSound(id);
 		return;
 	}
-	debugC(1, kDebugScript, "-- sound #%u %s%s", id, asset.files[0].file.c_str(), mode == kModePlayLoop ? ", looped" : "");
+	// A restored sound's time is its in point (0x4a88d0)
+	if (startMs)
+		sound.movie->setStart(startMs);
+	debugC(1, kDebugScript, "-- sound #%u %s%s from %u ms", id, asset.files[0].file.c_str(), loop ? ", looped" : "", startMs ? startMs : asset.files[0].start);
 	if (positional)
 		placeSound(sound);
-	sound.movie->play(mode == kModePlayLoop);
+	sound.movie->play(loop);
 	_sounds[id] = sound;
 }
 
@@ -866,10 +880,15 @@ void XFilesEngine::syncView() {
 		}
 		if (ids[i] == background)
 			movie->showStill();
-		else
-			movie->play(asset.flags & kAssetLoop);
+		else {
+			// The restored clip time applies to the first player started
+			movie->play(asset.flags & kAssetLoop, _pendingClipTime);
+			debugC(2, kDebugScript, "-- view clip #%u from %d ms", ids[i], _pendingClipTime >= 0 ? _pendingClipTime : (int)asset.files[0].start);
+			_pendingClipTime = -1;
+		}
 		_layers.push_back(movie);
 	}
+	_pendingClipTime = -1;
 }
 
 void XFilesEngine::closeView() {

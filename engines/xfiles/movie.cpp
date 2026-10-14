@@ -84,12 +84,16 @@ void Movie::close() {
 	_ended = false;
 }
 
-void Movie::play(bool loop) {
+void Movie::play(bool loop, int32 fromMs) {
+	// fromMs >= 0: this play starts there (a restored view's clip time,
+	// 0x51d200); a loop still goes back to the start time
 	if (!_decoder)
 		return;
 	_loop = loop;
 	_ended = false;
-	if (_startMs)
+	if (fromMs >= 0)
+		_decoder->seek(Audio::Timestamp(fromMs, 1000));
+	else if (_startMs)
 		_decoder->seek(Audio::Timestamp(_startMs, 1000));
 	if (_endMs > _startMs)
 		_decoder->setEndTime(Audio::Timestamp(_endMs, 1000));

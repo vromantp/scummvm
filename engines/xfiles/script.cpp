@@ -883,7 +883,7 @@ void Script::restore(const VCSave &save) {
 	log(Common::String::format("  disc %d", _disc));
 	enter(save.position[0], save.position[1], save.position[2], save.position[3]);
 	if (save.clip)
-		log(Common::String::format("  clip #%u at time %d in the view (not seeked)", save.clip, save.clipTime));
+		log(Common::String::format("  clip #%u at time %d in the view (the view plays from there)", save.clip, save.clipTime));
 
 	_history = save.history;
 	_asked.clear();
@@ -902,7 +902,8 @@ void Script::restore(const VCSave &save) {
 		showLayout(save.layout);
 
 	// 2. Sounds playing are kind 27 sound objects: no Object Activation. The
-	// play position (3rd value) is logged: the movie player cannot seek
+	// time (3rd value, ms in the file) is the sound's in point: it starts
+	// there and a loop goes back to it (0x4a88d0, 0x48825f)
 	for (uint i = 0; i + 3 <= save.sounds.size(); i += 3) {
 		uint32 id = save.sounds[i];
 		VCAsset a;
@@ -911,7 +912,7 @@ void Script::restore(const VCSave &save) {
 		_sounds[id] = true;
 		log(Common::String::format("  restored sound #%u at %u", id, save.sounds[i + 2]));
 		if (_hooks)
-			_hooks->playAsset(id, (a.flags & kAssetLoop) ? kModePlayLoop : kModePlayOnce, false, 0, 0);
+			_hooks->restoreSound(id, (a.flags & kAssetLoop) != 0, save.sounds[i + 2]);
 	}
 
 	// 3. Every timer is a Timer action Start (0x4a1250) with the saved number,
