@@ -484,7 +484,11 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 			_heldCursorItem = 0;
 			if (_hooks)
 				_hooks->heldItemChanged(0);
-		} else if (a.function == "SetIItemFocus" && !args.empty())
+		} else if (a.function == "StopEnvSounds")
+			stopEnvSounds();
+		else if (a.function == "RegPreferences")
+			regPreferences(a);
+		else if (a.function == "SetIItemFocus" && !args.empty())
 			_focus = args[0];
 		else if (a.function == "RegViewState" && !a.args.empty() && a.args[0].kind == kOperandVariable)
 			_variables[a.args[0].value] = 0; // 0x47e9d0 clears the variable it registers
@@ -626,6 +630,38 @@ void Script::endSound(uint32 id, const char *how) {
 	_sounds.erase(id);
 	log(Common::String::format("  << sound #%u %s", id, how));
 	fire(id, kEventObjectDeactivation);
+}
+
+void Script::stopEnvSounds() {
+	// 0x4cc9c0 queues every playing asset without a picture for deactivation:
+	// its Object Deactivation fires as at a stop (0x43a970). _sounds holds
+	// the audio-only assets (XS); clips with a picture keep playing. The
+	// players stop first, so a sound a trigger starts is not cut
+	if (_hooks)
+		_hooks->stopAllSounds();
+	Common::Array<uint32> ids;
+	for (Common::HashMap<uint32, bool>::const_iterator it = _sounds.begin(); it != _sounds.end(); ++it)
+		ids.push_back(it->_key);
+	Common::sort(ids.begin(), ids.end());
+	for (uint i = 0; i < ids.size(); i++)
+		endSound(ids[i], "stopped");
+}
+
+void Script::regPreferences(const VCAction &a) {
+	// 0x4ccda0 writes the registry's values into the 24 preference
+	// variables; only the closed-captioning and subliminal ones are taken
+	// from outside here (the settings of the player, or setPreference())
+	static const uint kPrefs[] = {kPrefClosedCaptioning, kPrefSubliminalMessages};
+	for (uint i = 0; i < ARRAYSIZE(kPrefs); i++) {
+		uint index = kPrefs[i];
+		if (index >= a.args.size() || a.args[index].kind != kOperandVariable)
+			continue;
+		int32 value = 0;
+		if (_hooks && _hooks->queryPreference(index, value))
+			_variables[a.args[index].value] = value;
+		else if (_preferences.contains(index))
+			_variables[a.args[index].value] = _preferences[index];
+	}
 }
 
 void Script::queueVideo(uint32 id, uint32 limit, bool loop) {

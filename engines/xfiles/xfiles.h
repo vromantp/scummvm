@@ -53,35 +53,6 @@ namespace XFiles {
 class Movie;
 class VCData;
 
-/** The arguments of RegPreferences, in order: each is a preference variable. */
-enum Preference {
-	kPref3DSound = 0,
-	kPrefArtificialIntuition = 1,
-	kPrefAutoRewind = 2,
-	kPrefClosedCaptioning = 3,
-	kPrefRolloverText = 4,
-	kPrefSaveGameOnExit = 5,
-	kPrefSkipClips = 6,
-	kPrefSkipIntro = 7,
-	kPrefSmoothText = 8,
-	kPrefSubliminalMessages = 9,
-	kPrefTransitions = 10,
-	kPrefTranslucency = 11,
-	kPrefActionSceneDifficulty = 12,
-	kPrefAutoSetDepth = 13,
-	kPrefFlashlightBeam = 14,
-	kPrefFlashlightBrightness = 15,
-	kPrefInventory = 16,
-	kPrefVolumeDialog = 17,
-	kPrefVolumeEffect = 18,
-	kPrefVolumeGame = 19,
-	kPrefVolumeMusic = 20,
-	kPrefAutoSetResolution = 21,
-	kPrefHighQualityVideo = 22,
-	kPrefLiveEnvironments = 23,
-	kPrefCount = 24
-};
-
 class XFilesEngine : public Engine, public ScriptHooks {
 public:
 	XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc);
@@ -105,6 +76,8 @@ public:
 	bool readAssetFile(uint32 id, Common::Array<byte> &data) override;
 	bool queryInventoryIcon(uint32 id, bool &hasIcon) const override;
 	void heldItemChanged(uint32 id) override;
+	bool queryPreference(uint index, int32 &value) const override;
+	void stopAllSounds() override;
 
 protected:
 	Common::Error run() override;
@@ -188,7 +161,6 @@ private:
 	};
 
 	void stopSound(uint32 id);
-	void stopAllSounds();
 	void updateSounds();
 	/** Start a sound; startMs != 0 is its in point (where a loop goes back to). */
 	void startSound(uint32 id, bool loop, bool positional, int16 x, int16 y, uint32 startMs);

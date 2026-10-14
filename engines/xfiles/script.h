@@ -39,6 +39,35 @@ namespace XFiles {
 /** The phone's VCIFaceLayout, "Phone (On)". */
 static const uint32 kPhoneLayout = 15297;
 
+/** The arguments of RegPreferences, in order: each is a preference variable. */
+enum Preference {
+	kPref3DSound = 0,
+	kPrefArtificialIntuition = 1,
+	kPrefAutoRewind = 2,
+	kPrefClosedCaptioning = 3,
+	kPrefRolloverText = 4,
+	kPrefSaveGameOnExit = 5,
+	kPrefSkipClips = 6,
+	kPrefSkipIntro = 7,
+	kPrefSmoothText = 8,
+	kPrefSubliminalMessages = 9,
+	kPrefTransitions = 10,
+	kPrefTranslucency = 11,
+	kPrefActionSceneDifficulty = 12,
+	kPrefAutoSetDepth = 13,
+	kPrefFlashlightBeam = 14,
+	kPrefFlashlightBrightness = 15,
+	kPrefInventory = 16,
+	kPrefVolumeDialog = 17,
+	kPrefVolumeEffect = 18,
+	kPrefVolumeGame = 19,
+	kPrefVolumeMusic = 20,
+	kPrefAutoSetResolution = 21,
+	kPrefHighQualityVideo = 22,
+	kPrefLiveEnvironments = 23,
+	kPrefCount = 24
+};
+
 /** Mode of an asset action (and of ScriptHooks::playAsset). */
 enum AssetMode {
 	kModePreload = 0,
@@ -81,6 +110,18 @@ public:
 	virtual void heldItemChanged(uint32 id) {}
 	/** The bytes of the file of a file asset (an e-mail's text), false if there is none. */
 	virtual bool readAssetFile(uint32 id, Common::Array<byte> &data) { return false; }
+	/**
+	 * The value the registry holds for a preference (RegPreferences, 0x4ccda0)
+	 * that this port takes from the ScummVM settings: false leaves the answer
+	 * to Script (a setPreference() value, else the variable's .gam value).
+	 * Asked for kPrefClosedCaptioning and kPrefSubliminalMessages.
+	 */
+	virtual bool queryPreference(uint index, int32 &value) const { return false; }
+	/**
+	 * StopEnvSounds (0x4cc9c0) ends the sounds: stop every player of a sound
+	 * asset. Script ends the sounds' objects itself afterwards.
+	 */
+	virtual void stopAllSounds() {}
 };
 
 /**
@@ -123,6 +164,14 @@ public:
 	 * lists, the kit, the timers and the sounds playing.
 	 */
 	void restore(const VCSave &save);
+
+	/**
+	 * The value RegPreferences writes into a preference variable (Preference
+	 * enum) when the hooks do not answer: the registry's value in a run that
+	 * is compared with a reference run. Without it the variable keeps its
+	 * .gam value.
+	 */
+	void setPreference(uint index, int32 value) { _preferences[index] = value; }
 
 	/**
 	 * Run one vc_sim.py step: wait, click:ID, timer:N, nav:ID, goto:ID or
@@ -402,6 +451,10 @@ private:
 	/** DoActionList(trigger, actionList): another trigger's actions. */
 	void runActionList(uint32 actionList, int event, const EventFields &fields);
 	void endSound(uint32 id, const char *how);
+	/** StopEnvSounds (0x4cc9c0): every sound without a picture ends. */
+	void stopEnvSounds();
+	/** RegPreferences (0x4ccda0): the registry's values go into the variables. */
+	void regPreferences(const VCAction &a);
 	void queueVideo(uint32 id, uint32 limit, bool loop);
 	void startVideo();
 	/** The video on screen ended or was stopped (how is logged). */
@@ -454,6 +507,7 @@ private:
 	Common::Array<uint32> _pressed;            ///< See takePressedItems()
 	uint32 _held;                              ///< The interface item the mouse button is down on (press()), 0 for none
 	Common::HashMap<uint32, bool> _sounds;     ///< Sounds playing (asset objects active)
+	Common::HashMap<uint, int32> _preferences; ///< See setPreference()
 
 	/** The phone's state (XFiles.exe globals 0x6b1900-0x6b190c, list 0x6ba5c8). */
 	struct Phone {

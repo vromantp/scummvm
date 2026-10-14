@@ -480,8 +480,6 @@ void XFilesEngine::callFunction(const VCAction &action, const Common::Array<int3
 		_subliminal.start(g_system->getMillis()); // Game_BuildObjects 0x477940 calls Prefs_Apply 0x452b20
 	else if (action.function == "RegUberVars")
 		registerUberVariables(action);
-	else if (action.function == "StopEnvSounds")
-		stopAllSounds(); // XFiles.exe 0x4cc9c0: stops every playing asset without a picture
 	else
 		callInventoryFunction(action, args);
 }
@@ -519,10 +517,17 @@ void XFilesEngine::registerPreferences(const VCAction &action) {
 	// variables; here ScummVM's settings take the registry's place.
 	for (uint i = 0; i < action.args.size() && i < kPrefCount; i++)
 		_prefVariables[i] = action.args[i].kind == kOperandVariable ? action.args[i].value : 0;
-	if (_prefVariables[kPrefClosedCaptioning])
-		_script->setVariable(_prefVariables[kPrefClosedCaptioning], ConfMan.getBool("subtitles"));
-	if (_prefVariables[kPrefSubliminalMessages])
-		_script->setVariable(_prefVariables[kPrefSubliminalMessages], ConfMan.getBool("subliminal_messages"));
+	// Script writes the closed-captioning and subliminal variables (queryPreference)
+}
+
+bool XFilesEngine::queryPreference(uint index, int32 &value) const {
+	if (index == kPrefClosedCaptioning)
+		value = ConfMan.getBool("subtitles");
+	else if (index == kPrefSubliminalMessages)
+		value = ConfMan.getBool("subliminal_messages");
+	else
+		return false;
+	return true;
 }
 
 void XFilesEngine::registerUberVariables(const VCAction &action) {
@@ -615,14 +620,10 @@ void XFilesEngine::stopSound(uint32 id) {
 }
 
 void XFilesEngine::stopAllSounds() {
-	Common::Array<uint32> stopped;
-	for (Common::HashMap<uint32, Sound>::iterator it = _sounds.begin(); it != _sounds.end(); ++it) {
+	// StopEnvSounds: Script ends the sounds' objects afterwards
+	for (Common::HashMap<uint32, Sound>::iterator it = _sounds.begin(); it != _sounds.end(); ++it)
 		delete it->_value.movie;
-		stopped.push_back(it->_key);
-	}
 	_sounds.clear();
-	for (uint i = 0; i < stopped.size(); i++)
-		_script->finishSound(stopped[i]);
 }
 
 void XFilesEngine::updateSounds() {
