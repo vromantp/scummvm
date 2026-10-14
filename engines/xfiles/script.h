@@ -110,6 +110,8 @@ public:
 	virtual void heldItemChanged(uint32 id) {}
 	/** The bytes of the file of a file asset (an e-mail's text), false if there is none. */
 	virtual bool readAssetFile(uint32 id, Common::Array<byte> &data) { return false; }
+	/** The width in pixels of a text in an item's font (Courier New, or Arial when sans), -1 if unknown. */
+	virtual int measureText(const Common::U32String &text, int size, bool bold, bool sans) const { return -1; }
 	/**
 	 * The value the registry holds for a preference (RegPreferences, 0x4ccda0)
 	 * that this port takes from the ScummVM settings: false leaves the answer
@@ -330,6 +332,7 @@ public:
 		Common::U32StringArray lines;  ///< Laid out lines
 		uint32 color;   ///< RGB
 		bool bold;
+		bool sans;      ///< Arial (Liberation Sans) instead of Courier New
 		int size;       ///< Character height in pixels (GDI's -lfHeight)
 		int lineHeight; ///< Pixels from one line to the next
 		TextAlign align;
@@ -407,9 +410,10 @@ private:
 	void setItemEnabled(uint32 item, bool enabled);
 	/** Lay out and set the text of an item (0x4be2c0); wrapWidth 0: a line per newline only. */
 	void setItemText(uint32 item, const Common::U32String &text, int size, bool bold, uint32 color, TextAlign align,
-		bool shadow, int wrapWidth);
-	/** PDA text: Courier New, regular, black, left, no shadow, wrapped at width (0x4be2c0). */
-	void setPDAText(uint32 item, const Common::U32String &text, int size, bool doubleWidth);
+		bool shadow, int wrapWidth, bool sans = false);
+	/** PDA text: Courier New, regular, black, left, no shadow, wrapped at width (0x4be2c0); ScrollTextList's colour and Arial are optional. */
+	void setPDAText(uint32 item, const Common::U32String &text, int size, bool doubleWidth, uint32 color = 0,
+		bool bold = false, bool sans = false);
 	/** The text of a text asset (or a string of XFilesT.dll), false if it has none. */
 	bool getTextAsset(uint32 entry, Common::U32String &text);
 	/** Lines of an e-mail's file (To, From, Subject, body), empty if it has none; cached. */
@@ -417,7 +421,9 @@ private:
 	/** The text of a file asset: Windows-1252, carriage returns dropped. */
 	bool readTextFile(uint32 asset, Common::U32String &text);
 	void showInboxTexts();
-	void setScrollText(uint32 item, const Common::U32String &text, int size);
+	void setScrollText(uint32 item, const Common::U32String &text, int size, uint32 color = 0, bool bold = false,
+		bool sans = false);
+	void scrollTextList(int32 item, int32 asset, int32 color, int32 font, int32 size);
 	void mainScroll(int32 n);
 	void pdaInitAddr();
 	void pdaFlipAddr(int32 n);

@@ -613,6 +613,10 @@ bool XFilesEngine::readAssetFile(uint32 id, Common::Array<byte> &data) {
 	return ok;
 }
 
+int XFilesEngine::measureText(const Common::U32String &text, int size, bool bold, bool sans) const {
+	return _interface ? _interface->measureItemText(text, size, bold, sans) : -1;
+}
+
 void XFilesEngine::stopSound(uint32 id) {
 	if (!_sounds.contains(id))
 		return;

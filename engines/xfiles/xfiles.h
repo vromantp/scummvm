@@ -74,6 +74,7 @@ public:
 	void playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) override;
 	void restoreSound(uint32 id, bool loop, uint32 startMs) override;
 	bool readAssetFile(uint32 id, Common::Array<byte> &data) override;
+	int measureText(const Common::U32String &text, int size, bool bold, bool sans) const override;
 	bool queryInventoryIcon(uint32 id, bool &hasIcon) const override;
 	void heldItemChanged(uint32 id) override;
 	bool queryPreference(uint index, int32 &value) const override;

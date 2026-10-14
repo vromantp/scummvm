@@ -499,7 +499,8 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 		else if (a.function.contains("Email") || a.function == "DisplayInBox" || a.function == "InitEmailRead" ||
 				a.function == "MainScroll" || a.function == "ScrollTextKill" || a.function.hasPrefix("PDAInitAddr") ||
 				a.function == "PDAFlipAddr" || a.function == "NotePadInit" || a.function == "NoteFlipDay" ||
-				a.function == "EnablePDANote" || a.function == "EnableAllNotes")
+				a.function == "EnablePDANote" || a.function == "EnableAllNotes" || a.function == "ScrollTextList" ||
+				a.function == "ScrollTextInit")
 			callEmail(a, args, event, fields);
 		if (_hooks)
 			_hooks->callFunction(a, args);

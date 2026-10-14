@@ -111,12 +111,33 @@ static int charWidthOf(int size) {
 	return (size * 6 + 5) / 10;
 }
 
+/** The width of a text: Courier New's fixed advance, or Arial through the hook (an estimate without one). */
+struct TextMeter {
+	const ScriptHooks *hooks;
+	int size;
+	bool bold, sans;
+
+	int width(const Common::U32String &text) const {
+		if (!sans)
+			return text.size() * charWidthOf(size);
+		int w = hooks ? hooks->measureText(text, size, bold, sans) : -1;
+		// Without fonts (vcdump): Arial 12 averages 5 px per character
+		return w >= 0 ? w : text.size() * size * 5 / 12;
+	}
+};
+
 /** Word-wrap a line (DT_WORDBREAK): break after the last space that fits, or inside a word longer than a line. */
-static void wrapLine(const Common::U32String &line, uint columns, Common::U32StringArray &out) {
+static void wrapLine(const Common::U32String &line, int limit, const TextMeter &meter, Common::U32StringArray &out) {
 	Common::U32String rest = line;
-	while (rest.size() > columns) {
+	while (meter.width(rest) > limit) {
 		int at = -1;
-		for (uint i = 0; i <= columns && i < rest.size(); i++) {
+		uint fit = 0; // the characters that fit
+		for (uint i = 0; i < rest.size(); i++) {
+			if (meter.width(rest.substr(0, i + 1)) > limit)
+				break;
+			fit = i + 1;
+		}
+		for (uint i = 0; i <= fit && i < rest.size(); i++) {
 			if (rest[i] == ' ')
 				at = i;
 		}
@@ -126,8 +147,9 @@ static void wrapLine(const Common::U32String &line, uint columns, Common::U32Str
 				at++;
 			rest = rest.substr(at);
 		} else {
-			out.push_back(rest.substr(0, columns));
-			rest = rest.substr(columns);
+			fit = MAX<uint>(fit, 1);
+			out.push_back(rest.substr(0, fit));
+			rest = rest.substr(fit);
 		}
 	}
 	out.push_back(rest);
@@ -145,7 +167,11 @@ static void listRemove(Common::Array<uint32> &list, uint32 id) {
 
 void Script::callEmail(const VCAction &a, const Common::Array<int32> &args, int event, const EventFields &fields) {
 	const Common::String &name = a.function;
-	if (name == "SendEmail" && !args.empty()) {
+	if (name == "ScrollTextList" && args.size() >= 5) {
+		scrollTextList(args[0], args[1], args[2], args[3], args[4]);
+	} else if (name == "ScrollTextInit" && !args.empty()) {
+		scrollTextList(args[0], 0, 'b', 'c', kPDAFontSize);
+	} else if (name == "SendEmail" && !args.empty()) {
 		_emailPending.push_back(args[0]);
 	} else if (name == "EmailFlushMess") {
 		for (uint i = 0; i < _emailPending.size(); i++) {
@@ -262,39 +288,43 @@ void Script::isIItemHeld(uint32 variableId, int32 item) {
 // -- Text ---------------------------------------------------------------------
 
 void Script::setItemText(uint32 item, const Common::U32String &text, int size, bool bold, uint32 color, TextAlign align,
-		bool shadow, int wrapWidth) {
+		bool shadow, int wrapWidth, bool sans) {
 	ItemText &t = _itemTexts[item];
 	t.lines.clear();
 	t.color = color;
 	t.bold = bold;
+	t.sans = sans;
 	t.size = size;
 	t.lineHeight = lineHeightOf(size);
 	t.align = align;
 	t.shadow = shadow;
 	t.firstLine = 0;
-	uint columns = wrapWidth > 0 ? MAX(1, wrapWidth / charWidthOf(size)) : 0;
+	// Courier New wraps at whole characters; Arial at the pixel width
+	TextMeter meter = { _hooks, size, bold, sans };
+	int limit = sans ? wrapWidth : MAX(1, wrapWidth / charWidthOf(size)) * charWidthOf(size);
 	Common::U32String line;
 	for (uint i = 0; i <= text.size(); i++) {
 		if (i < text.size() && text[i] != '\n') {
 			line += text[i];
 			continue;
 		}
-		if (columns)
-			wrapLine(line, columns, t.lines);
+		if (wrapWidth > 0)
+			wrapLine(line, limit, meter, t.lines);
 		else
 			t.lines.push_back(line);
 		line.clear();
 	}
 }
 
-void Script::setPDAText(uint32 item, const Common::U32String &text, int size, bool doubleWidth) {
+void Script::setPDAText(uint32 item, const Common::U32String &text, int size, bool doubleWidth, uint32 color, bool bold,
+		bool sans) {
 	// 0x4be2c0: Courier New 400, black, left, no shadow; laid out at twice the item's width unless
 	// +0x194 is set (it is 0 for every PDA text, which the callers pass as doubleWidth)
 	VCInterfaceItem data;
 	int width = 0;
 	if (_data.getInterfaceItem(item, data))
 		width = (data.rect.right - data.rect.left) * (doubleWidth ? 2 : 1);
-	setItemText(item, text, size, false, 0, kAlignLeft, false, width);
+	setItemText(item, text, size, bold, color, kAlignLeft, false, width, sans);
 }
 
 bool Script::getTextAsset(uint32 entry, Common::U32String &text) {
@@ -361,12 +391,25 @@ void Script::showInboxTexts() {
 	}
 }
 
-void Script::setScrollText(uint32 item, const Common::U32String &text, int size) {
+void Script::setScrollText(uint32 item, const Common::U32String &text, int size, uint32 color, bool bold, bool sans) {
 	// 0x4be340: a scroll text replaces the earlier one; wrapped at the item's width
 	if (_scrollItem && _scrollItem != item)
 		_itemTexts.erase(_scrollItem);
 	_scrollItem = item;
-	setPDAText(item, text, size, false);
+	setPDAText(item, text, size, false, color, bold, sans);
+}
+
+void Script::scrollTextList(int32 item, int32 asset, int32 color, int32 font, int32 size) {
+	// 0x481160 / 0x45e280 -> 0x4be340. The asset is a file asset (its file, as for an e-mail), a text asset
+	// or a string of XFilesT.dll (0x45f690). 'H' is Arial made bold, anything else Courier New 400.
+	// The colours: 'w' white, 'x' Color_TextBlue, 'b' and anything else black.
+	uint32 rgb = color == 'w' ? 0xffffff : color == 'x' ? 0x2e6b8c : 0;
+	bool arial = font == 'H';
+	Common::U32String text;
+	if (asset && !readTextFile(asset, text))
+		getTextAsset(asset, text);
+	// Arial 12 is 15 px per line (font.metrics, regular); the bold one is assumed to match
+	setScrollText(item, text, size, rgb, arial, arial);
 }
 
 void Script::mainScroll(int32 n) {

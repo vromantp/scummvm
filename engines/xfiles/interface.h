@@ -123,6 +123,9 @@ public:
 	void addModalException(uint32 layout);
 	void clearModalExceptions() { _modalExceptions.clear(); }
 
+	/** The width of a text in an item font (Script wraps by it), -1 if the font is missing. */
+	int measureItemText(const Common::U32String &text, int size, bool bold, bool sans) const;
+
 private:
 	/** A picture (an entry of a .pff archive) or a movie, looped. */
 	class Graphic {
@@ -179,7 +182,7 @@ private:
 	void syncItemTexts(const Script &script);
 	void drawItemText(Graphics::Surface &dst, const Item &item) const;
 	/** Courier New 400 or 700 at a character height, from Liberation Mono (kept); nullptr if unavailable. */
-	Graphics::Font *getItemFont(int size, bool bold) const;
+	Graphics::Font *getItemFont(int size, bool bold, bool sans) const;
 	void drawIcons(Graphics::Surface &dst, const Common::Array<Icon> &icons) const;
 	void drawRolloverText(Graphics::Surface &dst, const Common::Array<Icon> &icons) const;
 	static void blit(Graphics::Surface &dst, const Graphics::Surface &src, int x, int y);

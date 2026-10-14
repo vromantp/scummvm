@@ -557,18 +557,29 @@ void Interface::draw(Graphics::Surface &dst) const {
 	}
 }
 
-Graphics::Font *Interface::getItemFont(int size, bool bold) const {
-	uint key = size << 1 | (bold ? 1 : 0);
+Graphics::Font *Interface::getItemFont(int size, bool bold, bool sans) const {
+	uint key = size << 2 | (sans ? 2 : 0) | (bold ? 1 : 0);
 	if (_itemFonts.contains(key))
 		return _itemFonts[key];
 	Graphics::Font *font = nullptr;
 #ifdef USE_FREETYPE2
-	// Courier New: Liberation Mono has its metrics; GDI draws it without smoothing
-	font = Graphics::loadTTFFontFromArchive(bold ? "LiberationMono-Bold.ttf" : "LiberationMono-Regular.ttf", size,
-		Graphics::kTTFSizeModeCharacter, 0, 0, Graphics::kTTFRenderModeMonochrome);
+	if (sans) {
+		// Arial: Liberation Sans has its metrics
+		font = Graphics::loadTTFFontFromArchive(bold ? "LiberationSans-Bold.ttf" : "LiberationSans-Regular.ttf", size,
+			Graphics::kTTFSizeModeCharacter);
+	} else {
+		// Courier New: Liberation Mono has its metrics; GDI draws it without smoothing
+		font = Graphics::loadTTFFontFromArchive(bold ? "LiberationMono-Bold.ttf" : "LiberationMono-Regular.ttf", size,
+			Graphics::kTTFSizeModeCharacter, 0, 0, Graphics::kTTFRenderModeMonochrome);
+	}
 #endif
 	_itemFonts[key] = font;
 	return font;
+}
+
+int Interface::measureItemText(const Common::U32String &text, int size, bool bold, bool sans) const {
+	Graphics::Font *font = getItemFont(size, bold, sans);
+	return font ? font->getStringWidth(text) : -1;
 }
 
 void Interface::drawItemText(Graphics::Surface &dst, const Item &item) const {
@@ -576,7 +587,7 @@ void Interface::drawItemText(Graphics::Surface &dst, const Item &item) const {
 	// script, drawn from the item's top left, a line per line height, clipped to the item.
 	// A shadow is the same in black, 1 px right and down, drawn first.
 	const Script::ItemText &text = item.text;
-	Graphics::Font *font = getItemFont(text.size, text.bold);
+	Graphics::Font *font = getItemFont(text.size, text.bold, text.sans);
 	if (!font)
 		return;
 	Common::Rect clip = item.rect;
