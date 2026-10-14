@@ -184,6 +184,10 @@ public:
 	/** How often a conversation topic was asked. */
 	uint getAskCount(uint32 id) const { return _asked.getValOrDefault(id, 0); }
 	int32 getVariable(uint32 id) const;
+	/** The e-mail lists, for the state dump. */
+	const Common::Array<uint32> &getEmails() const { return _emails; }
+	const Common::Array<uint32> &getEmailsRead() const { return _emailsRead; }
+	const Common::Array<uint32> &getEmailsPending() const { return _emailPending; }
 	void setVariable(uint32 id, int32 value) { _variables[id] = value; }
 
 	struct Timer {
@@ -276,6 +280,13 @@ private:
 	/** RandGen(var, n): a number from 0 to n (0x49f6d0). */
 	void randGen(uint32 variableId, int32 n);
 
+	// PDA e-mail (pda.cpp)
+	/** Run one of the e-mail hooks (SendEmail, DisplayInBox...). */
+	void callEmail(const VCAction &action, const Common::Array<int32> &args, int event, const EventFields &fields);
+	void displayInBox(int32 value);
+	void initEmailRead(int32 item, int32 email);
+	void setItemEnabled(uint32 item, bool enabled);
+
 	// Phone (phone.cpp)
 	/** Run one of the Phone hooks (PhoneInit, PhoneButton...). */
 	void callPhone(const VCAction &action, const Common::Array<int32> &args, int event, const EventFields &fields);
@@ -350,6 +361,14 @@ private:
 		bool loop;      ///< Plays until stopped
 	};
 	Common::Array<VideoPlay> _videoPlays;      ///< Per queued video
+	/** PDA e-mail: VCEmail, VCEmailRead and VCEmailPending, and the inbox (globals 0x6bd914, 0x6bd86c). */
+	Common::Array<uint32> _emails, _emailsRead, _emailPending;
+	struct InboxRow {
+		uint32 id;
+		bool read;
+	};
+	Common::Array<InboxRow> _inboxRows;
+	uint _inboxTop;
 
 	/** FixJumpCut(first, later) of a topic's Object Activation (0x47ca30). */
 	struct JumpCut {

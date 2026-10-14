@@ -342,6 +342,14 @@ static Common::String jsonMap(const Common::Array<uint32> &ids, const Common::Ar
 	return out + (ids.empty() ? "}" : "\n }");
 }
 
+/** JSON `,\n "name": [id, ...]`. */
+static Common::String jsonList(const char *name, const Common::Array<uint32> &ids) {
+	Common::String out = Common::String::format(",\n \"%s\": [", name);
+	for (uint i = 0; i < ids.size(); i++)
+		out += Common::String::format("%s%u", i ? ", " : "", ids[i]);
+	return out + "]";
+}
+
 Common::String dumpState(const VCData &data, const Script &script) {
 	Common::Array<NeoEntry> entries;
 	Common::Array<uint32> ids;
@@ -367,6 +375,9 @@ Common::String dumpState(const VCData &data, const Script &script) {
 		}
 	}
 	out += ",\n \"enabled\": " + jsonMap(ids, values);
+	out += jsonList("emails", script.getEmails());
+	out += jsonList("emails_read", script.getEmailsRead());
+	out += jsonList("emails_pending", script.getEmailsPending());
 	out += Common::String::format(",\n \"game_state\": {\"position\": [%u, %u, %u, %u]}\n}\n", script.getNode(),
 		script.getLocation(), script.getViewPoint(), script.getView());
 	return out;

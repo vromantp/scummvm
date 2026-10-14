@@ -12,6 +12,7 @@ MODULE_OBJS = \
 	movie.o \
 	neoaccess.o \
 	phone.o \
+	pda.o \
 	pictures.o \
 	script.o \
 	subliminal.o \

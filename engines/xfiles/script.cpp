@@ -100,7 +100,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _focus(0), _currNodeVariable(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _focus(0), _currNodeVariable(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _inboxTop(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	_jumpCut.first = _jumpCut.later = false;
 	_phone.bookSize = _phone.bookIndex = 0;
 	_phone.showsName = false;
@@ -448,6 +448,8 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 			runActionList(args[0] == 1 ? kPDAEscapeOnActions : kPDAEscapeOffActions, event, fields);
 		else if (a.function.hasPrefix("Phone"))
 			callPhone(a, args, event, fields);
+		else if (a.function.contains("Email") || a.function == "DisplayInBox" || a.function == "InitEmailRead")
+			callEmail(a, args, event, fields);
 		if (_hooks)
 			_hooks->callFunction(a, args);
 	}
