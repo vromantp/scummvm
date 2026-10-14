@@ -512,15 +512,16 @@ void XFilesEngine::callInventoryFunction(const VCAction &action, const Common::A
 }
 
 void XFilesEngine::registerPreferences(const VCAction &action) {
-	// RegPreferences(24 variables), called once by the title. XFiles.exe
-	// keeps the preferences in the registry and writes them into these
-	// variables; here ScummVM's settings take the registry's place.
+	// RegPreferences(24 variables), run by Script before a game starts or
+	// continues (Script::loadPreferences) and by the title. XFiles.exe keeps
+	// the preferences in the registry and writes them into these variables;
+	// Script does the writes, asking queryPreference for the registry's value.
 	for (uint i = 0; i < action.args.size() && i < kPrefCount; i++)
 		_prefVariables[i] = action.args[i].kind == kOperandVariable ? action.args[i].value : 0;
-	// Script writes the closed-captioning and subliminal variables (queryPreference)
 }
 
 bool XFilesEngine::queryPreference(uint index, int32 &value) const {
+	// The others have no ScummVM setting and keep their .gam values
 	if (index == kPrefClosedCaptioning)
 		value = ConfMan.getBool("subtitles");
 	else if (index == kPrefSubliminalMessages)

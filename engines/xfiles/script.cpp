@@ -648,19 +648,47 @@ void Script::stopEnvSounds() {
 }
 
 void Script::regPreferences(const VCAction &a) {
-	// 0x4ccda0 writes the registry's values into the 24 preference
-	// variables; only the closed-captioning and subliminal ones are taken
-	// from outside here (the settings of the player, or setPreference())
-	static const uint kPrefs[] = {kPrefClosedCaptioning, kPrefSubliminalMessages};
-	for (uint i = 0; i < ARRAYSIZE(kPrefs); i++) {
-		uint index = kPrefs[i];
-		if (index >= a.args.size() || a.args[index].kind != kOperandVariable)
+	// 0x4ccda0 (mode 5) writes the registry's values into the 24 preference
+	// variables. The registry is the player's settings or setPreference();
+	// a preference neither knows keeps its .gam value, which is what the exe
+	// stores on its first start (no registry key: 0x4ccda0 mode 0)
+	for (uint index = 0; index < a.args.size() && index < kPrefCount; index++) {
+		if (a.args[index].kind != kOperandVariable)
 			continue;
 		int32 value = 0;
 		if (_hooks && _hooks->queryPreference(index, value))
 			_variables[a.args[index].value] = value;
 		else if (_preferences.contains(index))
 			_variables[a.args[index].value] = _preferences[index];
+	}
+}
+
+void Script::loadPreferences() {
+	// 0x4310f0: walk the title's triggers and run the first C++ Function
+	// action named RegPreferences, whatever its event or condition. The
+	// reference log shows it as "cpp from=0043137e"; compare.py leaves it out
+	VCTitle title;
+	if (!_data.getTitle(title))
+		return;
+	Common::Array<uint32> triggers;
+	_data.getMembers(title.triggers, triggers);
+	for (uint i = 0; i < triggers.size(); i++) {
+		VCTrigger t;
+		if (!_data.getTrigger(triggers[i], t))
+			continue;
+		for (uint j = 0; j < t.actions.size(); j++) {
+			VCAction a;
+			if (!_data.getAction(t.actions[j], a) || a.type != kActionFunction || a.function != "RegPreferences")
+				continue;
+			regPreferences(a);
+			if (_hooks) {
+				Common::Array<int32> args;
+				for (uint k = 0; k < a.args.size(); k++)
+					args.push_back(getValue(a.args[k], EventFields(), LocalVariables()));
+				_hooks->callFunction(a, args);
+			}
+			return;
+		}
 	}
 }
 
@@ -949,6 +977,8 @@ void Script::start() {
 		return;
 	}
 	log("== start: " + nameOrNone(_data, title.name));
+	// Game_Start (0x48cd70) writes the preferences before the title activates
+	loadPreferences();
 	fire(title.id, kEventObjectActivation);
 }
 
@@ -965,6 +995,8 @@ void Script::restore(const VCSave &save) {
 	if (save.disc >= 1)
 		_disc = save.disc;
 	log(Common::String::format("  disc %d", _disc));
+	// Game_Start (0x48cd70) also writes the preferences over a save's values
+	loadPreferences();
 	enter(save.position[0], save.position[1], save.position[2], save.position[3]);
 	if (save.clip)
 		log(Common::String::format("  clip #%u at time %d in the view (the view plays from there)", save.clip, save.clipTime));

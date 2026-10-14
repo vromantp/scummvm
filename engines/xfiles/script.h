@@ -113,8 +113,8 @@ public:
 	/**
 	 * The value the registry holds for a preference (RegPreferences, 0x4ccda0)
 	 * that this port takes from the ScummVM settings: false leaves the answer
-	 * to Script (a setPreference() value, else the variable's .gam value).
-	 * Asked for kPrefClosedCaptioning and kPrefSubliminalMessages.
+	 * to Script (a setPreference() value, else the variable's .gam value, as
+	 * on the exe's first start). Asked for every Preference.
 	 */
 	virtual bool queryPreference(uint index, int32 &value) const { return false; }
 	/**
@@ -169,7 +169,7 @@ public:
 	 * The value RegPreferences writes into a preference variable (Preference
 	 * enum) when the hooks do not answer: the registry's value in a run that
 	 * is compared with a reference run. Without it the variable keeps its
-	 * .gam value.
+	 * .gam value. Set it before start() or restore().
 	 */
 	void setPreference(uint index, int32 value) { _preferences[index] = value; }
 
@@ -455,6 +455,11 @@ private:
 	void stopEnvSounds();
 	/** RegPreferences (0x4ccda0): the registry's values go into the variables. */
 	void regPreferences(const VCAction &a);
+	/**
+	 * Game_Start's 0x4310f0: before the game begins (new or restored), the
+	 * first RegPreferences among the title's trigger actions runs, unlogged.
+	 */
+	void loadPreferences();
 	void queueVideo(uint32 id, uint32 limit, bool loop);
 	void startVideo();
 	/** The video on screen ended or was stopped (how is logged). */
