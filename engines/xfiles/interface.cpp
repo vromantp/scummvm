@@ -338,7 +338,9 @@ void Interface::syncIcons(const Script &script, uint32 classId, Common::Array<Ic
 	}
 	if (classId == kClassInventory)
 		_inventorySeeded = true;
-	const Common::Array<uint32> &order = _classOrder[classId == kClassActionIcon ? 0 : classId == kClassInventory ? 1 : 2];
+	// The inventory's order is Script's (a new game's class order, then the order items were enabled in),
+	// which is also what a save keeps
+	const Common::Array<uint32> &order = classId == kClassInventory ? script.getInventory() : _classOrder[classId == kClassActionIcon ? 0 : 2];
 	for (uint i = 0; i < order.size(); i++) {
 		uint32 id = order[i];
 		if (!script.isEnabled(id) || script.isSpent(id))
