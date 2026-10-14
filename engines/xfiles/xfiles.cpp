@@ -492,17 +492,6 @@ void XFilesEngine::callInventoryFunction(const VCAction &action, const Common::A
 	if (name == "OnIntInvClick") {
 		// Interface items (PDA, phone) are not held (0x467fb0)
 		_interface->setHeld(0);
-	} else if (name == "SelectInv" && args.size() >= 1) {
-		// 0x50a390: put back what is in hand and take the item, as a click
-		// on its icon would
-		if (_interface->hasInventoryIcon(args[0])) {
-			putBack();
-			clickInventory(args[0]);
-		}
-	} else if (name == "DeselectInv" && args.size() >= 1) {
-		// 0x50a570: 0 puts back any item
-		if (args[0] == 0 || (uint32)args[0] == _interface->getHeld())
-			putBack();
 	} else if (name == "RollOnEvKit" && args.size() >= 2) {
 		// 0x4efda0: nothing while that item is in hand; open the kit above
 		// the item's icon, or close it once the mouse has left it
@@ -914,8 +903,8 @@ void XFilesEngine::updateInterface() {
 			_script->roll(hover.id, true);
 	}
 	// The item in hand goes back when the mouse moves into the bar
-	// (InvBar_OnRoll 0x468330) or when it is disabled (0x436c20)
-	if (isHolding() && (_interface->hasEnteredBar() || !_script->isEnabled(_interface->getHeld())))
+	// (InvBar_OnRoll 0x468330); a disabled one goes back in Script::enable
+	if (isHolding() && _interface->hasEnteredBar())
 		putBack();
 }
 
@@ -924,29 +913,28 @@ bool XFilesEngine::isHolding() const {
 }
 
 void XFilesEngine::putBack() {
-	// The held-item object exists only while something is in hand; its
-	// deactivation (0x437c20) resets the variable
-	if (!isHolding())
-		return;
-	debugC(1, kDebugScript, "-- #%u put back", _interface->getHeld());
-	_script->clearHeldItem();
-	_interface->setHeld(0);
+	_script->putBack();
 }
 
-void XFilesEngine::clickInventory(uint32 inventory) {
-	// InvIcon_OnMouseClick (0x49c180): close the box, put back what is in
-	// hand, take the item's cursor, then the icon's Mouse Click triggers
-	// (which call OnInvClick)
-	if (inventory == _interface->getHeld())
-		return;
-	if (_dialogBox.isOpen()) {
+bool XFilesEngine::queryInventoryIcon(uint32 id, bool &hasIcon) const {
+	hasIcon = _interface->hasInventoryIcon(id);
+	return true;
+}
+
+void XFilesEngine::heldItemChanged(uint32 id) {
+	if (id && _dialogBox.isOpen()) {
 		_dialogBox.close();
 		_script->closeBox();
 	}
-	putBack();
-	_interface->setHeld(inventory);
-	debugC(1, kDebugScript, "-- click:%u (inventory)", inventory);
-	_script->click(inventory);
+	_interface->setHeld(id);
+}
+
+void XFilesEngine::clickInventory(uint32 inventory) {
+	// InvIcon_OnMouseClick (0x49c180); Script does it, heldItemChanged
+	// closes the box and takes the cursor
+	if (inventory == _interface->getHeld())
+		return;
+	_script->selectInventory(inventory);
 }
 
 void XFilesEngine::drawView() {

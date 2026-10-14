@@ -350,6 +350,9 @@ void Script::execute(const VCAction &a, int event, const EventFields &fields, Lo
 			_enabled[target] = a.value != 0;
 			if (!a.value)
 				_spent.erase(target);
+			// The held item disabled goes back (0x436c20)
+			if (!a.value && isHolding() && (uint32)getVariable(_heldVariable) == target)
+				putBack();
 			// An evidence icon gets its object when it is enabled (0x4201a0),
 			// firing its Object Activation; disabling removes its kit icon too
 			// (0x4a1940)
@@ -466,6 +469,15 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 			// Inv_Select 0x49b410: the item's value goes into the variable
 			if (_heldVariable)
 				_variables[_heldVariable] = args[0];
+		} else if (a.function == "SelectInv" && !args.empty()) {
+			// 0x50a390: if the item has an icon, put back what is in hand and
+			// take the item, as a click on its icon would
+			if (hasInventoryIcon(args[0]))
+				selectInventory(args[0]);
+		} else if (a.function == "DeselectInv" && !args.empty()) {
+			// 0x50a570: 0 puts back any item, else only that one
+			if (args[0] == 0 || (isHolding() && getVariable(_heldVariable) == args[0]))
+				putBack();
 		} else if (a.function == "SetIItemFocus" && !args.empty())
 			_focus = args[0];
 		else if (a.function == "RegViewState" && !a.args.empty() && a.args[0].kind == kOperandVariable)
@@ -491,6 +503,34 @@ bool Script::isHolding() const {
 void Script::clearHeldItem() {
 	if (_heldVariable)
 		_variables[_heldVariable] = _heldNone;
+}
+
+void Script::putBack() {
+	// The held-item object exists only while something is in hand; its
+	// deactivation (0x437c20) resets the variable
+	if (!isHolding())
+		return;
+	debugC(1, kDebugScript, "-- #%d put back", getVariable(_heldVariable));
+	clearHeldItem();
+	if (_hooks)
+		_hooks->heldItemChanged(0);
+}
+
+bool Script::hasInventoryIcon(uint32 id) const {
+	bool has;
+	if (_hooks && _hooks->queryInventoryIcon(id, has))
+		return has;
+	return _data.getClassOf(id) == kClassInventory && isEnabled(id);
+}
+
+void Script::selectInventory(uint32 id) {
+	if (isHolding() && (uint32)getVariable(_heldVariable) == id)
+		return;
+	putBack();
+	if (_hooks)
+		_hooks->heldItemChanged(id);
+	debugC(1, kDebugScript, "-- click:%u (inventory)", id);
+	click(id);
 }
 
 void Script::runActionList(uint32 actionList, int event, const EventFields &fields) {

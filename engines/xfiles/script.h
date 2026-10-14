@@ -68,6 +68,17 @@ public:
 	 * startMs in its file (the sound's in point, 0x4a88d0).
 	 */
 	virtual void restoreSound(uint32 id, bool loop, uint32 startMs) {}
+	/**
+	 * Whether an inventory item has an icon in the bar, if the engine knows
+	 * (it draws the icons); false leaves the answer to the Script, which
+	 * assumes an icon for every enabled VCInventory.
+	 */
+	virtual bool queryInventoryIcon(uint32 id, bool &hasIcon) const { return false; }
+	/**
+	 * The item in hand changed through the script (SelectInv, DeselectInv, the
+	 * held item disabled): id is the item now in hand, 0 when it was put back.
+	 */
+	virtual void heldItemChanged(uint32 id) {}
 	/** The bytes of the file of a file asset (an e-mail's text), false if there is none. */
 	virtual bool readAssetFile(uint32 id, Common::Array<byte> &data) { return false; }
 };
@@ -218,6 +229,12 @@ public:
 	bool isHolding() const;
 	/** The held-item object's deactivation (XFiles.exe 0x437c20): iCurrInventory is Inventory_None again. */
 	void clearHeldItem();
+	/** Inv_PutBack (0x429f00): acts only while something is in hand; tells the engine. */
+	void putBack();
+	/** The click on an inventory icon (InvIcon_OnMouseClick 0x49c180): put back, take the item, run its Mouse Click triggers. */
+	void selectInventory(uint32 id);
+	/** Whether the item has an icon in the bar: asks the engine, else every enabled VCInventory has one (0x4201a0). */
+	bool hasInventoryIcon(uint32 id) const;
 
 	struct Timer {
 		uint32 ms;

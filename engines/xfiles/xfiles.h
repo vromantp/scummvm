@@ -103,6 +103,8 @@ public:
 	void playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) override;
 	void restoreSound(uint32 id, bool loop, uint32 startMs) override;
 	bool readAssetFile(uint32 id, Common::Array<byte> &data) override;
+	bool queryInventoryIcon(uint32 id, bool &hasIcon) const override;
+	void heldItemChanged(uint32 id) override;
 
 protected:
 	Common::Error run() override;
