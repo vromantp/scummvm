@@ -37,7 +37,7 @@ namespace Image {
 // https://developer.apple.com/library/archive/documentation/mac/QuickDraw/QuickDraw-461.html
 // https://developer.apple.com/library/archive/documentation/mac/QuickDraw/QuickDraw-269.html
 
-PICTDecoder::PICTDecoder() : _outputSurface(nullptr), _palette(0), _version(2) {
+PICTDecoder::PICTDecoder() : _outputSurface(nullptr), _palette(0), _version(2), _keepAlpha(false) {
 }
 
 PICTDecoder::~PICTDecoder() {
@@ -529,9 +529,24 @@ void PICTDecoder::unpackBitsRect(Common::SeekableReadStream &stream, bool withPa
 		break;
 	case 4:
 		// We have a planar 32-bit surface
-		// Note that we ignore the alpha channel since it seems to not be correct
+		// Note that we ignore the alpha channel by default since it seems to not be correct
 		// macOS does not ignore it, but then displays it incorrectly. Photoshop
 		// does ignore it and displays it correctly.
+		if (_keepAlpha) {
+			// The first plane is the alpha channel
+			_outputSurface->create(width, height, Graphics::PixelFormat::createFormatARGB32());
+			for (uint16 y = 0; y < _outputSurface->h; y++) {
+				uint32 *dst = (uint32 *)_outputSurface->getBasePtr(0, y);
+				for (uint16 x = 0; x < _outputSurface->w; x++) {
+					byte a = *(buffer + y * _outputSurface->w * 4 + _outputSurface->w * 0 + x);
+					byte r = *(buffer + y * _outputSurface->w * 4 + _outputSurface->w * 1 + x);
+					byte g = *(buffer + y * _outputSurface->w * 4 + _outputSurface->w * 2 + x);
+					byte b = *(buffer + y * _outputSurface->w * 4 + _outputSurface->w * 3 + x);
+					*dst++ = _outputSurface->format.ARGBToColor(a, r, g, b);
+				}
+			}
+			break;
+		}
 		_outputSurface->create(width, height, Graphics::PixelFormat::createFormatRGB24());
 		for (uint16 y = 0; y < _outputSurface->h; y++) {
 			byte *dst = (byte *)_outputSurface->getBasePtr(0, y);
