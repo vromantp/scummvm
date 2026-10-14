@@ -299,7 +299,7 @@ public:
 	};
 	const Common::HashMap<uint, Timer> &getTimers() const { return _timers; }
 
-	/** A shown VCIFaceLayout and its items that were enabled when it was shown. */
+	/** A shown VCIFaceLayout and its items that were enabled when it was shown, in the exe's layer order. */
 	struct Layout {
 		uint32 id;
 		Common::Array<uint32> items;
@@ -401,6 +401,7 @@ private:
 	bool isBoxTopic(uint32 charViewId, uint32 conversationId) const;
 	void showLayout(uint32 layoutId);
 	void hideLayout(uint32 layoutId);
+	void insertLayoutItem(Common::Array<uint32> &items, uint32 itemId);
 	void updateLayoutItem(uint32 itemId, bool enabled);
 	void enableKitIcon(uint32 id);
 	/** RandGen(var, n): a number from 0 to n (0x49f6d0). */

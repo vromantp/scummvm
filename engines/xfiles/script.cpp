@@ -1265,33 +1265,35 @@ void Script::showLayout(uint32 layoutId) {
 	}
 	Layout shown;
 	shown.id = layoutId;
-	for (uint i = 0; i < layout.items.size(); i++) {
-		if (isEnabled(layout.items[i]))
-			shown.items.push_back(layout.items[i]);
-	}
 	_layouts.push_back(shown);
 
 	// The exe appends the objects in layout order to a list kept sorted by
 	// layer (low byte of the layer word): an item goes to the end if its layer
 	// is not below the last one's, else before the first item of an equal or
 	// higher layer. That reproduces all 15 layout shows of the runs
-	// pda-usage-run1 and manual1 (layer 0 ties, layout 34010, the save screen)
-	Common::Array<uint32> order;
-	Common::Array<byte> layers;
-	for (uint i = 0; i < shown.items.size(); i++) {
-		VCInterfaceItem item;
-		byte layer = _data.getInterfaceItem(shown.items[i], item) ? item.layer & 0xff : 0;
-		uint at = layers.size();
-		if (at && layers[at - 1] > layer) {
-			at = 0;
-			while (layers[at] < layer)
-				at++;
-		}
-		order.insert_at(at, shown.items[i]);
-		layers.insert_at(at, layer);
+	// pda-usage-run1 and manual1 (layer 0 ties, layout 34010, the save screen).
+	// The list also gives the order of the unshow's Object Deactivation.
+	for (uint i = 0; i < layout.items.size(); i++) {
+		if (isEnabled(layout.items[i]))
+			insertLayoutItem(_layouts.back().items, layout.items[i]);
 	}
+	Common::Array<uint32> order = _layouts.back().items;
 	for (uint i = 0; i < order.size(); i++)
 		fire(order[i], kEventObjectActivation);
+}
+
+void Script::insertLayoutItem(Common::Array<uint32> &items, uint32 itemId) {
+	// The layer-sorted insertion rule of showLayout
+	VCInterfaceItem item;
+	byte layer = _data.getInterfaceItem(itemId, item) ? item.layer & 0xff : 0;
+	uint at = items.size();
+	VCInterfaceItem other;
+	if (at && _data.getInterfaceItem(items[at - 1], other) && (other.layer & 0xff) > layer) {
+		at = 0;
+		while (at < items.size() && _data.getInterfaceItem(items[at], other) && (other.layer & 0xff) < layer)
+			at++;
+	}
+	items.insert_at(at, itemId);
 }
 
 void Script::hideLayout(uint32 layoutId) {
@@ -1675,6 +1677,8 @@ void Script::step(const Common::String &s) {
 		setFixedSeeds(id);
 	else if (kind == "key")
 		keyPress(id);
+	else if (kind == "layout")
+		showLayout(id); // shown from exe code, not by a Show Layout action
 	else if (kind == "end")
 		finishSound(id);
 }
