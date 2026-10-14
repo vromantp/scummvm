@@ -169,6 +169,14 @@ public:
 	 * lists, the kit, the timers and the sounds playing.
 	 */
 	void restore(const VCSave &save);
+	/**
+	 * The engine's GameState_Save (0x4d9450) as far as the Script knows it:
+	 * position (mode 1), history, notes, e-mail lists, disc, hint list and
+	 * glow, flashlight, letterbox tint, inventory, evidence, kit, dialog box
+	 * and layout. What only the engine knows (timers, sounds, the view's clip,
+	 * the head credits) and the photos are left as they are in save.
+	 */
+	void snapshot(VCSave &save) const;
 
 	/**
 	 * The value RegPreferences writes into a preference variable (Preference
@@ -313,11 +321,11 @@ public:
 	const VCSave &getRestoredSave() const { return _restoredSave; }
 	/** Whether the row of collected evidence is shown (a restore sets it; the engine does not draw it). */
 	bool isEvidenceRowShown() const { return _evidenceRowShown; }
-	/** The inventory in the order of the save (empty unless restored). */
+	/** The inventory in the order of the bar: the save's after a restore, a new game's class order, then as items are enabled and disabled. */
 	const Common::Array<uint32> &getInventory() const { return _inventory; }
-	/** Evidence icons outside the kit as restored from a save: (VCEvidenceIcon, shown) pairs. */
+	/** Evidence icons outside the kit: (VCEvidenceIcon, shown) pairs as restored from a save, and the icons enabled since (shown 0). */
 	const Common::Array<uint32> &getEvidence() const { return _evidence; }
-	/** Conversations asked, with repeats, as restored from a save. */
+	/** Conversations asked, with repeats, as restored from a save and asked since. */
 	const Common::Array<uint32> &getHistory() const { return _history; }
 	/** Evidence icons in the evidence kit (EnableKitIcon), in order. */
 	const Common::Array<uint32> &getKitIcons() const { return _kit; }
@@ -383,6 +391,10 @@ private:
 	int32 getValue(const VCOperand &operand, const EventFields &fields, const LocalVariables &locals) const;
 	bool test(const VCExpression &condition, const EventFields &fields, const LocalVariables &locals) const;
 	void logHook(const Common::String &name, bool handled);
+	/** Record the arguments of the hooks a save keeps (SetAIList, SetFLightProps...). */
+	void recordState(const Common::String &function, const Common::Array<int32> &args);
+	void addEvidence(uint32 id);
+	void removeEvidence(uint32 id);
 	void callFunction(const VCAction &action, int event, const EventFields &fields, const LocalVariables &locals);
 
 	void playAsset(uint32 id, byte mode, const VCAction *sound3D);
@@ -512,6 +524,11 @@ private:
 	int _restoreMode;                          ///< Position mode while restore() runs, else -1: which Object Activation fires
 	int32 _disc;                               ///< Disc in use (VCGameState +42)
 	bool _evidenceRowShown;                    ///< EvIcons_SetRowShown, set by a shown evidence icon of a restore
+	uint32 _hintList, _hintTrigger;            ///< The last SetAIList, 0 after ClearAIList
+	int32 _hintGlow;                           ///< The last SetAIGlow above 1, else 0
+	byte _flashlight[3];                       ///< SetFLightProps as the save keeps it (FLight_SetProps 0x4d7d20 via 0x44bda0)
+	byte _tint;                                ///< SetLBoxTint (1) or ClearLBoxTint (0)
+	byte _tintColor[3];                        ///< The tint in the order the save stores it (blue, green, red)
 	VCSave _restoredSave;                      ///< The save restore() continued from
 	bool _restored;
 	Common::HashMap<uint32, Common::String> _strings;  ///< VCString values that changed

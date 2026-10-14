@@ -56,7 +56,7 @@ enum {
 };
 
 HeadCredits::HeadCredits() : _dll(nullptr), _strings(nullptr), _font(nullptr), _enabled(false), _rolling(false),
-	_shownAny(false), _index(-1), _next(0), _hideAt(0) {
+	_shownAny(false), _index(-1), _lastShown(-1), _next(0), _hideAt(0) {
 }
 
 HeadCredits::~HeadCredits() {
@@ -89,6 +89,7 @@ void HeadCredits::roll(uint32 now, bool skipIntro, int first) {
 	_rolling = true;
 	bool fromStart = _shownAny || skipIntro;
 	_index = first >= 1 ? first - 1 : (fromStart ? kFirstCredit : kFirstCreditAfterIntro) - 1;
+	_lastShown = first >= 1 ? first : -1;
 	_next = now + kCreditPeriod;
 	_hideAt = 0;
 	_text.clear();
@@ -106,6 +107,7 @@ void HeadCredits::reset() {
 	_rolling = false;
 	_shownAny = false;
 	_index = -1;
+	_lastShown = -1;
 	hide();
 }
 
@@ -135,6 +137,7 @@ void HeadCredits::update(uint32 now, bool canShow) {
 	if (!canShow)
 		return;
 	_index++;
+	_lastShown = _index;
 	_text = Common::U32String(text, Common::kWindows1252);
 	_hideAt = now + kCreditShown;
 }

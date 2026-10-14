@@ -151,6 +151,14 @@ void Movie::pause(bool pause) {
 	_decoder->pauseVideo(pause);
 }
 
+uint32 Movie::getTime() const {
+	return _decoder ? _decoder->getTime() : 0;
+}
+
+bool Movie::isPlaying() const {
+	return _decoder && !_ended && _decoder->isPlaying();
+}
+
 int Movie::getCurFrame() const {
 	return _decoder ? _decoder->getCurFrame() : -1;
 }

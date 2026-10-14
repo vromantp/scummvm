@@ -38,6 +38,7 @@ Console::Console() : GUI::Debugger() {
 	registerCmd("discs", WRAP_METHOD(Console, Cmd_discs));
 	registerCmd("step", WRAP_METHOD(Console, Cmd_step));
 	registerCmd("state", WRAP_METHOD(Console, Cmd_state));
+	registerCmd("snapshot", WRAP_METHOD(Console, Cmd_snapshot));
 }
 
 Console::~Console() {
@@ -157,6 +158,28 @@ bool Console::Cmd_step(int argc, const char **argv) {
 	return true;
 }
 
+bool Console::Cmd_snapshot(int argc, const char **argv) {
+	// What a save would hold now (XFilesEngine::fillSnapshot), as `state json`
+	Script *script = g_engine->getScript();
+	if (argc > 2 || !script) {
+		debugPrintf(script ? "Usage: %s [FILE]\n" : "No game running\n", argv[0]);
+		return true;
+	}
+	VCSave snapshot;
+	g_engine->fillSnapshot(snapshot);
+	Common::String json = dumpState(g_engine->getData(), *script, &snapshot);
+	if (argc == 1) {
+		debugPrintf("%s", json.c_str());
+		return true;
+	}
+	Common::DumpFile file;
+	if (file.open(Common::Path(argv[1], '/'), true) && file.write(json.c_str(), json.size()) == json.size())
+		debugPrintf("Wrote %s\n", argv[1]);
+	else
+		debugPrintf("Cannot write %s\n", argv[1]);
+	return true;
+}
+
 bool Console::Cmd_state(int argc, const char **argv) {
 	Script *script = g_engine->getScript();
 	if (!script) {
@@ -166,7 +189,9 @@ bool Console::Cmd_state(int argc, const char **argv) {
 	const VCData &data = g_engine->getData();
 	if (argc >= 2 && !strcmp(argv[1], "json")) {
 		// For the research repo's tools/save_compare.py
-		Common::String json = dumpState(data, *script);
+		VCSave snapshot;
+		g_engine->fillSnapshot(snapshot);
+		Common::String json = dumpState(data, *script, &snapshot);
 		if (argc == 2) {
 			debugPrintf("%s", json.c_str());
 			return true;

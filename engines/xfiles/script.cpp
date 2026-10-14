@@ -100,8 +100,10 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _inboxTop(0), _pdaFontSize(12), _pdaLayout(false), _scrollItem(0), _addressIndex(0), _noteDay(0), _noteDays(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _inboxTop(0), _pdaFontSize(12), _pdaLayout(false), _scrollItem(0), _addressIndex(0), _noteDay(0), _noteDays(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	_jumpCut.first = _jumpCut.later = false;
+	memset(_flashlight, 0, sizeof(_flashlight));
+	memset(_tintColor, 0, sizeof(_tintColor));
 	_phone.bookSize = _phone.bookIndex = 0;
 	_phone.showsName = false;
 	_phone.tone = 0;
@@ -362,6 +364,20 @@ void Script::execute(const VCAction &a, int event, const EventFields &fields, Lo
 					fire(target, kEventObjectActivation);
 				else if (!a.value && it != _kit.end())
 					_kit.erase(it);
+				// The group 0 object joins the evidence list, or goes
+				if (a.value)
+					addEvidence(target);
+				else
+					removeEvidence(target);
+			}
+			// An inventory icon's object joins the bar at the end, or goes
+			// (0x4201a0); the bar's order is what a save keeps
+			if (_data.getClassOf(target) == kClassInventory) {
+				Common::Array<uint32>::iterator it = Common::find(_inventory.begin(), _inventory.end(), target);
+				if (a.value && it == _inventory.end())
+					_inventory.push_back(target);
+				else if (!a.value && it != _inventory.end())
+					_inventory.erase(it);
 			}
 			// A topic enabled while its box is open joins the box (0x476340)
 			if (a.value && _box && isBoxTopic(_box, target))
@@ -428,6 +444,17 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 		args.push_back(getValue(a.args[i], fields, locals));
 
 	if (a.function == "SetStartView" && args.size() >= 4) {
+		// Game_BuildObjects (0x477940) makes an object for every enabled
+		// VCInventory in class order; a restore uses the save's list
+		if (!_restored) {
+			Common::Array<NeoEntry> icons;
+			_inventory.clear();
+			_data.getHdb().getObjects(kClassInventory, icons);
+			for (uint i = 0; i < icons.size(); i++) {
+				if (isEnabled(icons[i].key))
+					_inventory.push_back(icons[i].key);
+			}
+		}
 		enter(args[0], args[1], args[2], args[3]);
 		// The exe also builds the game objects there (0x486a10 calls
 		// Game_BuildObjects 0x477940)
@@ -505,8 +532,11 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 				a.function == "EnablePDANote" || a.function == "EnableAllNotes" || a.function == "ScrollTextList" ||
 				a.function == "ScrollTextInit")
 			handled = callEmail(a, args, event, fields);
-		else
+		else {
+			// The hooks the save keeps are recorded; none is drawn or logged as handled
+			recordState(a.function, args);
 			handled = false;
+		}
 		if (_hooks && _hooks->callFunction(a, args))
 			handled = true;
 		logHook(a.function, handled);
@@ -1033,6 +1063,12 @@ void Script::restore(const VCSave &save) {
 	_inventory = save.inventory;
 	_evidence = save.evidence;
 	_kit = save.kit;
+	_hintList = save.hintList;
+	_hintTrigger = save.hintTrigger;
+	_hintGlow = save.hintGlow;
+	memcpy(_flashlight, save.flashlight, sizeof(_flashlight));
+	_tint = save.tint;
+	memcpy(_tintColor, save.tintColor, sizeof(_tintColor));
 
 	// 1. The full-screen layout (Layout_SetAsView)
 	if (save.layout)
@@ -1080,6 +1116,97 @@ void Script::restore(const VCSave &save) {
 	if (save.dialogBox)
 		log(Common::String::format("  dialog box of #%u", save.dialogBox));
 	_restoreMode = -1;
+}
+
+void Script::recordState(const Common::String &function, const Common::Array<int32> &args) {
+	// The hooks whose arguments a save keeps (GameState_Save 0x4d9450); the
+	// engine draws none of them yet
+	if (function == "SetAIList" && args.size() >= 2) {
+		// SetAIList(trigger, list)
+		_hintTrigger = args[0];
+		_hintList = args[1];
+	} else if (function == "ClearAIList") {
+		_hintTrigger = _hintList = 0;
+	} else if (function == "SetAIGlow" && !args.empty()) {
+		// A level above 1 is kept
+		_hintGlow = args[0] > 1 ? args[0] : 0;
+	} else if (function == "SetFLightProps" && args.size() >= 3) {
+		// 0x44bda0 turns the arguments into the three values the save keeps:
+		// 2 -> 1 (else 0), 'O' -> 1 (else 0), 'B' -> 0, 'D' -> 2, else 1
+		_flashlight[0] = args[0] == 2;
+		_flashlight[1] = args[1] == 'O';
+		_flashlight[2] = 1;
+		if (args[2] == 'B')
+			_flashlight[2] = 0;
+		else if (args[2] == 'D')
+			_flashlight[2] = 2;
+	} else if (function == "SetLBoxTint" && args.size() >= 3) {
+		_tint = 1;
+		_tintColor[0] = args[2];
+		_tintColor[1] = args[1];
+		_tintColor[2] = args[0];
+	} else if (function == "ClearLBoxTint") {
+		_tint = 0;
+	} else if (function == "DispEvIcons" && !args.empty()) {
+		_evidenceRowShown = args[0] != 0;
+	}
+}
+
+void Script::addEvidence(uint32 id) {
+	for (uint i = 0; i + 2 <= _evidence.size(); i += 2) {
+		if (_evidence[i] == id)
+			return;
+	}
+	_evidence.push_back(id);
+	_evidence.push_back(0);
+}
+
+void Script::removeEvidence(uint32 id) {
+	for (uint i = 0; i + 2 <= _evidence.size(); i += 2) {
+		if (_evidence[i] == id) {
+			_evidence.remove_at(i + 1);
+			_evidence.remove_at(i);
+			return;
+		}
+	}
+}
+
+void Script::snapshot(VCSave &save) const {
+	// GameState_Save (0x4d9450). The position is always the current view
+	// (mode 1); modes 0 and 2 only come from the original's saves.
+	save.position[0] = _node;
+	save.position[1] = _location;
+	save.position[2] = _viewPoint;
+	save.position[3] = _view;
+	save.positionMode = 1;
+	save.history = _history;
+	save.notes = _notes;
+	save.emails = _emails;
+	save.emailsRead = _emailsRead;
+	save.emailsPending = _emailPending;
+	save.disc = _disc;
+	save.hintList = _hintList;
+	save.hintTrigger = _hintTrigger;
+	save.hintGlow = _hintGlow;
+	memcpy(save.flashlight, _flashlight, sizeof(_flashlight));
+	save.tint = _tint;
+	memcpy(save.tintColor, _tintColor, sizeof(_tintColor));
+	save.inventory = _inventory;
+	// The group 0 icons are shown together (DispEvIcons)
+	save.evidence = _evidence;
+	for (uint i = 0; i + 2 <= save.evidence.size(); i += 2)
+		save.evidence[i + 1] = _evidenceRowShown;
+	save.kit = _kit;
+	save.dialogBox = _box;
+	// Only five full-screen layouts are kept, the last one shown
+	static const uint32 kKeptLayouts[] = { 57082, 84328, 84370, 72504, 58553 };
+	save.layout = 0;
+	for (uint i = 0; i < _layouts.size(); i++) {
+		for (uint j = 0; j < ARRAYSIZE(kKeptLayouts); j++) {
+			if (_layouts[i].id == kKeptLayouts[j])
+				save.layout = kKeptLayouts[j];
+		}
+	}
 }
 
 void Script::click(uint32 id) {
@@ -1351,6 +1478,7 @@ void Script::ask(uint32 conversationId) {
 			}
 		}
 	}
+	_history.push_back(conversationId);
 	playTopic(conversationId, true);
 	fire(conversationId, kEventMouseClick);
 }

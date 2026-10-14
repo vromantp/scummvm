@@ -72,6 +72,9 @@ public:
 	/** Pause or resume a playing movie (the game's pause); the time it was paused does not count. */
 	void pause(bool pause);
 	bool hasEnded() const { return _ended; }
+	/** Where the movie is, in ms from the start of its file (not of the asset's range); 0 if it is not open. */
+	uint32 getTime() const;
+	bool isPlaying() const;
 	int getCurFrame() const;
 
 	/** Volume of the soundtrack, 0-255 (Audio::Mixer::kMaxChannelVolume). */

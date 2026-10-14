@@ -58,6 +58,12 @@ public:
 	 * 0x4a80a0), instead of 4 or 1.
 	 */
 	void roll(uint32 now, bool skipIntro, int first = -1);
+	/**
+	 * The string number of the last credit shown, which a save keeps (VCGameState +62): -1 when
+	 * the credits are not rolling or none has come yet. After a restore it is the saved one
+	 * until the next credit.
+	 */
+	int getLastCredit() const { return _rolling ? _lastShown : -1; }
 	/** Take the credit on screen away now; the next one still comes. */
 	void hide();
 	/** Stop rolling and forget what came (a new game). */
@@ -77,6 +83,7 @@ private:
 	bool _rolling;
 	bool _shownAny;            ///< A credit came since the start, shown or not (exe: +0x68)
 	int _index;                ///< String of the last credit shown; -1 before the first
+	int _lastShown;            ///< The last credit shown, or the one a restored roll continues from; -1 if none
 	uint32 _next;              ///< When the next credit comes
 	uint32 _hideAt;            ///< When the credit on screen goes; 0 if none
 	Common::U32String _text;   ///< The credit on screen

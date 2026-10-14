@@ -19,6 +19,7 @@
  *
  */
 
+#include "common/algorithm.h"
 #include "common/config-manager.h"
 #include "common/debug-channels.h"
 #include "common/events.h"
@@ -35,6 +36,7 @@
 #include "xfiles/movie.h"
 #include "xfiles/script.h"
 #include "xfiles/vcdata.h"
+#include "xfiles/vcdump.h"
 
 namespace XFiles {
 
@@ -665,6 +667,16 @@ void XFilesEngine::runSteps() {
 			}
 			return;
 		}
+		if (step.hasPrefix("state:")) {
+			// Engine only: write the state as `state json FILE` does
+			VCSave snapshot;
+			fillSnapshot(snapshot);
+			Common::String json = dumpState(*_data, *_script, &snapshot);
+			Common::DumpFile file;
+			if (!file.open(Common::Path(step.substr(6), '/'), true) || file.write(json.c_str(), json.size()) != json.size())
+				warning("Cannot write the state to %s", step.c_str() + 6);
+			continue;
+		}
 		if (step == "escape") {
 			// Engine only: the Escape key
 			if (!_menuOpen && queue.empty())
@@ -694,6 +706,62 @@ void XFilesEngine::runSteps() {
 		}
 		return;
 	}
+}
+
+// -- Snapshot -----------------------------------------------------------------
+
+void XFilesEngine::fillSnapshot(VCSave &save) {
+	// GameState_Save (0x4d9450); Script knows its part
+	_script->snapshot(save);
+	save.photos = 0;
+	if (_dialogBox.isOpen())
+		save.dialogBox = _dialogBox.getCharView();
+
+	// Timers in the order they were started: a one-shot one keeps its
+	// remaining time, a periodic one its period
+	uint32 now = gameMillis();
+	const Common::HashMap<uint, Script::Timer> &timers = _script->getTimers();
+	Common::Array<uint> numbers;
+	for (Common::HashMap<uint, Script::Timer>::const_iterator it = timers.begin(); it != timers.end(); ++it)
+		numbers.push_back(it->_key);
+	for (uint i = 1; i < numbers.size(); i++) {
+		for (uint j = i; j > 0 && timers.getVal(numbers[j]).serial < timers.getVal(numbers[j - 1]).serial; j--)
+			SWAP(numbers[j], numbers[j - 1]);
+	}
+	save.timers.clear();
+	for (uint i = 0; i < numbers.size(); i++) {
+		const Script::Timer &timer = timers.getVal(numbers[i]);
+		uint32 time = timer.ms;
+		if (!timer.periodic && _timerStates.contains(numbers[i]) && _timerStates[numbers[i]].serial == timer.serial) {
+			uint32 elapsed = now - _timerStates[numbers[i]].started;
+			time = elapsed < timer.ms ? timer.ms - elapsed : 0;
+		}
+		save.timers.push_back(numbers[i]);
+		save.timers.push_back(time);
+		save.timers.push_back(timer.periodic ? 1 : 0);
+	}
+
+	// Sounds, with their position in ms from the start of the file
+	save.sounds.clear();
+	for (uint i = 0; i < _soundOrder.size(); i++) {
+		save.sounds.push_back(_soundOrder[i]);
+		save.sounds.push_back(1);
+		save.sounds.push_back(_sounds.getVal(_soundOrder[i]).movie->getTime());
+	}
+
+	// The asset the view shows, with its time in the file
+	save.clip = 0;
+	save.clipFlag = 0;
+	save.clipTime = 0;
+	if (!_layers.empty() && !_viewAssets.empty()) {
+		VCAsset asset;
+		if (_data->getAsset(_viewAssets[0], asset)) {
+			save.clip = asset.id;
+			save.clipFlag = (asset.flags & kAssetLoop) != 0;
+			save.clipTime = _layers[0]->getTime();
+		}
+	}
+	save.credits = _headCredits.getLastCredit();
 }
 
 // -- C++ functions ------------------------------------------------------------
@@ -830,6 +898,10 @@ void XFilesEngine::startSound(uint32 id, bool loop, bool positional, int16 x, in
 		placeSound(sound);
 	sound.movie->play(loop);
 	_sounds[id] = sound;
+	Common::Array<uint32>::iterator it = Common::find(_soundOrder.begin(), _soundOrder.end(), id);
+	if (it != _soundOrder.end())
+		_soundOrder.erase(it);
+	_soundOrder.push_back(id);
 }
 
 bool XFilesEngine::readAssetFile(uint32 id, Common::Array<byte> &data) {
@@ -855,6 +927,9 @@ void XFilesEngine::stopSound(uint32 id) {
 		return;
 	delete _sounds[id].movie;
 	_sounds.erase(id);
+	Common::Array<uint32>::iterator it = Common::find(_soundOrder.begin(), _soundOrder.end(), id);
+	if (it != _soundOrder.end())
+		_soundOrder.erase(it);
 }
 
 void XFilesEngine::stopAllSounds() {
@@ -862,6 +937,7 @@ void XFilesEngine::stopAllSounds() {
 	for (Common::HashMap<uint32, Sound>::iterator it = _sounds.begin(); it != _sounds.end(); ++it)
 		delete it->_value.movie;
 	_sounds.clear();
+	_soundOrder.clear();
 }
 
 void XFilesEngine::updateSounds() {

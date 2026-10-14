@@ -591,6 +591,13 @@ static void readBlobList(const NeoFile &db, uint32 mark, Common::Array<uint32> &
 	}
 }
 
+VCSave::VCSave() : positionMode(1), disc(1), photos(0), hintList(0), hintTrigger(0), hintGlow(0), credits(-1), tint(0), clip(0),
+	clipFlag(0), clipTime(0), dialogBox(0), layout(0) {
+	memset(position, 0, sizeof(position));
+	memset(flashlight, 0, sizeof(flashlight));
+	memset(tintColor, 0, sizeof(tintColor));
+}
+
 bool VCData::getSave(VCSave &save) const {
 	Common::Array<NeoEntry> states;
 	if (!_gam.getObjects(kClassGameState, states) || states.empty())
@@ -609,6 +616,7 @@ bool VCData::getSave(VCSave &save) const {
 			readBlobList(_gam, mark + 6, *lists[i]);
 	}
 	save.disc = (int32)_gam.readUint32(m + 42);
+	save.photos = (int32)_gam.readUint32(m + 46);
 	save.hintList = _gam.readUint32(m + 50);
 	save.hintTrigger = _gam.readUint32(m + 54);
 	save.hintGlow = (int32)_gam.readUint32(m + 58);
@@ -624,6 +632,7 @@ bool VCData::getSave(VCSave &save) const {
 	readBlobList(_gam, m + 90, save.kit);
 	readBlobList(_gam, m + 98, save.timers);
 	save.clip = _gam.readUint32(m + 113);
+	save.clipFlag = _gam.readByte(m + 117);
 	save.clipTime = (int32)_gam.readUint32(m + 118);
 	save.dialogBox = _gam.readUint32(m + 122);
 	save.layout = _gam.readUint32(m + 126);

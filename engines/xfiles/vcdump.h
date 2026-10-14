@@ -30,6 +30,8 @@ namespace XFiles {
 class NeoFile;
 class Script;
 class VCData;
+struct VCSave;
+struct VCSave;
 
 /*
  * Readable dumps of the databases for the debugger. The text is UTF-8 and
@@ -69,10 +71,13 @@ Common::String dumpSceneTree(const VCData &data, const Common::String &nodeFilte
 /**
  * The script's state as JSON with the keys of a save's delta (the research
  * repo's tools/save_delta.py): every variable's value, every VCEnabled's
- * flag (by VCEnabled ID) and game_state.position [node, location,
- * viewpoint, view]. tools/save_compare.py compares it with a save.
+ * flag (by VCEnabled ID), the lists (conversation_history, emails...) and
+ * game_state with all its fields. tools/save_compare.py compares it with a
+ * save. snapshot: the engine's full snapshot (XFilesEngine::fillSnapshot);
+ * without it the game state is Script::snapshot's, with the fields only
+ * the engine knows (sounds, timers, the view's clip, credits) empty.
  */
-Common::String dumpState(const VCData &data, const Script &script);
+Common::String dumpState(const VCData &data, const Script &script, const VCSave *snapshot = nullptr);
 
 } // End of namespace XFiles
 

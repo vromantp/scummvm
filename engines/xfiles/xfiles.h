@@ -68,6 +68,13 @@ public:
 	const DiscFiles &getDiscFiles() const { return _discFiles; }
 	/** The running game's interpreter, or nullptr before New Game. */
 	Script *getScript() { return _script; }
+	/**
+	 * The engine's GameState_Save (XFiles.exe 0x4d9450): the Script's snapshot and what only
+	 * the engine knows: the timers' times, the sounds' positions, the view's clip and its
+	 * time, the head credits, the open dialog box. Photos on the camera are 0 until the
+	 * camera is ported.
+	 */
+	void fillSnapshot(VCSave &save);
 
 	// ScriptHooks
 	bool callFunction(const VCAction &action, const Common::Array<int32> &args) override;
@@ -256,6 +263,7 @@ private:
 	static const uint32 kButtonUpDelay = 100;
 	Common::Array<PressedItem> _pressedItems;     ///< Phone buttons shown pressed (Script::takePressedItems)
 	Common::HashMap<uint32, Sound> _sounds;
+	Common::Array<uint32> _soundOrder;    ///< The playing sounds in the order they started (a save lists them so)
 	uint32 _soundView;                    ///< The view the 3D sounds were placed for
 	Common::Point _soundFacing;           ///< The last facing found, kept for views without one
 

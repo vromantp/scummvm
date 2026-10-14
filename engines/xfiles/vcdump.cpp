@@ -350,7 +350,15 @@ static Common::String jsonList(const char *name, const Common::Array<uint32> &id
 	return out + "]";
 }
 
-Common::String dumpState(const VCData &data, const Script &script) {
+/** JSON `  "name": [v, v, ...]` of a game_state list. */
+static Common::String jsonStateList(const char *name, const Common::Array<uint32> &list) {
+	Common::String out = Common::String::format("  \"%s\": [", name);
+	for (uint i = 0; i < list.size(); i++)
+		out += Common::String::format("%s%u", i ? ", " : "", list[i]);
+	return out + "]";
+}
+
+Common::String dumpState(const VCData &data, const Script &script, const VCSave *snapshot) {
 	Common::Array<NeoEntry> entries;
 	Common::Array<uint32> ids;
 	Common::Array<int32> values;
@@ -380,6 +388,12 @@ Common::String dumpState(const VCData &data, const Script &script) {
 	out += jsonList("emails_pending", script.getEmailsPending());
 	out += jsonList("pda_notes", script.getPDANotes());
 	out += jsonList("inventory", script.getInventory());
+	VCSave own;
+	if (!snapshot) {
+		script.snapshot(own);
+		snapshot = &own;
+	}
+	out += jsonList("conversation_history", snapshot->history);
 	// Running timers: number -> [ms, periodic]
 	out += ",\n \"timers\": {";
 	const Common::HashMap<uint, Script::Timer> &timers = script.getTimers();
@@ -390,8 +404,22 @@ Common::String dumpState(const VCData &data, const Script &script) {
 	for (uint i = 0; i < numbers.size(); i++)
 		out += Common::String::format("%s\"%u\": [%u, %d]", i ? ", " : "", numbers[i], timers.getVal(numbers[i]).ms, timers.getVal(numbers[i]).periodic ? 1 : 0);
 	out += "}";
-	out += Common::String::format(",\n \"game_state\": {\"position\": [%u, %u, %u, %u]}\n}\n", script.getNode(),
-		script.getLocation(), script.getViewPoint(), script.getView());
+	// The save's game state with the keys of save_delta.py (docs/formats/saves.md)
+	const VCSave &s = *snapshot;
+	out += ",\n \"game_state\": {\n";
+	out += Common::String::format("  \"position\": [%u, %u, %u, %u],\n", script.getNode(), script.getLocation(), script.getViewPoint(),
+		script.getView());
+	out += Common::String::format("  \"disc\": %d, \"photos_on_camera\": %d, \"ai_actions\": %u, \"ai_trigger\": %u, \"ai_glow\": %d,\n",
+		s.disc, s.photos, s.hintList, s.hintTrigger, s.hintGlow);
+	out += Common::String::format("  \"credits\": %d, \"flashlight\": [%u, %u, %u], \"lbox_tint\": %u, \"lbox_color\": [%u, %u, %u],\n", s.credits,
+		s.flashlight[0], s.flashlight[1], s.flashlight[2], s.tint, s.tintColor[0], s.tintColor[1], s.tintColor[2]);
+	out += Common::String::format("  \"view_clip\": %u, \"view_clip_flag\": %u, \"view_clip_time\": %d, \"dbox_charview\": %u, \"layout\": %u, \"position_mode\": %d,\n",
+		s.clip, s.clipFlag, s.clipTime, s.dialogBox, s.layout, s.positionMode);
+	out += jsonStateList("sounds", s.sounds) + ",\n";
+	out += jsonStateList("inventory", s.inventory) + ",\n";
+	out += jsonStateList("evidence", s.evidence) + ",\n";
+	out += jsonStateList("evidence_kit", s.kit) + ",\n";
+	out += jsonStateList("timers", s.timers) + "\n }\n}\n";
 	return out;
 }
 

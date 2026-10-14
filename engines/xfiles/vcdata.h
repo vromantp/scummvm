@@ -343,12 +343,15 @@ struct VCAsset {
 
 /** What a .X save holds besides the variables and enable flags (VCGameState and the lists it names). */
 struct VCSave {
+	VCSave();
+
 	uint32 position[4];              ///< VCNode, VCLocaton, VCViewPoint, VCView
 	int16 positionMode;              ///< 0 the start view, 1 the current view, 2 from the pending Set View
 	Common::Array<uint32> history;   ///< VCConversation IDs asked
 	Common::Array<uint32> notes;     ///< VCPDANotes
 	Common::Array<uint32> emails, emailsRead, emailsPending;
 	int32 disc;
+	int32 photos;                    ///< Photos on the camera, not yet downloaded
 	uint32 hintList, hintTrigger;
 	int32 hintGlow;
 	int32 credits;                   ///< Head credits scroll position, -1 when not rolling
@@ -361,6 +364,7 @@ struct VCSave {
 	Common::Array<uint32> kit;       ///< VCEvidenceIcon IDs in the kit
 	Common::Array<uint32> timers;    ///< Triples (timer, time, periodic)
 	uint32 clip;                     ///< VCAssetRef playing in the current view, or 0
+	byte clipFlag;                   ///< That clip's flag bit 8 (the asset's flags & 8)
 	int32 clipTime;
 	uint32 dialogBox;                ///< VCCharView whose box was open, or 0
 	uint32 layout;                   ///< Full-screen interface layout shown, or 0
