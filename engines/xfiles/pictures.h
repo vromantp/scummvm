@@ -36,11 +36,35 @@ class DiscFiles;
 class VCData;
 
 /**
+ * A picture asset in the screen format, with the exe's transparency rule
+ * (XFiles.exe 0x429c70 with Pref_bTranslucency on) decided at load: a
+ * picture with an alpha plane is drawn through it; one without is keyed on
+ * pure blue if one of its four corner pixels is pure blue; otherwise it is
+ * drawn opaque.
+ */
+class PictureAsset {
+public:
+	/** Takes the surface (screen format) and the alpha per pixel (w * h bytes, or nullptr for opaque). */
+	PictureAsset(Graphics::Surface *surface, byte *alpha);
+	~PictureAsset();
+
+	const Graphics::Surface &getSurface() const { return *_surface; }
+	int getWidth() const;
+	int getHeight() const;
+	/** Draw at (x, y), clipped to dst: alpha 0 is skipped, 255 copied, between blended. */
+	void draw(Graphics::Surface &dst, int x, int y) const;
+
+private:
+	Graphics::Surface *_surface;
+	byte *_alpha;
+};
+
+/**
  * Load a picture asset: an entry of a .pff archive (QuickDraw PICTs
  * without the 512-byte file header), converted to the given format.
- * Returns nullptr if it cannot be read; the caller frees the surface.
+ * Returns nullptr if it cannot be read; the caller deletes the picture.
  */
-Graphics::Surface *loadPicture(const VCData &data, const DiscFiles &files, uint32 assetId, const Graphics::PixelFormat &format);
+PictureAsset *loadPicture(const VCData &data, const DiscFiles &files, uint32 assetId, const Graphics::PixelFormat &format);
 
 /**
  * Load the frames of a picture asset that spans several entries of its
@@ -50,12 +74,6 @@ Graphics::Surface *loadPicture(const VCData &data, const DiscFiles &files, uint3
  */
 bool loadFrames(const VCData &data, const DiscFiles &files, uint32 assetId, const Graphics::PixelFormat &format,
 	Common::Array<Graphics::Surface *> &frames, Common::Array<uint32> &durations);
-
-/**
- * Draw a picture with pure blue as the transparent colour (as the dialog
- * box pictures use it). Both surfaces have the same format.
- */
-void drawKeyed(Graphics::Surface &dst, const Graphics::Surface &src, int x, int y);
 
 } // End of namespace XFiles
 

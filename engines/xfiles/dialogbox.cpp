@@ -84,8 +84,6 @@ DialogBox::DialogBox() : _font(nullptr), _charView(0), _historyTab(false), _scro
 
 DialogBox::~DialogBox() {
 	for (uint i = 0; i < kPicCount; i++) {
-		if (_pictures[i])
-			_pictures[i]->free();
 		delete _pictures[i];
 	}
 	delete _font;
@@ -107,7 +105,7 @@ bool DialogBox::load(const VCData &data, const DiscFiles &files, const Graphics:
 }
 
 void DialogBox::open(uint32 charView, const Common::Rect &charRect) {
-	int width = _pictures[kPicTalk] ? _pictures[kPicTalk]->w : 0;
+	int width = _pictures[kPicTalk] ? _pictures[kPicTalk]->getWidth() : 0;
 	int x = charRect.left + (charRect.width() - width) / 2;
 	if (x + width > kBandRight)
 		x = kBandRight - width;
@@ -185,16 +183,16 @@ Common::Rect DialogBox::getRect(int x, int y, int w, int h) const {
 }
 
 Common::Rect DialogBox::getThumbRect() const {
-	const Graphics::Surface *bar = _pictures[kPicScrollBar], *thumb = _pictures[kPicThumb];
-	int range = bar->h - thumb->h;
+	const PictureAsset *bar = _pictures[kPicScrollBar], *thumb = _pictures[kPicThumb];
+	int range = bar->getHeight() - thumb->getHeight();
 	uint max = getMaxScroll();
 	int y = max ? range * (int)_scroll / (int)max : 0;
-	return getRect(kScrollX, kScrollY + y, thumb->w, thumb->h);
+	return getRect(kScrollX, kScrollY + y, thumb->getWidth(), thumb->getHeight());
 }
 
 bool DialogBox::contains(const Common::Point &pos) const {
-	const Graphics::Surface *folder = _pictures[kPicTalk];
-	return isOpen() && getRect(0, 0, folder->w, folder->h).contains(pos);
+	const PictureAsset *folder = _pictures[kPicTalk];
+	return isOpen() && getRect(0, 0, folder->getWidth(), folder->getHeight()).contains(pos);
 }
 
 DialogBox::Hit DialogBox::click(const Common::Point &pos, uint32 &topic) {
@@ -212,18 +210,18 @@ DialogBox::Hit DialogBox::click(const Common::Point &pos, uint32 &topic) {
 		_scroll = 0;
 		return kHitInside;
 	}
-	const Graphics::Surface *bar = _pictures[kPicScrollBar];
-	if (getRect(kScrollX, kScrollY - kArrowH, bar->w, kArrowH).contains(pos)) {
+	const PictureAsset *bar = _pictures[kPicScrollBar];
+	if (getRect(kScrollX, kScrollY - kArrowH, bar->getWidth(), kArrowH).contains(pos)) {
 		if (_scroll > 0)
 			_scroll--;
 		return kHitInside;
 	}
-	if (getRect(kScrollX, kScrollY + bar->h, bar->w, kArrowH).contains(pos)) {
+	if (getRect(kScrollX, kScrollY + bar->getHeight(), bar->getWidth(), kArrowH).contains(pos)) {
 		if (_scroll < getMaxScroll())
 			_scroll++;
 		return kHitInside;
 	}
-	if (getRect(kScrollX, kScrollY, bar->w, bar->h).contains(pos)) {
+	if (getRect(kScrollX, kScrollY, bar->getWidth(), bar->getHeight()).contains(pos)) {
 		// Page up or down from the thumb
 		uint page = getVisibleRows();
 		if (pos.y < getThumbRect().top)
@@ -248,17 +246,17 @@ DialogBox::Hit DialogBox::click(const Common::Point &pos, uint32 &topic) {
 void DialogBox::draw(Graphics::Surface &dst, const Common::Point &mouse) const {
 	if (!isOpen())
 		return;
-	drawKeyed(dst, *_pictures[_historyTab ? kPicHistory : kPicTalk], _pos.x, _pos.y);
+	_pictures[_historyTab ? kPicHistory : kPicTalk]->draw(dst, _pos.x, _pos.y);
 	if (_history.empty())
-		drawBlended(dst, *_pictures[kPicNoHistory], _pos.x + kHistoryTabX, _pos.y + kTabY);
+		drawBlended(dst, _pictures[kPicNoHistory]->getSurface(), _pos.x + kHistoryTabX, _pos.y + kTabY);
 
 	if (getMaxScroll()) {
-		const Graphics::Surface *bar = _pictures[kPicScrollBar];
-		drawKeyed(dst, *_pictures[kPicUp], _pos.x + kScrollX, _pos.y + kScrollY - kArrowH);
-		drawKeyed(dst, *bar, _pos.x + kScrollX, _pos.y + kScrollY);
-		drawKeyed(dst, *_pictures[kPicDown], _pos.x + kScrollX, _pos.y + kScrollY + bar->h);
+		const PictureAsset *bar = _pictures[kPicScrollBar];
+		_pictures[kPicUp]->draw(dst, _pos.x + kScrollX, _pos.y + kScrollY - kArrowH);
+		bar->draw(dst, _pos.x + kScrollX, _pos.y + kScrollY);
+		_pictures[kPicDown]->draw(dst, _pos.x + kScrollX, _pos.y + kScrollY + bar->getHeight());
 		Common::Rect thumb = getThumbRect();
-		drawKeyed(dst, *_pictures[kPicThumb], thumb.left, thumb.top);
+		_pictures[kPicThumb]->draw(dst, thumb.left, thumb.top);
 	}
 
 	if (!_font)

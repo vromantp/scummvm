@@ -88,10 +88,7 @@ Interface::Graphic::Graphic() : _picture(nullptr), _movie(nullptr) {
 }
 
 Interface::Graphic::~Graphic() {
-	if (_picture) {
-		_picture->free();
-		delete _picture;
-	}
+	delete _picture;
 	delete _movie;
 }
 
@@ -120,7 +117,7 @@ void Interface::Graphic::update() {
 
 const Graphics::Surface *Interface::Graphic::getSurface() const {
 	if (_picture)
-		return _picture;
+		return &_picture->getSurface();
 	if (_movie && _movie->getFrame().getPixels())
 		return &_movie->getFrame();
 	return nullptr;
@@ -128,7 +125,7 @@ const Graphics::Surface *Interface::Graphic::getSurface() const {
 
 void Interface::Graphic::draw(Graphics::Surface &dst, int x, int y) const {
 	if (_picture)
-		drawKeyed(dst, *_picture, x, y);
+		_picture->draw(dst, x, y);
 	else if (_movie && _movie->getFrame().getPixels())
 		blit(dst, _movie->getFrame(), x, y);
 }
@@ -175,8 +172,14 @@ Interface::Graphic *Interface::loadGraphic(uint32 assetList) const {
 	Common::Array<uint32> assets;
 	if (!assetList || !_data.getMembers(assetList, assets) || assets.empty())
 		return nullptr;
+	return loadAsset(assets[0]);
+}
+
+Interface::Graphic *Interface::loadAsset(uint32 assetId) const {
+	if (!assetId)
+		return nullptr;
 	Graphic *graphic = new Graphic();
-	if (!graphic->open(_data, _files, assets[0], _format)) {
+	if (!graphic->open(_data, _files, assetId, _format)) {
 		delete graphic;
 		return nullptr;
 	}
@@ -404,7 +407,8 @@ void Interface::syncItems(const Script &script) {
 			item.id = data.id;
 			item.layer = data.layer & 0xff; // only the low byte is the drawing layer
 			item.rect = Common::Rect(data.rect.left, data.rect.top, data.rect.right, data.rect.bottom);
-			item.graphic = loadGraphic(data.assets);
+			// The picture is the first enabled asset of the list (0x41fe60)
+			item.graphic = loadAsset(script.firstEnabled(data.assets));
 			item.hasText = false;
 			// Lower layers are on top: higher ones are drawn first. The phone
 			// shows it: its body is layer 200, the pressed buttons 198-199,

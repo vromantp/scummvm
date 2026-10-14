@@ -35,6 +35,7 @@ struct Surface;
 namespace XFiles {
 
 class DiscFiles;
+class PictureAsset;
 class VCData;
 
 /**
@@ -99,7 +100,7 @@ private:
 	Common::Rect getRect(int x, int y, int w, int h) const;
 	Common::Rect getThumbRect() const;
 
-	Graphics::Surface *_pictures[kPicCount];
+	PictureAsset *_pictures[kPicCount];
 	Graphics::Font *_font;
 	Common::Point _pos;
 	uint32 _charView;

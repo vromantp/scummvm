@@ -43,6 +43,7 @@ namespace XFiles {
 
 class DiscFiles;
 class Movie;
+class PictureAsset;
 class Script;
 class VCData;
 
@@ -136,11 +137,11 @@ private:
 		void update();
 		/** Empty if nothing could be opened. */
 		const Graphics::Surface *getSurface() const;
-		/** Draw at (x, y); pictures have pure blue as the transparent colour. */
+		/** Draw at (x, y); pictures follow the exe's transparency rule (PictureAsset). */
 		void draw(Graphics::Surface &dst, int x, int y) const;
 
 	private:
-		Graphics::Surface *_picture;
+		PictureAsset *_picture;
 		Movie *_movie;
 	};
 
@@ -169,7 +170,10 @@ private:
 	};
 
 	/** Load the graphic of the first asset of a VCAssetRefList, nullptr if none opens. */
+	/** The graphic of the first asset of a list, or nullptr. */
 	Graphic *loadGraphic(uint32 assetList) const;
+	/** The graphic of an asset, or nullptr (also for asset 0). */
+	Graphic *loadAsset(uint32 assetId) const;
 	void syncIcons(const Script &script, uint32 classId, Common::Array<Icon> &icons);
 	void syncKit(const Script &script);
 	Icon makeIcon(uint32 id) const;

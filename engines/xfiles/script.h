@@ -253,6 +253,8 @@ public:
 	/** Whether the first video loops: it ends only when a Stop action stops it. */
 	bool isVideoLooped() const { return !_videoPlays.empty() && _videoPlays[0].loop; }
 	bool isEnabled(uint32 id) const;
+	/** The first member of an asset list that is enabled (XFiles.exe 0x41fe60), 0 if none. */
+	uint32 firstEnabled(uint32 listId) const;
 	/**
 	 * Whether a Mouse Click trigger of an object runs an action whose
 	 * condition tests a variable and holds now (XFiles.exe 0x4d23c0 asks
@@ -380,7 +382,6 @@ private:
 	void callFunction(const VCAction &action, int event, const EventFields &fields, const LocalVariables &locals);
 
 	void playAsset(uint32 id, byte mode, const VCAction *sound3D);
-	uint32 firstEnabled(uint32 listId) const;
 	void playList(uint32 listId);
 	void playStock(uint32 assetId);
 	void playTopic(uint32 conversationId, bool inBox);
