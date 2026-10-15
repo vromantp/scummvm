@@ -446,6 +446,15 @@ private:
 	void pswdConnect(uint32 variableId);
 	void ingInit();
 	void ingKeyPress(uint key, int event, const EventFields &fields);
+	void loginClick(int field);
+	void mediaInit();
+	void playAssetAt(uint32 asset, int x, int y);
+	/** Focus a log-in field (state 0 to 3) and put the caret behind its text (0x4867e0). */
+	void loginFocus(int field);
+	void moveLoginCaret(int field);
+	const Common::String &loginBuffer(int field) const;
+	/** The text asset equals the buffer (0x459e00): case ignored, two empty strings are equal. */
+	bool sameLoginText(const Common::String &buffer, uint32 textAsset);
 	/** The editor of 0x486e60: a key edits the buffer (at most max characters); true if it changed. */
 	static bool editText(uint key, Common::String &buffer, uint max);
 	/** Draw a computer field (Courier New 14, 0x4be2c0) into an item; an empty text clears it. */
@@ -588,6 +597,12 @@ private:
 		Common::String password;  ///< LoginKeyPress 2, max 23
 		Common::String field3;    ///< LoginKeyPress 3, max 21
 		Common::String query;     ///< INGKeyPressed, max 30
+		Common::String field4;    ///< The second pair's 4th field (LoginKeyPress 4 is not ported: stays empty)
+		int loginState;           ///< 0x6b9120: the focused log-in field, 0 to 3
+		bool connectedBefore;     ///< 0x6b16bc: copy of variable 4946, set by the first connection
+		int wrongTries;           ///< 0x6b16c4: failed connections with the right user name; not in a save
+		int mediaCounter;         ///< 0x6b9b94 (MediaInit)
+		Computer() : loginState(0), connectedBefore(false), wrongTries(0), mediaCounter(0) {}
 	} _computer;
 	Common::HashMap<uint32, Common::Point> _itemOrigins; ///< See getItemOrigin()
 	Common::Array<uint32> _videoQueue;
@@ -607,6 +622,7 @@ private:
 	int _pdaFontSize;                          ///< EmailInit(c): 12 for 'P', else 14
 	bool _pdaLayout;                           ///< EmailInit('P'): the PDA's item tables
 	Common::HashMap<uint32, Common::U32StringArray> _emailLines;  ///< Lines of the e-mail files read
+	uint32 _prefArtificialIntuition;           ///< The variable RegPreferences gives Pref_bArtificialIntuition, or 0
 	uint32 _scrollItem;                        ///< The item of the scroll text (0x42ca30), or 0
 	Common::Array<uint32> _addressList;        ///< Enabled assets of item 45307 (0x6b8390)
 	uint _addressIndex;                        ///< 0x6b16b0

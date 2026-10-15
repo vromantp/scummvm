@@ -100,7 +100,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _inboxTop(0), _pdaFontSize(12), _pdaLayout(false), _scrollItem(0), _addressIndex(0), _noteDay(0), _noteDays(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _inboxTop(0), _pdaFontSize(12), _pdaLayout(false), _prefArtificialIntuition(0), _scrollItem(0), _addressIndex(0), _noteDay(0), _noteDays(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	_jumpCut.first = _jumpCut.later = false;
 	memset(_flashlight, 0, sizeof(_flashlight));
 	memset(_tintColor, 0, sizeof(_tintColor));
@@ -535,7 +535,9 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 		else if (a.function.hasPrefix("Phone"))
 			handled = callPhone(a, args, event, fields);
 		else if (a.function == "LoginInit" || a.function == "LoginKeyPress" || a.function == "PswdConnect" ||
-				a.function == "INGInit" || a.function == "INGKeyPressed")
+				a.function == "INGInit" || a.function == "INGKeyPressed" || a.function == "LoginClick" ||
+				a.function == "PlayAssetAt" || a.function == "MediaInit" || a.function == "INGDestroy" ||
+				a.function == "MediaDestroy" || a.function == "PswdInit" || a.function == "PwbkInit")
 			handled = callComputer(a, args, event, fields);
 		else if (a.function.contains("Email") || a.function == "DisplayInBox" || a.function == "InitEmailRead" ||
 				a.function == "MainScroll" || a.function == "ScrollTextKill" || a.function.hasPrefix("PDAInitAddr") ||
@@ -714,6 +716,8 @@ void Script::regPreferences(const VCAction &a) {
 	// variables. The registry is the player's settings or setPreference();
 	// a preference neither knows keeps its .gam value, which is what the exe
 	// stores on its first start (no registry key: 0x4ccda0 mode 0)
+	if (a.args.size() > kPrefArtificialIntuition && a.args[kPrefArtificialIntuition].kind == kOperandVariable)
+		_prefArtificialIntuition = a.args[kPrefArtificialIntuition].value;
 	for (uint index = 0; index < a.args.size() && index < kPrefCount; index++) {
 		if (a.args[index].kind != kOperandVariable)
 			continue;
