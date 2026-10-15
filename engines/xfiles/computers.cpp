@@ -263,13 +263,9 @@ void Script::pswdConnect(uint32 variableId) {
 		else if (sameLoginText(_computer.user, 92085))
 			message = 92113;
 	}
-	// 0x4be800: the popup layout is shown (a type 5 action appended to the hook's list), then the item
-	VCAction show;
-	show.type = kActionInterface;
-	show.mode = 0;
-	show.layout = kPopupLayout;
-	LocalVariables locals;
-	execute(show, 0, EventFields(), locals);
+	// 0x4be800: the popup layout is shown (a type 5 action appended to the hook's list, which the
+	// exe runs without an action.run line), then the item
+	showLayout(kPopupLayout);
 	setItemEnabled(message, true);
 	log(Common::String::format("      login: refused (message #%u)", message));
 	// Then the fields are reset as LoginInit('C') does

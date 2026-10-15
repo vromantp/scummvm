@@ -1515,7 +1515,8 @@ void Script::updateLayoutItem(uint32 itemId, bool enabled) {
 		Common::Array<uint32> &items = _layouts[i].items;
 		Common::Array<uint32>::iterator it = Common::find(items.begin(), items.end(), itemId);
 		if (enabled && it == items.end()) {
-			items.push_back(itemId);
+			// Into the layer-sorted list, as at the show (fbi-login-wrong: 67487 before 67511)
+			insertLayoutItem(items, itemId);
 			fire(itemId, kEventObjectActivation);
 		} else if (!enabled && it != items.end()) {
 			items.erase(it);
