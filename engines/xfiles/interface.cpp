@@ -433,6 +433,9 @@ void Interface::syncItemTexts(const Script &script) {
 		_items[i].hasText = text != nullptr;
 		if (text)
 			_items[i].text = *text;
+		Common::Point origin;
+		if (script.getItemOrigin(_items[i].id, origin))
+			_items[i].rect.moveTo(origin);
 	}
 }
 

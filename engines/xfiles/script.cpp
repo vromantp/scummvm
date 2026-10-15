@@ -164,6 +164,14 @@ void Script::keyPress(uint vk) {
 	fire(_focus, kEventKeyPress, fields);
 }
 
+bool Script::getItemOrigin(uint32 itemId, Common::Point &origin) const {
+	Common::HashMap<uint32, Common::Point>::const_iterator it = _itemOrigins.find(itemId);
+	if (it == _itemOrigins.end())
+		return false;
+	origin = it->_value;
+	return true;
+}
+
 void Script::takePressedItems(Common::Array<uint32> &items) {
 	items.push_back(_pressed);
 	_pressed.clear();
@@ -526,6 +534,9 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 			runActionList(args[0] == 1 ? kPDAEscapeOnActions : kPDAEscapeOffActions, event, fields);
 		else if (a.function.hasPrefix("Phone"))
 			handled = callPhone(a, args, event, fields);
+		else if (a.function == "LoginInit" || a.function == "LoginKeyPress" || a.function == "PswdConnect" ||
+				a.function == "INGInit" || a.function == "INGKeyPressed")
+			handled = callComputer(a, args, event, fields);
 		else if (a.function.contains("Email") || a.function == "DisplayInBox" || a.function == "InitEmailRead" ||
 				a.function == "MainScroll" || a.function == "ScrollTextKill" || a.function.hasPrefix("PDAInitAddr") ||
 				a.function == "PDAFlipAddr" || a.function == "NotePadInit" || a.function == "NoteFlipDay" ||
@@ -1478,6 +1489,7 @@ void Script::hideLayout(uint32 layoutId) {
 		for (uint j = 0; j < items.size(); j++) {
 			fire(items[j], kEventObjectDeactivation);
 			_itemTexts.erase(items[j]);
+			_itemOrigins.erase(items[j]);
 			if (items[j] == _focus)
 				_focus = 0;
 		}

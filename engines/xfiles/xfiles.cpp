@@ -240,6 +240,14 @@ uint XFilesEngine::getVirtualKey(const Common::KeyState &kbd) {
 		return 0x60 + (kbd.keycode - Common::KEYCODE_KP0); // VK_NUMPAD0
 	if (kbd.keycode >= Common::KEYCODE_a && kbd.keycode <= Common::KEYCODE_z)
 		return 'A' + (kbd.keycode - Common::KEYCODE_a);
+	if (kbd.keycode == Common::KEYCODE_BACKSPACE)
+		return 0x08;
+	if (kbd.keycode == Common::KEYCODE_TAB)
+		return 0x09;
+	if (kbd.keycode == Common::KEYCODE_SPACE)
+		return 0x20;
+	if (kbd.keycode == Common::KEYCODE_DELETE)
+		return 0x2e;
 	if (kbd.keycode == Common::KEYCODE_RETURN || kbd.keycode == Common::KEYCODE_KP_ENTER)
 		return 0x0d;
 	return 0;

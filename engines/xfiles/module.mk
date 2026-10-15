@@ -2,6 +2,7 @@ MODULE := engines/xfiles
 
 MODULE_OBJS = \
 	captions.o \
+	computers.o \
 	console.o \
 	cursors.o \
 	dialogbox.o \

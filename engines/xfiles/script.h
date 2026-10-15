@@ -24,6 +24,7 @@
 
 #include "common/array.h"
 #include "common/hashmap.h"
+#include "common/rect.h"
 #include "common/str.h"
 #include "common/str-array.h"
 #include "common/ustr.h"
@@ -369,6 +370,8 @@ public:
 	};
 	/** The text of an interface item, or nullptr; drawn from the item's top left and clipped to it. */
 	const ItemText *getItemText(uint32 itemId) const;
+	/** Where a script moved an interface item to (its top left), false if it did not. */
+	bool getItemOrigin(uint32 itemId, Common::Point &origin) const;
 	/** The interface item with the keyboard focus (SetIItemFocus), or 0. */
 	uint32 getFocus() const { return _focus; }
 	/**
@@ -434,6 +437,19 @@ private:
 	/** RandGen(var, n): a number from 0 to n (0x49f6d0). */
 	void randGen(uint32 variableId, int32 n);
 	void isIItemHeld(uint32 variableId, int32 item);
+
+	// Computer text entry (computers.cpp)
+	/** Run one of the log-in and ING hooks; false for those not ported. */
+	bool callComputer(const VCAction &action, const Common::Array<int32> &args, int event, const EventFields &fields);
+	void loginInit(char mode);
+	void loginKeyPress(int field, uint key, int event, const EventFields &fields);
+	void pswdConnect(uint32 variableId);
+	void ingInit();
+	void ingKeyPress(uint key, int event, const EventFields &fields);
+	/** The editor of 0x486e60: a key edits the buffer (at most max characters); true if it changed. */
+	static bool editText(uint key, Common::String &buffer, uint max);
+	/** Draw a computer field (Courier New 14, 0x4be2c0) into an item; an empty text clears it. */
+	void setFieldText(uint32 item, const Common::String &text);
 
 	// PDA e-mail (pda.cpp)
 	/** Run one of the e-mail hooks (SendEmail, DisplayInBox...). */
@@ -566,6 +582,14 @@ private:
 		bool showsName;               ///< The display shows an entry, not a dialled number
 		uint32 tone;                  ///< The key tone playing, or 0
 	} _phone;
+	/** The computer text entry buffers (XFiles.exe 0x6be918 and others). */
+	struct Computer {
+		Common::String user;      ///< LoginKeyPress 1, max 23
+		Common::String password;  ///< LoginKeyPress 2, max 23
+		Common::String field3;    ///< LoginKeyPress 3, max 21
+		Common::String query;     ///< INGKeyPressed, max 30
+	} _computer;
+	Common::HashMap<uint32, Common::Point> _itemOrigins; ///< See getItemOrigin()
 	Common::Array<uint32> _videoQueue;
 	struct VideoPlay {
 		uint32 limit;   ///< ms to play, 0 for all
