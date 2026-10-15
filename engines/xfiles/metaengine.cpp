@@ -20,6 +20,8 @@
  */
 
 #include "common/translation.h"
+#include "graphics/managed_surface.h"
+#include "graphics/scaler.h"
 
 #include "xfiles/metaengine.h"
 #include "xfiles/detection.h"
@@ -54,7 +56,14 @@ const ADExtraGuiOptionsMap *XFilesMetaEngine::getAdvancedExtraGuiOptions() const
 }
 
 bool XFilesMetaEngine::hasFeature(MetaEngineFeature f) const {
-	return false;
+	return checkExtendedSaves(f) || f == kSupportsLoadingDuringStartup;
+}
+
+void XFilesMetaEngine::getSavegameThumbnail(Graphics::Surface &thumb) {
+	// The menu covers the game: its picture is the copy made when it opened
+	Graphics::ManagedSurface *shot = XFiles::g_engine ? XFiles::g_engine->getMenuShot() : nullptr;
+	if (!shot || !createThumbnail(&thumb, shot))
+		MetaEngine::getSavegameThumbnail(thumb);
 }
 
 #if PLUGIN_ENABLED_DYNAMIC(XFILES)

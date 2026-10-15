@@ -83,7 +83,7 @@ static const int kMenuCornerLeft = 501, kMenuCornerBottom = 34;
 static const uint32 kXCursor = 25541;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
-	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuOpen(false), _paused(false), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _soundView(0), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
+	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuOpen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _soundView(0), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
 	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0) {
 	g_engine = this;
 	_loadedSave = false;
@@ -180,8 +180,15 @@ Common::Error XFilesEngine::run() {
 	_fastForward = Common::StringTokenizer(ConfMan.get("xfiles_fastforward")).split();
 
 	_video = new Movie();
+	// -x / --save-slot: load that save before the intro, and skip the intro and the menu
+	int saveSlot = ConfMan.getInt("save_slot");
+	if (saveSlot >= 0) {
+		Common::Error status = loadGameState(saveSlot);
+		if (status.getCode() != Common::kNoError)
+			warning("Cannot load save slot %d: %s", saveSlot, status.getDesc().c_str());
+	}
 	// A step list starts the game at once, without the intro and the menu
-	if (!_steps.empty() || !_fastForward.empty() || _loadedSave || (playIntro() && runMenu()))
+	if (_pendingLoad.valid || !_steps.empty() || !_fastForward.empty() || _loadedSave || (playIntro() && runMenu()))
 		runGame();
 	return Common::kNoError;
 }
@@ -398,6 +405,8 @@ void XFilesEngine::openGameMenu() {
 		return;
 	if (isHolding())
 		putBack();
+	// The saves made while the menu is up show the game, not the menu
+	_menuShot.copyFrom(_screen);
 	pauseGame(true);
 	_menuOpen = true;
 	startMenu();
@@ -410,9 +419,16 @@ uint32 XFilesEngine::gameMillis() const {
 
 void XFilesEngine::pauseGame(bool pause) {
 	// Scene_SuspendAll: the media pause (Media_PauseAll) and the game's
-	// timed objects stop, so everything goes on where it was
-	if (pause == _paused)
-		return;
+	// timed objects stop, so everything goes on where it was. The menu and
+	// the GMM (pauseEngineIntern) can both ask: the game runs again when
+	// the last one resumes
+	if (pause) {
+		if (_pauseDepth++ > 0)
+			return;
+	} else {
+		if (_pauseDepth == 0 || --_pauseDepth > 0)
+			return;
+	}
 	if (pause) {
 		_pauseStart = g_system->getMillis();
 	} else {
@@ -427,6 +443,26 @@ void XFilesEngine::pauseGame(bool pause) {
 		_layers[i]->pause(pause);
 	for (Common::HashMap<uint32, Sound>::iterator it = _sounds.begin(); it != _sounds.end(); ++it)
 		it->_value.movie->pause(pause);
+}
+
+void XFilesEngine::pauseEngineIntern(bool pause) {
+	Engine::pauseEngineIntern(pause);
+	if (pause)
+		debugC(1, kDebugScript, "-- game paused by ScummVM");
+	// Before a game runs there is nothing to pause
+	pauseGame(pause);
+}
+
+bool XFilesEngine::canSaveGameStateCurrently(Common::U32String *msg) {
+	// The moment of the original's save: the view is active (no travel, no
+	// held view), no video plays or waits, no phone button is down. The
+	// menu being open does not matter, it is where the original saves.
+	return _script && !_pendingLoad.valid && _script->isViewActive() && _script->getVideoQueue().empty() && !_video->isOpen() &&
+		_pressedItems.empty();
+}
+
+bool XFilesEngine::canLoadGameStateCurrently(Common::U32String *msg) {
+	return _data != nullptr;
 }
 
 // -- The game -----------------------------------------------------------------
@@ -462,11 +498,18 @@ void XFilesEngine::restoreGame(const VCSave &save) {
 }
 
 void XFilesEngine::runGame() {
-	createScript();
-	if (_loadedSave)
-		restoreGame(_save);
-	else
-		startNewGame();
+	if (_pendingLoad.valid) {
+		// A save chosen before the game (the start-up menu, save_slot)
+		applyPendingLoad();
+		if (!_script)
+			return;
+	} else {
+		createScript();
+		if (_loadedSave)
+			restoreGame(_save);
+		else
+			startNewGame();
+	}
 	// Fast-forward (xfiles_fastforward): the steps run in the script alone,
 	// as vc_sim.py runs them, so nothing plays and no time passes; the
 	// game goes on from where they end
@@ -577,6 +620,8 @@ bool XFilesEngine::teardownGame() {
 	_shotBox = false;
 	_waitVideo = 0;
 	_waitTimer = -1;
+	// Whatever asked for the pause (the menu) is gone with the game
+	_pauseDepth = _paused ? 1 : 0;
 	pauseGame(false);
 
 	delete _script;

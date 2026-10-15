@@ -32,6 +32,7 @@
 #include "common/error.h"
 #include "common/keyboard.h"
 #include "engines/engine.h"
+#include "graphics/managed_surface.h"
 #include "graphics/surface.h"
 
 #include "xfiles/captions.h"
@@ -59,7 +60,8 @@ public:
 	~XFilesEngine() override;
 
 	bool hasFeature(EngineFeature f) const override {
-		return f == kSupportsReturnToLauncher || f == kSupportsSubtitleOptions;
+		return f == kSupportsReturnToLauncher || f == kSupportsSubtitleOptions || f == kSupportsLoadingDuringRuntime ||
+			f == kSupportsSavingDuringRuntime;
 	}
 
 	Common::Language getLanguage() const { return _gameDescription->language; }
@@ -80,6 +82,15 @@ public:
 	Common::Error saveGameStream(Common::WriteStream *stream, bool isAutosave = false) override;
 	/** Parses the save and queues the load, which runs at the start of the next frame. */
 	Common::Error loadGameStream(Common::SeekableReadStream *stream) override;
+	/**
+	 * Saving needs a running game whose view is active: no video on screen or queued, no
+	 * travel or held view, no pressed item. The open in-game menu does not prevent it.
+	 */
+	bool canSaveGameStateCurrently(Common::U32String *msg = nullptr) override;
+	/** Loading is possible whenever the databases are loaded. */
+	bool canLoadGameStateCurrently(Common::U32String *msg = nullptr) override;
+	/** The game screen as it was when the in-game menu opened; nullptr while the menu is not up. */
+	Graphics::ManagedSurface *getMenuShot() { return _menuOpen ? &_menuShot : nullptr; }
 
 	// ScriptHooks
 	bool callFunction(const VCAction &action, const Common::Array<int32> &args) override;
@@ -94,6 +105,8 @@ public:
 
 protected:
 	Common::Error run() override;
+	/** The GMM and the save dialogs pause the game like the in-game menu does (nested). */
+	void pauseEngineIntern(bool pause) override;
 
 private:
 	/** Input gathered by pollInput() for one frame. */
@@ -162,7 +175,7 @@ private:
 
 	/** The game's own clock: getMillis() without the time spent paused. */
 	uint32 gameMillis() const;
-	/** Freeze or resume the game's time, its videos and sounds. */
+	/** Freeze or resume the game's time, its videos and sounds. Nested: each pause needs its resume. */
 	void pauseGame(bool pause);
 
 	void playQueuedVideo(const Input &input);
@@ -249,6 +262,8 @@ private:
 	Movie *_menuClick;                    ///< The click sound of an entry
 	bool _menuOpen;                       ///< The menu is up over the running game
 	bool _paused;
+	uint _pauseDepth;                     ///< Pauses asked for (menu, GMM, dialogs)
+	Graphics::ManagedSurface _menuShot;   ///< The screen when the menu opened (the saves' thumbnail)
 	uint32 _pauseStart;                   ///< getMillis() when the game was paused
 	uint32 _pausedTotal;                  ///< Milliseconds the game spent paused before
 	uint32 _prefVariables[kPrefCount];  ///< From RegPreferences
