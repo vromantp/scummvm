@@ -177,6 +177,14 @@ private:
 	uint32 gameMillis() const;
 	/** Freeze or resume the game's time, its videos and sounds. Nested: each pause needs its resume. */
 	void pauseGame(bool pause);
+	/**
+	 * Menu_AskSave before New and Quit, by Pref_bSaveGameOnExit: 'A' asks (yes opens the save
+	 * dialog), 'Y' writes the autosave slot, 'N' does nothing. false: the player cancelled the
+	 * save, so New or Quit must not go on.
+	 */
+	bool saveOnExit();
+	/** The start-up menu's Previous: load the most recent save (autosave included). false if there is none. */
+	bool loadMostRecentSave();
 
 	void playQueuedVideo(const Input &input);
 	void updateTimers();

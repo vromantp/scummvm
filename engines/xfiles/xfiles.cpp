@@ -25,10 +25,15 @@
 #include "common/events.h"
 #include "common/file.h"
 #include "common/formats/winexe.h"
+#include "common/ptr.h"
+#include "common/savefile.h"
 #include "common/system.h"
+#include "common/translation.h"
 #include "common/tokenizer.h"
 #include "image/png.h"
+#include "engines/metaengine.h"
 #include "engines/util.h"
+#include "gui/message.h"
 #include "graphics/pixelformat.h"
 
 #include "xfiles/xfiles.h"
@@ -292,7 +297,7 @@ bool XFilesEngine::playIntro() {
 }
 
 bool XFilesEngine::runMenu() {
-	// The start-up menu: only New and Quit work; the X loop (49585) and name
+	// The start-up menu: only New, Load, Previous and Quit work; the X loop (49585) and name
 	// (49589) movies and the entries' help texts are not shown.
 	startMenu();
 	while (!shouldQuit()) {
@@ -300,6 +305,11 @@ bool XFilesEngine::runMenu() {
 		if (input.click) {
 			MenuEntry entry = clickMenu(input.pos);
 			if (entry == kMenuNew) {
+				closeMenu();
+				return true;
+			}
+			if ((entry == kMenuLoad && loadGameDialog()) || (entry == kMenuPrevious && loadMostRecentSave())) {
+				// The load is queued; the game starts from it
 				closeMenu();
 				return true;
 			}
@@ -388,14 +398,78 @@ void XFilesEngine::menuChoice(MenuEntry entry) {
 		pauseGame(false);
 		break;
 	case kMenuQuit:
-		quitGame();
+		if (saveOnExit())
+			quitGame();
 		break;
 	case kMenuNew:
-		restartGame();
+		if (saveOnExit())
+			restartGame();
+		break;
+	case kMenuSave:
+		// The menu stays up, as after the original's save
+		saveGameDialog();
+		break;
+	case kMenuLoad:
+		// A chosen save is queued; the next frame closes the menu and loads it
+		loadGameDialog();
 		break;
 	default:
-		break; // Load, Save, Options and Help are not implemented (B-061)
+		break; // Options and Help are not implemented (B-061)
 	}
+}
+
+bool XFilesEngine::saveOnExit() {
+	// A scripted run (xfiles_steps) has nobody to answer
+	if (!_script || !_steps.empty())
+		return true;
+	int32 mode = _prefVariables[kPrefSaveGameOnExit] ? _script->getVariable(_prefVariables[kPrefSaveGameOnExit]) : 'A';
+	if (mode == 'Y') {
+		// The original saves to the current save without asking; the autosave slot never overwrites a player's slot
+		if (canSaveGameStateCurrently() &&
+				saveGameState(getAutosaveSlot(), Common::convertFromU32String(_("Autosave")), true).getCode() != Common::kNoError)
+			g_system->displayMessageOnOSD(_("Error occurred making autosave"));
+		return true;
+	}
+	if (mode != 'A')
+		return true;
+	GUI::MessageDialog question(_("Do you want to save your game first?"), _("Yes"), _("No"));
+	if (question.runModal() != GUI::kMessageOK)
+		return true;
+	// A game that cannot be saved just now does not hold up New or Quit
+	return !canSaveGameStateCurrently() || saveGameDialog();
+}
+
+bool XFilesEngine::loadMostRecentSave() {
+	int best = -1;
+	uint64 bestTime = 0;
+	SaveStateList saves = getMetaEngine()->listSaves(_targetName.c_str());
+	for (SaveStateList::const_iterator it = saves.begin(); it != saves.end(); ++it) {
+		Common::ScopedPtr<Common::InSaveFile> in(_saveFileMan->openForLoading(getSaveStateName(it->getSaveSlot())));
+		ExtendedSavegameHeader header;
+		if (!in || !MetaEngine::readSavegameHeader(in.get(), &header))
+			continue;
+		uint16 year;
+		uint8 month, day, hour, minute;
+		MetaEngine::decodeSavegameDate(&header, year, month, day);
+		MetaEngine::decodeSavegameTime(&header, hour, minute);
+		uint64 time = ((((uint64)year * 12 + month) * 31 + day) * 24 + hour) * 60 + minute;
+		// The date has no seconds: of two saves in the same minute the later slot counts
+		if (best < 0 || time > bestTime || (time == bestTime && it->getSaveSlot() > best)) {
+			best = it->getSaveSlot();
+			bestTime = time;
+		}
+	}
+	if (best < 0) {
+		g_system->displayMessageOnOSD(_("There is no saved game"));
+		return false;
+	}
+	Common::Error status = loadGameState(best);
+	if (status.getCode() != Common::kNoError) {
+		GUI::MessageDialog errorDialog(status.getDesc());
+		errorDialog.runModal();
+		return false;
+	}
+	return true;
 }
 
 void XFilesEngine::openGameMenu() {
