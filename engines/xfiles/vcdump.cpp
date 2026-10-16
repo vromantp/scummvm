@@ -26,9 +26,6 @@
 namespace XFiles {
 
 // The engine's own display tables (XFiles.exe VA 0x6b4270, 0x6b42e8, 0x6b4740, 0x6b4590)
-static const char *const kActionTypeNames[] = {
-	"statement", "asset", "timer", "enable", "set_view", "interface", "function", "sound3d"
-};
 static const char *const kConditionOps[] = { "==", "!=", ">", "<", ">=", "<=", "and", "or" };
 static const char *const kStatementOps[] = { "=", "++", "--", "+=", "-=", "*=", "/=", "%=" };
 static const char *const kAssetModes[] = { "preload", "play_once", "play_loop", "stop", "unload" };
