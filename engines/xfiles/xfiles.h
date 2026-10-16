@@ -53,6 +53,7 @@ class WinResources;
 namespace XFiles {
 
 class Movie;
+class PictureAsset;
 class VCData;
 
 class XFilesEngine : public Engine, public ScriptHooks {
@@ -252,6 +253,12 @@ private:
 	Movie *_menuX;                        ///< The main menu's movies (49583 the X, 49587 the entries)
 	Movie *_menuEntries;
 	Movie *_menuClick;                    ///< The click sound of an entry
+	Movie *_menuLoop;                     ///< 49585, the X loop (MIDloop.mov)
+	Movie *_menuLoopSound;                ///< 94320, the loop's sound
+	Movie *_menuTop;                      ///< 49589, the top strip (a still)
+	PictureAsset *_menuReturn;            ///< 72895 return.pic over Previous, only from the game
+	bool _menuIntroDone;                  ///< g_menuIntroDone (0x6b1980): the fade-in has played this run, never cleared
+	bool _menuFading;                     ///< The X is still fading in, alone
 	bool _menuOpen;                       ///< The menu is up over the running game
 	bool _paused;
 	uint _pauseDepth;                     ///< Pauses asked for (menu, GMM, dialogs)

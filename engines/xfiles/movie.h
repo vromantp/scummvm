@@ -65,6 +65,10 @@ public:
 	void setStart(uint32 startMs) { _startMs = startMs; }
 	/** Decode the single frame at the start time. */
 	bool showStill();
+	/** Decode the single frame at ms (from the start of the file). */
+	bool showStillAt(uint32 ms);
+	/** Decode the last frame of the asset's range (the whole file if it has none). */
+	bool showStillAtEnd();
 	/** Decode a frame if one is due; handle looping and the end. */
 	void update();
 	/** Stop at once, keeping the last frame. */

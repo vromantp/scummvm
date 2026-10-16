@@ -102,10 +102,21 @@ void Movie::play(bool loop, int32 fromMs) {
 }
 
 bool Movie::showStill() {
+	return showStillAt(_startMs);
+}
+
+bool Movie::showStillAtEnd() {
 	if (!_decoder)
 		return false;
-	if (_startMs)
-		_decoder->seek(Audio::Timestamp(_startMs, 1000));
+	uint32 end = _endMs > _startMs ? _endMs : _decoder->getDuration().msecs();
+	return showStillAt(end > _startMs ? end - 1 : _startMs);
+}
+
+bool Movie::showStillAt(uint32 ms) {
+	if (!_decoder)
+		return false;
+	if (ms)
+		_decoder->seek(Audio::Timestamp(ms, 1000));
 	const Graphics::Surface *frame = _decoder->decodeNextFrame();
 	if (!frame) {
 		warning("Movie: no frame at %u ms in asset #%u", _startMs, _assetId);

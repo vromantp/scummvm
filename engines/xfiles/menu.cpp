@@ -28,13 +28,19 @@
 
 #include "xfiles/xfiles.h"
 #include "xfiles/movie.h"
+#include "xfiles/pictures.h"
 
 namespace XFiles {
 
 enum {
 	// The main menu: the X movie at the left, the entries movie at the right
 	kMenuEntriesLeft = 472,
-	kMenuEntriesShown = 75 ///< Frame of the entries movie where all entries are lit and no help text shows
+	kMenuEntriesShown = 75,     ///< Frame of the entries movie where all entries are lit and no help text shows
+	kMenuEntriesShownMs = 5000, ///< The same moment in ms (0x6bae84)
+	kMenuLoopLeft = 61,
+	kMenuLoopTop = 103,
+	kMenuTopLeft = 57,
+	kMenuReturnTop = 215
 };
 
 // Logos and title, played by XFiles.exe itself (no list or action refers to them)
@@ -43,6 +49,10 @@ static const uint32 kIntroAssets[] = {56003, 56002, 19668, 56001};
 // Main menu movies (category 37 Game, also played by the exe)
 static const uint32 kMenuXAsset = 49583;
 static const uint32 kMenuEntriesAsset = 49587;
+static const uint32 kMenuLoopAsset = 49585;      // The X loop, MIDloop.mov
+static const uint32 kMenuLoopSoundAsset = 94320; // Its sound, MIDloop.amv
+static const uint32 kMenuTopAsset = 49589;       // The top strip, TOPro.mov
+static const uint32 kMenuReturnAsset = 72895;    // return.pic, over Previous when the menu opens from the game
 
 // Main menu: the click sound (PrefClick.amv)
 static const uint32 kMenuClickAsset = 67518;
@@ -77,8 +87,7 @@ bool XFilesEngine::playIntro() {
 }
 
 bool XFilesEngine::runMenu() {
-	// The start-up menu: only New, Load, Previous and Quit work; the X loop (49585) and name
-	// (49589) movies and the entries' help texts are not shown.
+	// The start-up menu: only New, Load, Previous and Quit work; the entries' help texts are not shown.
 	startMenu();
 	while (!shouldQuit()) {
 		Input input = pollInput();
@@ -107,27 +116,72 @@ bool XFilesEngine::runMenu() {
 }
 
 void XFilesEngine::startMenu() {
+	// MainMenu_LoadMedia and Screen_ShowMenu (0x44e060): the X fades in alone, then
+	// the entries and the loop start, but only at the first menu of a run and never
+	// with Pref_bSkipIntro. Every later open shows the X's last frame and the lit
+	// entries at once, with the loop running.
 	closeMenu();
 	_menuX = new Movie();
 	_menuEntries = new Movie();
-	if (openMovie(*_menuX, kMenuXAsset))
+	_menuLoop = new Movie();
+	_menuLoopSound = new Movie();
+	_menuTop = new Movie();
+	bool fade = !_menuIntroDone && !getPreference(kPrefSkipIntro);
+	bool xOpen = openMovie(*_menuX, kMenuXAsset);
+	bool entriesOpen = openMovie(*_menuEntries, kMenuEntriesAsset);
+	bool loopOpen = openMovie(*_menuLoop, kMenuLoopAsset);
+	bool soundOpen = openMovie(*_menuLoopSound, kMenuLoopSoundAsset);
+	if (openMovie(*_menuTop, kMenuTopAsset))
+		_menuTop->showStill();
+	// Opened from the game, the entries are drawn with return.pic over Previous
+	if (_menuOpen)
+		_menuReturn = loadPicture(*_data, _discFiles, kMenuReturnAsset, _screen.format);
+	_menuFading = fade && xOpen;
+	if (_menuFading) {
 		_menuX->play(false);
-	if (openMovie(*_menuEntries, kMenuEntriesAsset))
-		_menuEntries->play(false);
+		return;
+	}
+	if (xOpen)
+		_menuX->showStillAtEnd();
+	if (entriesOpen)
+		_menuEntries->showStillAt(kMenuEntriesShownMs);
+	if (loopOpen)
+		_menuLoop->play(true);
+	if (soundOpen)
+		_menuLoopSound->play(true);
 }
 
 void XFilesEngine::closeMenu() {
 	delete _menuX;
 	delete _menuEntries;
 	delete _menuClick;
-	_menuX = _menuEntries = _menuClick = nullptr;
+	delete _menuLoop;
+	delete _menuLoopSound;
+	delete _menuTop;
+	delete _menuReturn;
+	_menuX = _menuEntries = _menuClick = _menuLoop = _menuLoopSound = _menuTop = nullptr;
+	_menuReturn = nullptr;
+	_menuFading = false;
 }
 
 void XFilesEngine::updateMenu() {
-	_menuX->update();
+	if (_menuFading) {
+		_menuX->update();
+		if (!_menuX->hasEnded())
+			return;
+		// The X is in: the entries run to 5000 ms while the loop and its sound start
+		_menuFading = false;
+		_menuEntries->play(false);
+		_menuLoop->play(true);
+		_menuLoopSound->play(true);
+	}
 	_menuEntries->update();
-	if (!_menuEntries->hasEnded() && _menuEntries->getCurFrame() >= kMenuEntriesShown)
+	_menuLoop->update();
+	_menuLoopSound->update();
+	if (!_menuEntries->hasEnded() && _menuEntries->getCurFrame() >= kMenuEntriesShown) {
 		_menuEntries->stop();
+		_menuIntroDone = true; // 0x4812d0
+	}
 	if (_menuClick) {
 		_menuClick->update();
 		if (_menuClick->hasEnded()) {
@@ -140,7 +194,13 @@ void XFilesEngine::updateMenu() {
 void XFilesEngine::drawMenu() {
 	_screen.fillRect(Common::Rect(_screen.w, _screen.h), 0);
 	blit(_menuX->getFrame(), 0, 0);
+	if (_menuFading)
+		return;
+	blit(_menuLoop->getFrame(), kMenuLoopLeft, kMenuLoopTop);
+	blit(_menuTop->getFrame(), kMenuTopLeft, 0);
 	blit(_menuEntries->getFrame(), kMenuEntriesLeft, 0);
+	if (_menuReturn)
+		_menuReturn->draw(_screen, kMenuEntriesLeft, kMenuReturnTop);
 }
 
 XFilesEngine::MenuEntry XFilesEngine::hitMenu(const Common::Point &pos) const {
