@@ -30,6 +30,7 @@
 #include "common/ustr.h"
 
 #include "xfiles/hooks.h"
+#include "xfiles/phone.h"
 #include "xfiles/vcdata.h"
 
 namespace Common {
@@ -149,6 +150,9 @@ public:
  * than SetStartView and DoActionList are only logged.
  */
 class Script {
+	// The areas with their own class use the Script services listed in docs/subsystems/interpreter.md
+	friend class PhoneHooks;
+
 public:
 	/** A character's stock replies: the atoms of its topic without a label. */
 	enum {
@@ -418,7 +422,6 @@ private:
 	/** Fill _hookTable: the Script's own hooks, then those of each area file. */
 	void addHooks();
 	void addCoreHooks();
-	void addPhoneHooks();    // phone.cpp
 	void addComputerHooks(); // computers.cpp
 	void addPDAHooks();      // pda.cpp
 	void addEvidence(uint32 id);
@@ -503,19 +506,12 @@ private:
 	bool hasNote(uint32 id) const;
 	bool dayHasNote(uint day, uint32 note) const;
 
-	// Phone (phone.cpp)
-	void phoneInit(uint32 numberVar);
-	void phoneButton(char key, uint32 numberVar, uint32 pressedItem);
-	void phoneClear(uint32 numberVar);
-	void phoneMenuInit(uint32 numberVar);
-	void phoneFlipName(bool back, uint32 numberVar);
-	void phoneSend(uint32 numberVar, uint32 triggerVar, uint32 actionsVar, int event, const EventFields &fields);
-	void phoneKeyPress(uint vk, int event, const EventFields &fields);
-	/** Show the current phone book entry and take its number. */
-	void phoneShowEntry(uint32 numberVar);
-	/** The phone's layout was hidden (0x4c87c0, 0x4c8150). */
-	void phoneClosed();
-	void setPhoneDisplay(const Common::U32String &text);
+	// Services for the area classes (PhoneHooks) besides the public ones
+	void clearItemText(uint32 item) { _itemTexts.erase(item); }
+	/** Show an interface item pressed: its picture, enabled by the click, goes 100 ms later (takePressedItems). */
+	void pressItem(uint32 item) { _pressed.push_back(item); }
+	/** The node RegCurrNode's variable holds, 0 before RegCurrNode. */
+	int32 getCurrentNode() const { return _currNodeVariable ? getVariable(_currNodeVariable) : 0; }
 	/** DoActionList(trigger, actionList): another trigger's actions. */
 	void runActionList(uint32 actionList, int event, const EventFields &fields);
 	void endSound(uint32 id, const char *how);
@@ -554,6 +550,7 @@ private:
 	const VCData &_data;
 	ScriptHooks *_hooks;
 	HookTable<Script> _hookTable; ///< The C++ function hooks Script implements, by name
+	PhoneHooks _phone;            ///< The phone's hooks and state (phone.cpp)
 	Common::WinResources *_texts;
 	Common::HashMap<uint32, int32> _variables;
 	Common::HashMap<uint32, bool> _enabled;    ///< Objects without a VCEnabled are always enabled
@@ -593,14 +590,6 @@ private:
 	Common::HashMap<uint32, bool> _clips;      ///< Graphic clips placed by PlayAssetAt and playing
 	Common::HashMap<uint, int32> _preferences; ///< See setPreference()
 
-	/** The phone's state (XFiles.exe globals 0x6b1900-0x6b190c, list 0x6ba5c8). */
-	struct Phone {
-		Common::Array<uint32> book;   ///< Enabled phone book entries, filled by PhoneMenuInit
-		uint bookSize;                ///< Kept when the book is emptied on closing
-		uint bookIndex;               ///< The entry shown
-		bool showsName;               ///< The display shows an entry, not a dialled number
-		uint32 tone;                  ///< The key tone playing, or 0
-	} _phone;
 	/** The computer text entry buffers (XFiles.exe 0x6be918 and others). */
 	struct Computer {
 		Common::String user;      ///< LoginKeyPress 1, max 23

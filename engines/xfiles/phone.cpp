@@ -21,6 +21,7 @@
 
 #include "common/formats/winexe.h"
 
+#include "xfiles/phone.h"
 #include "xfiles/script.h"
 
 namespace XFiles {
@@ -106,162 +107,165 @@ static const PhoneKey kPhoneKeys[] = {
 	{ '9', 43270, 43272 }
 };
 
-void Script::addPhoneHooks() {
-	HookTable<Script> &t = _hookTable;
+PhoneHooks::PhoneHooks(Script &script, const VCData &data)
+	: _script(script), _data(data), _bookSize(0), _bookIndex(0), _showsName(false), _tone(0) {
+}
+
+void PhoneHooks::addHooks(HookTable<Script> &t) {
 	t.add("PhoneInit", [](Script &s, const HookCall &c) {
-		s.phoneInit(c.variableArg(0));
+		s._phone.init(c.variableArg(0));
 		return true;
 	});
 	t.add("PhoneButton", [](Script &s, const HookCall &c) {
 		if (!c.has(3))
 			return false;
-		s.phoneButton((char)c.args[0], c.variableArg(1), c.args[2]);
+		s._phone.button((char)c.args[0], c.variableArg(1), c.args[2]);
 		return true;
 	});
 	t.add("PhoneClear", [](Script &s, const HookCall &c) {
-		s.phoneClear(c.variableArg(0));
+		s._phone.clear(c.variableArg(0));
 		return true;
 	});
 	t.add("PhoneMenuInit", [](Script &s, const HookCall &c) {
-		s.phoneMenuInit(c.variableArg(0));
+		s._phone.menuInit(c.variableArg(0));
 		return true;
 	});
 	t.add("PhoneFlipName", [](Script &s, const HookCall &c) {
 		if (!c.has(2))
 			return false;
-		s.phoneFlipName(c.args[0] != 0, c.variableArg(1));
+		s._phone.flipName(c.args[0] != 0, c.variableArg(1));
 		return true;
 	});
 	t.add("PhoneSend", [](Script &s, const HookCall &c) {
-		s.phoneSend(c.variableArg(0), c.variableArg(1), c.variableArg(2), c.event, c.fields);
+		s._phone.send(c.variableArg(0), c.variableArg(1), c.variableArg(2), c.event, c.fields);
 		return true;
 	});
 	t.add("PhoneKeyPress", [](Script &s, const HookCall &c) {
 		if (!c.has(1))
 			return false;
-		s.phoneKeyPress(c.args[0], c.event, c.fields);
+		s._phone.keyPress(c.args[0], c.event, c.fields);
 		return true;
 	});
 	t.addLogged("PhoneDestroy"); // It only frees the display's font
 }
 
-void Script::setPhoneDisplay(const Common::U32String &text) {
+void PhoneHooks::setDisplay(const Common::U32String &text) {
 	if (text.empty()) {
-		_itemTexts.erase(kPhoneDisplay);
+		_script.clearItemText(kPhoneDisplay);
 		return;
 	}
 	// Not wrapped, bold, a line per newline; 17 px lines
-	setItemText(kPhoneDisplay, text, kPhoneTextSize, true, kPhoneTextColor, kAlignLeft, false, 0);
+	_script.setItemText(kPhoneDisplay, text, kPhoneTextSize, true, kPhoneTextColor, Script::kAlignLeft, false, 0);
 }
 
-void Script::phoneInit(uint32 numberVar) {
+void PhoneHooks::init(uint32 numberVar) {
 	// 0x4c7f00: an empty display and number (the phone book and the entry
 	// shown are kept)
-	setPhoneDisplay(Common::U32String());
-	setString(numberVar, Common::String());
+	setDisplay(Common::U32String());
+	_script.setString(numberVar, Common::String());
 }
 
-void Script::phoneButton(char key, uint32 numberVar, uint32 pressedItem) {
+void PhoneHooks::button(char key, uint32 numberVar, uint32 pressedItem) {
 	// 0x4c8870: a digit is added to the number, unless it has 13; one
 	// pressed while an entry of the phone book is shown starts a new number.
 	// It plays its tone, stopping the previous one.
 	if (key >= '0' && key <= '9') {
-		Common::String number = getString(numberVar);
-		if (number.size() < kPhoneMaxDigits || _phone.showsName) {
-			if (_phone.showsName) {
-				_phone.showsName = false;
+		Common::String number = _script.getString(numberVar);
+		if (number.size() < kPhoneMaxDigits || _showsName) {
+			if (_showsName) {
+				_showsName = false;
 				number.clear();
 			}
 			number += key;
-			setString(numberVar, number);
-			setPhoneDisplay(Common::U32String(number));
-			log("      phone: " + number);
-			if (_phone.tone)
-				playAsset(_phone.tone, kModeStop, nullptr);
-			_phone.tone = kPhoneTones[key - '0'];
-			playAsset(_phone.tone, kModePlayOnce, nullptr);
+			_script.setString(numberVar, number);
+			setDisplay(Common::U32String(number));
+			_script.log("      phone: " + number);
+			if (_tone)
+				_script.playAsset(_tone, kModeStop, nullptr);
+			_tone = kPhoneTones[key - '0'];
+			_script.playAsset(_tone, kModePlayOnce, nullptr);
 		}
 	}
 	// The button's pressed picture, enabled by the click, goes 100 ms later
 	if (pressedItem)
-		_pressed.push_back(pressedItem);
+		_script.pressItem(pressedItem);
 }
 
-void Script::phoneClear(uint32 numberVar) {
+void PhoneHooks::clear(uint32 numberVar) {
 	// 0x4c8b10: whether an entry was shown is kept
-	setPhoneDisplay(Common::U32String());
-	setString(numberVar, Common::String());
+	setDisplay(Common::U32String());
+	_script.setString(numberVar, Common::String());
 }
 
-void Script::phoneMenuInit(uint32 numberVar) {
+void PhoneHooks::menuInit(uint32 numberVar) {
 	// 0x4c8550: the book is made again from its enabled entries; the entry
 	// shown last time is shown again
-	setString(numberVar, Common::String());
+	_script.setString(numberVar, Common::String());
 	VCInterfaceItem item;
 	Common::Array<uint32> entries;
-	_phone.book.clear();
+	_book.clear();
 	if (_data.getInterfaceItem(kPhoneBook, item))
 		_data.getMembers(item.assets, entries);
 	for (uint i = 0; i < entries.size(); i++) {
-		if (isEnabled(entries[i]))
-			_phone.book.push_back(entries[i]);
+		if (_script.isEnabled(entries[i]))
+			_book.push_back(entries[i]);
 	}
-	_phone.bookSize = _phone.book.size();
-	if (_phone.bookIndex < _phone.book.size()) {
-		_phone.showsName = true;
-		phoneShowEntry(numberVar);
+	_bookSize = _book.size();
+	if (_bookIndex < _book.size()) {
+		_showsName = true;
+		showEntry(numberVar);
 	}
 }
 
-void Script::phoneFlipName(bool back, uint32 numberVar) {
+void PhoneHooks::flipName(bool back, uint32 numberVar) {
 	// 0x4c81c0: only while an entry is shown and the book has two or more
-	if (!_phone.showsName || _phone.bookSize < 2)
+	if (!_showsName || _bookSize < 2)
 		return;
 	if (back)
-		_phone.bookIndex = (_phone.bookIndex + _phone.bookSize - 1) % _phone.bookSize;
+		_bookIndex = (_bookIndex + _bookSize - 1) % _bookSize;
 	else
-		_phone.bookIndex = (_phone.bookIndex + 1) % _phone.bookSize;
-	if (_phone.bookIndex < _phone.book.size())
-		phoneShowEntry(numberVar);
+		_bookIndex = (_bookIndex + 1) % _bookSize;
+	if (_bookIndex < _book.size())
+		showEntry(numberVar);
 }
 
-void Script::phoneShowEntry(uint32 numberVar) {
+void PhoneHooks::showEntry(uint32 numberVar) {
 	// An entry is a text asset, or names a string of XFilesT.dll: name lines,
 	// then the number; the number is its last 10 characters
-	uint32 entry = _phone.book[_phone.bookIndex];
+	uint32 entry = _book[_bookIndex];
 	Common::U32String text;
-	getTextAsset(entry, text);
+	_script.getTextAsset(entry, text);
 	Common::U32String lines;
 	for (uint i = 0; i < text.size(); i++) {
 		if (text[i] != '\r')
 			lines += text[i];
 	}
-	setPhoneDisplay(lines);
+	setDisplay(lines);
 	Common::String number = text.encode();
 	if (number.size() > 10)
 		number = Common::String(number.c_str() + number.size() - 10);
-	setString(numberVar, number);
-	log(Common::String::format("      phone: entry %u, ", entry) + number);
+	_script.setString(numberVar, number);
+	_script.log(Common::String::format("      phone: entry %u, ", entry) + number);
 }
 
-void Script::phoneSend(uint32 numberVar, uint32 triggerVar, uint32 actionsVar, int event, const EventFields &fields) {
+void PhoneHooks::send(uint32 numberVar, uint32 triggerVar, uint32 actionsVar, int event, const Common::Array<int32> &fields) {
 	// 0x4c8bd0: look the number up in the call table; a known number rings,
 	// then its trigger's actions play (iCallTriggerID, iCallActionID, run by
 	// the rings' end). Unknown numbers play a recording at once.
-	Common::String number = getString(numberVar);
+	Common::String number = _script.getString(numberVar);
 	if (number.size() > 11) {
-		runActionList(kPhoneFailures[kFailureTooLong][1], event, fields);
+		_script.runActionList(kPhoneFailures[kFailureTooLong][1], event, fields);
 		return;
 	}
 	if (number.size() == 10 && strncmp(number.c_str(), kPhoneAreaCode, 3) != 0) {
-		runActionList(kPhoneFailures[kFailureLongDistance][1], event, fields);
+		_script.runActionList(kPhoneFailures[kFailureLongDistance][1], event, fields);
 		return;
 	}
 	Common::U32String text;
 	if (_data.getText(kLoneGunmenNumber, text) && text.encode() == number) {
-		int32 node = _currNodeVariable ? getVariable(_currNodeVariable) : 0;
-		if (node < 2 || !getVariable(kHasNotCalledLoneGunmen)) {
-			runActionList(kPhoneFailures[kFailureTooLong][1], event, fields);
+		int32 node = _script.getCurrentNode();
+		if (node < 2 || !_script.getVariable(kHasNotCalledLoneGunmen)) {
+			_script.runActionList(kPhoneFailures[kFailureTooLong][1], event, fields);
 			return;
 		}
 	}
@@ -274,10 +278,10 @@ void Script::phoneSend(uint32 numberVar, uint32 triggerVar, uint32 actionsVar, i
 			number == known.c_str() + known.size() - 7;
 		if (known != number && !local)
 			continue;
-		log(Common::String::format("      phone: calls #%u", kPhoneCalls[i].number));
-		_variables[triggerVar] = kPhoneCalls[i].trigger;
-		_variables[actionsVar] = kPhoneCalls[i].actions;
-		runActionList(kPhoneRingActions, event, fields);
+		_script.log(Common::String::format("      phone: calls #%u", kPhoneCalls[i].number));
+		_script.setVariable(triggerVar, kPhoneCalls[i].trigger);
+		_script.setVariable(actionsVar, kPhoneCalls[i].actions);
+		_script.runActionList(kPhoneRingActions, event, fields);
 		return;
 	}
 	// Otherwise the last digit picks the recording, for 7, 10 and 11 digits
@@ -287,29 +291,29 @@ void Script::phoneSend(uint32 numberVar, uint32 triggerVar, uint32 actionsVar, i
 		char last = number.lastChar();
 		failure = last >= '0' && last <= '9' ? kByLastDigit[last - '0'] : 1;
 	}
-	log(Common::String::format("      phone: no answer (%u)", failure));
-	runActionList(kPhoneFailures[failure][1], event, fields);
+	_script.log(Common::String::format("      phone: no answer (%u)", failure));
+	_script.runActionList(kPhoneFailures[failure][1], event, fields);
 }
 
-void Script::phoneKeyPress(uint vk, int event, const EventFields &fields) {
+void PhoneHooks::keyPress(uint vk, int event, const Common::Array<int32> &fields) {
 	// 0x4c8340: digits of the main keys or the keypad (VK_NUMPAD0-9) press
 	// their button, Return presses Send
 	if (vk >= 0x60 && vk <= 0x69)
 		vk = vk - 0x60 + '0';
 	for (uint i = 0; i < ARRAYSIZE(kPhoneKeys); i++) {
 		if (kPhoneKeys[i].vk == vk) {
-			runActionList(kPhoneKeys[i].actions, event, fields);
+			_script.runActionList(kPhoneKeys[i].actions, event, fields);
 			return;
 		}
 	}
 }
 
-void Script::phoneClosed() {
+void PhoneHooks::closed() {
 	// 0x4c87c0 empties the phone book, 0x4c8150 stops the key tone
-	_phone.book.clear();
-	if (_phone.tone)
-		playAsset(_phone.tone, kModeStop, nullptr);
-	_phone.tone = 0;
+	_book.clear();
+	if (_tone)
+		_script.playAsset(_tone, kModeStop, nullptr);
+	_tone = 0;
 }
 
 } // End of namespace XFiles
