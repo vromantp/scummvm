@@ -1491,7 +1491,11 @@ void Script::applySaved(const SavedValues &values) {
 }
 
 void Script::click(uint32 id) {
-	_box = 0; // a click outside the box closes it
+	// A click outside the box closes it; one on an interface item leaves
+	// it open (newgame-to-comityinn: the box's topics are not activated
+	// again after a click on a layout's item)
+	if (_data.getClassOf(id) != kClassInterfaceItem)
+		_box = 0;
 	if (!isEnabled(id)) {
 		log("  " + getObjectLabel(_data, id) + " is disabled");
 		return;
@@ -2123,9 +2127,15 @@ void Script::step(const Common::String &s) {
 		finishVideo();
 	else if (kind == "click" && _data.getClassOf(id) == kClassInventory)
 		selectInventory(id); // an inventory icon takes its cursor (0x49c180)
-	else if (kind == "click")
+	else if (kind == "click") {
 		click(id);
-	else if (kind == "press")
+		// A character view clicked with nothing in hand opens its box, as
+		// XFilesEngine::openDialogBox does: the topics activate now, not
+		// at the first ask
+		VCCharView charView;
+		if (!isHolding() && _data.getCharView(id, charView) && charView.conversations)
+			openBox(id);
+	} else if (kind == "press")
 		press(id);
 	else if (kind == "release")
 		release();
