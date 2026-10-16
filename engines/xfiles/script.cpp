@@ -1126,6 +1126,24 @@ void Script::activateViewObject(uint32 id) {
 		return;
 	_viewObjects.push_back(id);
 	fire(id, kEventObjectActivation);
+	// A character view, once its Object Activation has run, plays the first
+	// enabled asset of its asset list as a Do Asset action would (sound
+	// object, then the clip): reference run newgame-to-comityinn, 21993
+	// plays 19746 after trigger 56118, 22631 plays 19983 (and not 20031,
+	// enabled after it). Those clips' Deactivation disables them, so each
+	// plays once (B-092)
+	VCCharView cv;
+	if (!_data.getCharView(id, cv))
+		return;
+	Common::Array<uint32> assets;
+	_data.getMembers(cv.assets, assets);
+	for (uint i = 0; i < assets.size(); i++) {
+		VCAsset a;
+		if (!isEnabled(assets[i]) || !_data.getAsset(assets[i], a) || a.files.empty())
+			continue;
+		playAsset(assets[i], kModePlayOnce, nullptr);
+		break;
+	}
 }
 
 void Script::deactivateViewObject(uint32 id) {
