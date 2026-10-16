@@ -522,6 +522,8 @@ private:
 	void enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, bool deactivateAll = false);
 	void travel();
 	void showView();
+	/** Logs the asset the current view shows. */
+	void logViewAssets();
 	/** Activate what the current view shows: its first asset, character views, navs, explorables. */
 	void activateView();
 	void activateViewObjects();

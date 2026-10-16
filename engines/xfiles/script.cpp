@@ -1049,6 +1049,11 @@ void Script::activateView() {
 	if (_viewHeld) {
 		_viewHeld = false;
 		log("  == view activated " + getObjectLabel(_data, _view));
+		// The actions after the set_view ran while it was held: the asset
+		// it activates may not be the one shown when it was entered
+		// (newgame-to-comityinn, view 925: the click on 30659 enables 25745
+		// after its set_view)
+		logViewAssets();
 	}
 	_viewActive = true;
 	fire(_view, kEventObjectActivation);
@@ -1221,11 +1226,7 @@ void Script::getViewAssets(Common::Array<uint32> &assets, uint32 &background) co
 	}
 }
 
-void Script::showView() {
-	VCView v;
-	if (!_data.getView(_view, v))
-		return;
-
+void Script::logViewAssets() {
 	Common::Array<uint32> ids;
 	uint32 background;
 	getViewAssets(ids, background);
@@ -1235,8 +1236,16 @@ void Script::showView() {
 		log(Common::String::format("      %s #%u ", ids[i] == background ? "background" : "overlay", ids[i]) +
 			formatFile(asset.files[0]) + "  \"" + nameOrNone(_data, asset.name) + "\"");
 	}
+}
 
-	ids.clear();
+void Script::showView() {
+	VCView v;
+	if (!_data.getView(_view, v))
+		return;
+
+	logViewAssets();
+
+	Common::Array<uint32> ids;
 	_data.getMembers(v.characters, ids);
 	for (uint i = 0; i < ids.size(); i++) {
 		VCCharView cv;
