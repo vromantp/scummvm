@@ -20,6 +20,7 @@ MODULE_OBJS = \
 	refrun.o \
 	saveload.o \
 	script.o \
+	sound.o \
 	subliminal.o \
 	vcdata.o \
 	vcdump.o \

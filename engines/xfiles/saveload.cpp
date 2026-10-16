@@ -186,11 +186,7 @@ void XFilesEngine::fillSnapshot(VCSave &save) {
 
 	// Sounds, with their position in ms from the start of the file
 	save.sounds.clear();
-	for (uint i = 0; i < _soundOrder.size(); i++) {
-		save.sounds.push_back(_soundOrder[i]);
-		save.sounds.push_back(1);
-		save.sounds.push_back(_sounds.getVal(_soundOrder[i]).movie->getTime());
-	}
+	_sound.getSaved(save.sounds);
 
 	// The asset the view shows, with its time in the file
 	save.clip = 0;

@@ -43,6 +43,7 @@
 #include "xfiles/headcredits.h"
 #include "xfiles/interface.h"
 #include "xfiles/script.h"
+#include "xfiles/sound.h"
 #include "xfiles/subliminal.h"
 
 namespace Common {
@@ -233,35 +234,6 @@ private:
 	/** Loss (0), paranoia (1) or X-track (2), 0 before RegUberVars. */
 	int32 getUberVariable(uint index) const;
 
-	/** A playing sound asset (XS): environments, effects, music. */
-	struct Sound {
-		Movie *movie;
-		bool positional;  ///< Played by a 3D Sound action
-		int16 x, y;       ///< On the viewpoint grid
-	};
-
-	void stopSound(uint32 id);
-	/** A graphic clip PlayAssetAt placed: played once, drawn over the screen at (x, y). */
-	struct Clip {
-		Movie *movie;
-		int16 x, y;
-	};
-	void stopClip(uint32 id);
-	void clearClips();
-	void updateClips();
-	void drawClips();
-	void updateSounds();
-	/** Start a sound; startMs != 0 is its in point (where a loop goes back to). */
-	void startSound(uint32 id, bool loop, bool positional, int16 x, int16 y, uint32 startMs);
-	/** Volume and balance of a 3D sound for the current view. */
-	void placeSound(Sound &sound);
-	/** The target of a view's first nav whose hotspot has the given one's cursor; 0 if none. */
-	uint32 getNavTarget(uint32 view, uint32 hotSpot) const;
-	/** Position of the viewpoint of the current location that holds a view. */
-	bool getViewPosition(uint32 view, Common::Point &pos) const;
-	/** Where a view looks, from its navigation (XFiles.exe 0x46d7a0). */
-	bool getFacing(uint32 view, const Common::Point &from, Common::Point &facing) const;
-
 	const ADGameDescription *_gameDescription;
 	Common::RandomSource _randomSource;
 	VCData *_data;
@@ -308,11 +280,7 @@ private:
 	};
 	static const uint32 kButtonUpDelay = 100;
 	Common::Array<PressedItem> _pressedItems;     ///< Phone buttons shown pressed (Script::takePressedItems)
-	Common::HashMap<uint32, Sound> _sounds;
-	Common::HashMap<uint32, Clip> _clips;
-	Common::Array<uint32> _soundOrder;    ///< The playing sounds in the order they started (a save lists them so)
-	uint32 _soundView;                    ///< The view the 3D sounds were placed for
-	Common::Point _soundFacing;           ///< The last facing found, kept for views without one
+	SoundPlayer _sound;                           ///< The sounds and placed clips (sound.cpp)
 
 	// Comparison with reference runs of the original (the research repo's
 	// docs/reference-runs.md, "Screenshots"): the xfiles_shots setting names a

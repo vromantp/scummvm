@@ -60,8 +60,8 @@ static const int kMenuCornerLeft = 501, kMenuCornerBottom = 34;
 static const uint32 kXCursor = 25541;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
-	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuOpen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _soundView(0), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
-	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0) {
+	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuOpen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
+	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _sound(_discFiles) {
 	g_engine = this;
 	addHooks();
 	_loadedSave = false;
@@ -74,9 +74,7 @@ XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : E
 }
 
 XFilesEngine::~XFilesEngine() {
-	for (Common::HashMap<uint32, Sound>::iterator it = _sounds.begin(); it != _sounds.end(); ++it)
-		delete it->_value.movie;
-	clearClips();
+	_sound.clear();
 	closeMenu();
 	closeView();
 	delete _interface;
@@ -286,10 +284,7 @@ void XFilesEngine::pauseGame(bool pause) {
 		_video->pause(pause);
 	for (uint i = 0; i < _layers.size(); i++)
 		_layers[i]->pause(pause);
-	for (Common::HashMap<uint32, Sound>::iterator it = _sounds.begin(); it != _sounds.end(); ++it)
-		it->_value.movie->pause(pause);
-	for (Common::HashMap<uint32, Clip>::iterator it = _clips.begin(); it != _clips.end(); ++it)
-		it->_value.movie->pause(pause);
+	_sound.pause(pause);
 }
 
 void XFilesEngine::pauseEngineIntern(bool pause) {
@@ -305,6 +300,7 @@ void XFilesEngine::pauseEngineIntern(bool pause) {
 void XFilesEngine::createScript() {
 	_script = new Script(*_data);
 	_script->setHooks(this);
+	_sound.attach(_data, _script);
 	_script->setTexts(_texts);
 	_script->setRandomSeed(_randomSource.getRandomNumber(0xFFFFFFFF));
 }
@@ -374,8 +370,7 @@ void XFilesEngine::runGame() {
 			continue;
 		}
 		updateTimers();
-		updateSounds();
-		updateClips();
+		_sound.update(getPreference(kPref3DSound));
 		_captions.update(gameMillis());
 		_headCredits.update(gameMillis(), _script->getVideoQueue().empty() && !_dialogBox.isOpen());
 		// The words show over a view, the dialog box or the location card,
@@ -395,7 +390,7 @@ void XFilesEngine::runGame() {
 			updateCursor();
 			drawView();
 			_dialogBox.draw(_screen, _mouse);
-			drawClips();
+			_sound.drawClips(_screen);
 		}
 		_captions.drawCard(_screen);
 		_headCredits.draw(_screen);
@@ -436,8 +431,7 @@ bool XFilesEngine::teardownGame() {
 	_menuOpen = false;
 	_timerStates.clear();
 	_pressedItems.clear();
-	stopAllSounds();
-	clearClips();
+	_sound.clear();
 	_video->close();
 	_videoStarted = 0;
 	closeView();
@@ -452,7 +446,6 @@ bool XFilesEngine::teardownGame() {
 	_lastClickHit.id = 0;
 	_hover = _lastClickHit;
 	_pendingClipTime = -1;
-	_soundView = 0;
 	_shotDue = 0;
 	_shotView = 0;
 	_shotBox = false;
@@ -462,6 +455,7 @@ bool XFilesEngine::teardownGame() {
 	_pauseDepth = _paused ? 1 : 0;
 	pauseGame(false);
 
+	_sound.attach(nullptr, nullptr);
 	delete _script;
 	_script = nullptr;
 	delete _interface;
@@ -608,50 +602,6 @@ void XFilesEngine::startVideoText(const VCAction &action, const Common::Array<in
 
 // -- Sound --------------------------------------------------------------------
 
-void XFilesEngine::playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) {
-	if (mode == kModeStop) {
-		stopSound(id);
-		stopClip(id);
-		return;
-	}
-	startSound(id, mode == kModePlayLoop, positional, x, y, 0);
-}
-
-void XFilesEngine::restoreSound(uint32 id, bool loop, uint32 startMs) {
-	startSound(id, loop, false, 0, 0, startMs);
-}
-
-void XFilesEngine::startSound(uint32 id, bool loop, bool positional, int16 x, int16 y, uint32 startMs) {
-	// Overlays and backgrounds come from the view's asset list; this only
-	// handles sounds
-	VCAsset asset;
-	if (!_data->getAsset(id, asset) || asset.files.empty() || !asset.files[0].file.hasPrefix("XS:"))
-		return;
-	stopSound(id);
-	Sound sound;
-	sound.movie = new Movie();
-	sound.positional = positional;
-	sound.x = x;
-	sound.y = y;
-	if (!sound.movie->open(_discFiles, asset)) {
-		delete sound.movie;
-		_script->finishSound(id);
-		return;
-	}
-	// A restored sound's time is its in point (0x4a88d0)
-	if (startMs)
-		sound.movie->setStart(startMs);
-	debugC(1, kDebugScript, "-- sound #%u %s%s from %u ms", id, asset.files[0].file.c_str(), loop ? ", looped" : "", startMs ? startMs : asset.files[0].start);
-	if (positional)
-		placeSound(sound);
-	sound.movie->play(loop);
-	_sounds[id] = sound;
-	Common::Array<uint32>::iterator it = Common::find(_soundOrder.begin(), _soundOrder.end(), id);
-	if (it != _soundOrder.end())
-		_soundOrder.erase(it);
-	_soundOrder.push_back(id);
-}
-
 bool XFilesEngine::readAssetFile(uint32 id, Common::Array<byte> &data) {
 	// A file asset on the hard disk or a disc (an e-mail's text, XT:<id>.xtx)
 	VCAsset asset;
@@ -670,204 +620,20 @@ int XFilesEngine::measureText(const Common::U32String &text, int size, bool bold
 	return _interface ? _interface->measureItemText(text, size, bold, sans) : -1;
 }
 
+void XFilesEngine::playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) {
+	_sound.play(id, mode, positional, x, y, getPreference(kPref3DSound));
+}
+
+void XFilesEngine::restoreSound(uint32 id, bool loop, uint32 startMs) {
+	_sound.restore(id, loop, startMs);
+}
+
 void XFilesEngine::playClip(uint32 id, int16 x, int16 y) {
-	stopClip(id);
-	Clip clip;
-	clip.movie = new Movie();
-	clip.x = x;
-	clip.y = y;
-	if (!openMovie(*clip.movie, id)) {
-		delete clip.movie;
-		_script->finishSound(id);
-		return;
-	}
-	debugC(1, kDebugScript, "-- clip #%u at (%d, %d)", id, x, y);
-	clip.movie->play(false);
-	_clips[id] = clip;
-}
-
-void XFilesEngine::stopClip(uint32 id) {
-	if (!_clips.contains(id))
-		return;
-	delete _clips[id].movie;
-	_clips.erase(id);
-}
-
-void XFilesEngine::clearClips() {
-	for (Common::HashMap<uint32, Clip>::iterator it = _clips.begin(); it != _clips.end(); ++it)
-		delete it->_value.movie;
-	_clips.clear();
-}
-
-void XFilesEngine::updateClips() {
-	Common::Array<uint32> ended;
-	for (Common::HashMap<uint32, Clip>::iterator it = _clips.begin(); it != _clips.end(); ++it) {
-		it->_value.movie->update();
-		if (it->_value.movie->hasEnded())
-			ended.push_back(it->_key);
-	}
-	for (uint i = 0; i < ended.size(); i++) {
-		stopClip(ended[i]);
-		_script->finishSound(ended[i]);
-	}
-}
-
-void XFilesEngine::drawClips() {
-	for (Common::HashMap<uint32, Clip>::const_iterator it = _clips.begin(); it != _clips.end(); ++it)
-		blit(it->_value.movie->getFrame(), it->_value.x, it->_value.y);
-}
-
-void XFilesEngine::stopSound(uint32 id) {
-	if (!_sounds.contains(id))
-		return;
-	delete _sounds[id].movie;
-	_sounds.erase(id);
-	Common::Array<uint32>::iterator it = Common::find(_soundOrder.begin(), _soundOrder.end(), id);
-	if (it != _soundOrder.end())
-		_soundOrder.erase(it);
+	_sound.playClip(id, x, y);
 }
 
 void XFilesEngine::stopAllSounds() {
-	// StopEnvSounds: Script ends the sounds' objects afterwards
-	for (Common::HashMap<uint32, Sound>::iterator it = _sounds.begin(); it != _sounds.end(); ++it)
-		delete it->_value.movie;
-	_sounds.clear();
-	_soundOrder.clear();
-}
-
-void XFilesEngine::updateSounds() {
-	// 3D sounds are placed again when the player moves
-	bool moved = _script->getView() != _soundView;
-	_soundView = _script->getView();
-	Common::Array<uint32> ended;
-	for (Common::HashMap<uint32, Sound>::iterator it = _sounds.begin(); it != _sounds.end(); ++it) {
-		if (moved && it->_value.positional)
-			placeSound(it->_value);
-		it->_value.movie->update();
-		if (it->_value.movie->hasEnded())
-			ended.push_back(it->_key);
-	}
-	for (uint i = 0; i < ended.size(); i++) {
-		stopSound(ended[i]);
-		_script->finishSound(ended[i]);
-	}
-}
-
-uint32 XFilesEngine::getNavTarget(uint32 view, uint32 hotSpot) const {
-	// XFiles.exe matches navs by their hotspot's cursor: a nav whose own
-	// hotspot shows the Forward cursor counts as the forward one
-	VCView v;
-	VCHotSpot wanted;
-	Common::Array<uint32> navs;
-	if (!_data->getView(view, v) || !_data->getHotSpot(hotSpot, wanted) || !_data->getMembers(v.navs, navs))
-		return 0;
-	for (uint i = 0; i < navs.size(); i++) {
-		VCNav nav;
-		VCHotSpot h;
-		if (_data->getNav(navs[i], nav) && _data->getHotSpot(nav.hotSpot, h) && h.cursor == wanted.cursor)
-			return nav.target;
-	}
-	return 0;
-}
-
-bool XFilesEngine::getViewPosition(uint32 view, Common::Point &pos) const {
-	VCLocation location;
-	if (!_data->getLocation(_script->getLocation(), location))
-		return false;
-	for (uint i = 0; i < location.viewPoints.size(); i++) {
-		VCViewPoint vp;
-		if (!_data->getViewPoint(location.viewPoints[i], vp))
-			continue;
-		for (uint j = 0; j < vp.views.size(); j++) {
-			if (vp.views[j] == view) {
-				pos = Common::Point(vp.x, vp.y);
-				return true;
-			}
-		}
-	}
-	return false;
-}
-
-bool XFilesEngine::getFacing(uint32 view, const Common::Point &from, Common::Point &facing) const {
-	// XFiles.exe 0x46d7a0, as Sound3D_Place 0x4a8be0 uses it: towards the
-	// viewpoint of the view's forward nav; else the forward one of the view
-	// its left nav leads to, turned right by 90 degrees; else that of its
-	// right nav's view, turned left. North is +y, East +x.
-	uint32 hotSpots[3]; // Left, right, forward
-	Common::Point to;
-	if (!_data->getDefaultHotSpots(hotSpots))
-		return false;
-	uint32 target = getNavTarget(view, hotSpots[2]);
-	if (target && getViewPosition(target, to)) {
-		facing = to - from;
-		return true;
-	}
-	for (int side = 0; side < 2; side++) {
-		uint32 sideView = getNavTarget(view, hotSpots[side]);
-		target = sideView ? getNavTarget(sideView, hotSpots[2]) : 0;
-		if (target && getViewPosition(target, to)) {
-			Common::Point d = to - from;
-			facing = side == 0 ? Common::Point(d.y, -d.x) : Common::Point(-d.y, d.x);
-			return true;
-		}
-	}
-	return false;
-}
-
-void XFilesEngine::placeSound(Sound &sound) {
-	// XFiles.exe 0x4a8be0. Without the 3D sound preference the sound plays
-	// at the volume of its type, as any other.
-	VCViewPoint viewPoint;
-	if (!getPreference(kPref3DSound) || !_data->getViewPoint(_script->getViewPoint(), viewPoint)) {
-		sound.movie->setVolume(Audio::Mixer::kMaxChannelVolume);
-		sound.movie->setBalance(0);
-		return;
-	}
-	// Placed before its view is activated, it is silent until the player
-	// moves on (reference run, 2026-10-12: the Field Office ambience at the
-	// start of the game)
-	if (!_script->isViewActive()) {
-		sound.movie->setVolume(0);
-		return;
-	}
-
-	// Volume: 100 within 3 units of the viewpoint, 90 up to 5, then 5 less
-	// per unit, 10 up to 21 and 5 beyond
-	double dx = sound.x - viewPoint.x, dy = sound.y - viewPoint.y;
-	double distance = sqrt(dx * dx + dy * dy);
-	int volume;
-	if (distance < 3)
-		volume = 100;
-	else if (distance <= 5)
-		volume = 90;
-	else if (distance <= 21)
-		volume = 85 - 5 * (int)ceil(distance - 6);
-	else
-		volume = 5;
-	sound.movie->setVolume(volume * Audio::Mixer::kMaxChannelVolume / 100);
-	if (volume < 11)
-		return; // The original leaves the balance alone
-
-	// Balance: the angle between the view's facing and the sound, 0 straight
-	// ahead or behind and 85% to the side. A view without a facing keeps the
-	// last one found; with no facing or the sound on the viewpoint, the
-	// balance is left alone.
-	getFacing(_script->getView(), Common::Point(viewPoint.x, viewPoint.y), _soundFacing);
-	int fx = _soundFacing.x, fy = _soundFacing.y;
-	if ((fx == 0 && fy == 0) || (dx == 0 && dy == 0))
-		return;
-	double angle = acos((fx * dx + fy * dy) / (sqrt((double)(fx * fx + fy * fy)) * distance)) * 2 / M_PI;
-	if (angle > 1)
-		angle = 2 - angle;
-	int balance = (int)(angle * 100);
-	// The original takes 85% in extended precision, which truncates exact
-	// products one lower (100 gives 84)
-	int scaled = ABS(balance) * 85;
-	scaled = scaled / 100 - (scaled && scaled % 100 == 0 ? 1 : 0);
-	balance = fx * dy - dx * fy > 0 ? -scaled : scaled; // Negative: to the left
-	sound.movie->setBalance(balance * 127 / 100);
-	debugC(1, kDebugScript, "-- sound #%u at (%d, %d), viewpoint (%d, %d) facing (%d, %d): volume %d, balance %d",
-		sound.movie->getAssetId(), sound.x, sound.y, viewPoint.x, viewPoint.y, fx, fy, volume, balance);
+	_sound.stopAll();
 }
 
 void XFilesEngine::drawCaptions(const Movie &movie, const Common::Point &pos) {
