@@ -1,0 +1,270 @@
+/* ScummVM - Graphic Adventure Engine
+ *
+ * ScummVM is the legal property of its developers, whose names
+ * are too numerous to list here. Please refer to the COPYRIGHT
+ * file distributed with this source distribution.
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ *
+ */
+
+#include "common/ptr.h"
+#include "common/savefile.h"
+#include "common/system.h"
+#include "common/translation.h"
+#include "engines/metaengine.h"
+#include "gui/message.h"
+
+#include "xfiles/xfiles.h"
+#include "xfiles/movie.h"
+
+namespace XFiles {
+
+enum {
+	// The main menu: the X movie at the left, the entries movie at the right
+	kMenuEntriesLeft = 472,
+	kMenuEntriesShown = 75 ///< Frame of the entries movie where all entries are lit and no help text shows
+};
+
+// Logos and title, played by XFiles.exe itself (no list or action refers to them)
+static const uint32 kIntroAssets[] = {56003, 56002, 19668, 56001};
+
+// Main menu movies (category 37 Game, also played by the exe)
+static const uint32 kMenuXAsset = 49583;
+static const uint32 kMenuEntriesAsset = 49587;
+
+// Main menu: the click sound (PrefClick.amv)
+static const uint32 kMenuClickAsset = 67518;
+
+// Main menu entries (MainMenu_OnMouseClick, XFiles.exe): all from x 472 to 638
+// (exclusive); the vertical extent of each, in the order of enum MenuEntry
+static const int kMenuEntriesRight = 638;
+static const int kMenuEntryRows[][2] = {
+	{78, 114}, {126, 162}, {175, 211}, {225, 261}, {275, 311}, {330, 366}, {385, 421}};
+static const char *const kMenuEntryNames[] = {"new", "load", "save", "previous", "options", "help", "quit"};
+
+// The intro, the start-up menu and the in-game menu the X corner opens
+
+bool XFilesEngine::playIntro() {
+	for (uint i = 0; i < ARRAYSIZE(kIntroAssets) && !shouldQuit(); i++) {
+		if (!openMovie(*_video, kIntroAssets[i]))
+			continue;
+		_video->play(false);
+		while (!shouldQuit() && !_video->hasEnded()) {
+			Input input = pollInput();
+			if (input.click || input.skip)
+				_video->stop();
+			_video->update();
+			_screen.fillRect(Common::Rect(_screen.w, _screen.h), 0);
+			const Graphics::Surface &frame = _video->getFrame();
+			blit(frame, (_screen.w - frame.w) / 2, (_screen.h - frame.h) / 2);
+			present();
+		}
+		_video->close();
+	}
+	return !shouldQuit();
+}
+
+bool XFilesEngine::runMenu() {
+	// The start-up menu: only New, Load, Previous and Quit work; the X loop (49585) and name
+	// (49589) movies and the entries' help texts are not shown.
+	startMenu();
+	while (!shouldQuit()) {
+		Input input = pollInput();
+		if (input.click) {
+			MenuEntry entry = clickMenu(input.pos);
+			if (entry == kMenuNew) {
+				closeMenu();
+				return true;
+			}
+			if ((entry == kMenuLoad && loadGameDialog()) || (entry == kMenuPrevious && loadMostRecentSave())) {
+				// The load is queued; the game starts from it
+				closeMenu();
+				return true;
+			}
+			if (entry == kMenuQuit) {
+				quitGame();
+				break;
+			}
+		}
+		updateMenu();
+		drawMenu();
+		present();
+	}
+	closeMenu();
+	return false;
+}
+
+void XFilesEngine::startMenu() {
+	closeMenu();
+	_menuX = new Movie();
+	_menuEntries = new Movie();
+	if (openMovie(*_menuX, kMenuXAsset))
+		_menuX->play(false);
+	if (openMovie(*_menuEntries, kMenuEntriesAsset))
+		_menuEntries->play(false);
+}
+
+void XFilesEngine::closeMenu() {
+	delete _menuX;
+	delete _menuEntries;
+	delete _menuClick;
+	_menuX = _menuEntries = _menuClick = nullptr;
+}
+
+void XFilesEngine::updateMenu() {
+	_menuX->update();
+	_menuEntries->update();
+	if (!_menuEntries->hasEnded() && _menuEntries->getCurFrame() >= kMenuEntriesShown)
+		_menuEntries->stop();
+	if (_menuClick) {
+		_menuClick->update();
+		if (_menuClick->hasEnded()) {
+			delete _menuClick;
+			_menuClick = nullptr;
+		}
+	}
+}
+
+void XFilesEngine::drawMenu() {
+	_screen.fillRect(Common::Rect(_screen.w, _screen.h), 0);
+	blit(_menuX->getFrame(), 0, 0);
+	blit(_menuEntries->getFrame(), kMenuEntriesLeft, 0);
+}
+
+XFilesEngine::MenuEntry XFilesEngine::hitMenu(const Common::Point &pos) const {
+	if (pos.x < kMenuEntriesLeft || pos.x >= kMenuEntriesRight)
+		return kMenuNone;
+	for (int i = 0; i < kMenuEntryCount; i++) {
+		if (pos.y >= kMenuEntryRows[i][0] && pos.y < kMenuEntryRows[i][1])
+			return (MenuEntry)i;
+	}
+	return kMenuNone;
+}
+
+XFilesEngine::MenuEntry XFilesEngine::clickMenu(const Common::Point &pos) {
+	MenuEntry entry = hitMenu(pos);
+	if (entry == kMenuNone)
+		return entry; // A click outside the entries does nothing
+	debugC(1, kDebugScript, "-- menu %s", kMenuEntryNames[entry]);
+	// Every entry plays PrefClick.amv (the exe also plays the entry's highlight)
+	delete _menuClick;
+	_menuClick = new Movie();
+	if (openMovie(*_menuClick, kMenuClickAsset)) {
+		_menuClick->play(false);
+	} else {
+		delete _menuClick;
+		_menuClick = nullptr;
+	}
+	return entry;
+}
+
+void XFilesEngine::menuChoice(MenuEntry entry) {
+	switch (entry) {
+	case kMenuPrevious:
+		closeMenu();
+		_menuOpen = false;
+		pauseGame(false);
+		break;
+	case kMenuQuit:
+		if (saveOnExit())
+			quitGame();
+		break;
+	case kMenuNew:
+		if (saveOnExit())
+			restartGame();
+		break;
+	case kMenuSave:
+		// The menu stays up, as after the original's save
+		saveGameDialog();
+		break;
+	case kMenuLoad:
+		// A chosen save is queued; the next frame closes the menu and loads it
+		loadGameDialog();
+		break;
+	default:
+		break; // Options and Help are not implemented (B-061)
+	}
+}
+
+bool XFilesEngine::saveOnExit() {
+	// A scripted run (xfiles_steps) has nobody to answer
+	if (!_script || !_steps.empty())
+		return true;
+	int32 mode = _prefVariables[kPrefSaveGameOnExit] ? _script->getVariable(_prefVariables[kPrefSaveGameOnExit]) : 'A';
+	if (mode == 'Y') {
+		// The original saves to the current save without asking; the autosave slot never overwrites a player's slot
+		if (canSaveGameStateCurrently() &&
+				saveGameState(getAutosaveSlot(), Common::convertFromU32String(_("Autosave")), true).getCode() != Common::kNoError)
+			g_system->displayMessageOnOSD(_("Error occurred making autosave"));
+		return true;
+	}
+	if (mode != 'A')
+		return true;
+	GUI::MessageDialog question(_("Do you want to save your game first?"), _("Yes"), _("No"));
+	if (question.runModal() != GUI::kMessageOK)
+		return true;
+	// A game that cannot be saved just now does not hold up New or Quit
+	return !canSaveGameStateCurrently() || saveGameDialog();
+}
+
+bool XFilesEngine::loadMostRecentSave() {
+	int best = -1;
+	uint64 bestTime = 0;
+	SaveStateList saves = getMetaEngine()->listSaves(_targetName.c_str());
+	for (SaveStateList::const_iterator it = saves.begin(); it != saves.end(); ++it) {
+		Common::ScopedPtr<Common::InSaveFile> in(_saveFileMan->openForLoading(getSaveStateName(it->getSaveSlot())));
+		ExtendedSavegameHeader header;
+		if (!in || !MetaEngine::readSavegameHeader(in.get(), &header))
+			continue;
+		uint16 year;
+		uint8 month, day, hour, minute;
+		MetaEngine::decodeSavegameDate(&header, year, month, day);
+		MetaEngine::decodeSavegameTime(&header, hour, minute);
+		uint64 time = ((((uint64)year * 12 + month) * 31 + day) * 24 + hour) * 60 + minute;
+		// The date has no seconds: of two saves in the same minute the later slot counts
+		if (best < 0 || time > bestTime || (time == bestTime && it->getSaveSlot() > best)) {
+			best = it->getSaveSlot();
+			bestTime = time;
+		}
+	}
+	if (best < 0) {
+		g_system->displayMessageOnOSD(_("There is no saved game"));
+		return false;
+	}
+	Common::Error status = loadGameState(best);
+	if (status.getCode() != Common::kNoError) {
+		GUI::MessageDialog errorDialog(status.getDesc());
+		errorDialog.runModal();
+		return false;
+	}
+	return true;
+}
+
+void XFilesEngine::openGameMenu() {
+	// XCorner_OpenMenu: the held item goes back, the scene is suspended and
+	// the menu shows; the dialog box stays open behind it
+	if (_menuOpen)
+		return;
+	if (isHolding())
+		putBack();
+	// The saves made while the menu is up show the game, not the menu
+	_menuShot.copyFrom(_screen);
+	pauseGame(true);
+	_menuOpen = true;
+	startMenu();
+	debugC(1, kDebugScript, "-- menu open");
+}
+
+} // End of namespace XFiles

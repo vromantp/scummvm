@@ -20,12 +20,15 @@
  */
 
 
+#include "common/algorithm.h"
 #include "common/debug.h"
 #include "common/serializer.h"
 #include "common/stream.h"
 #include "common/textconsole.h"
 
 #include "xfiles/xfiles.h"
+#include "xfiles/movie.h"
+#include "xfiles/vcdata.h"
 
 namespace XFiles {
 
@@ -136,6 +139,72 @@ Common::Error XFilesEngine::loadGameStream(Common::SeekableReadStream *stream) {
 	_pendingLoad = load;
 	debugC(1, kDebugScript, "-- game load pending");
 	return Common::kNoError;
+}
+
+bool XFilesEngine::canSaveGameStateCurrently(Common::U32String *msg) {
+	// The moment of the original's save: the view is active (no travel, no
+	// held view), no video plays or waits, no phone button is down. The
+	// menu being open does not matter, it is where the original saves.
+	return _script && !_pendingLoad.valid && _script->isViewActive() && _script->getVideoQueue().empty() && !_video->isOpen() &&
+		_pressedItems.empty();
+}
+
+bool XFilesEngine::canLoadGameStateCurrently(Common::U32String *msg) {
+	return _data != nullptr;
+}
+
+void XFilesEngine::fillSnapshot(VCSave &save) {
+	// GameState_Save (0x4d9450); Script knows its part
+	_script->snapshot(save);
+	save.photos = 0;
+	if (_dialogBox.isOpen())
+		save.dialogBox = _dialogBox.getCharView();
+
+	// Timers in the order they were started: a one-shot one keeps its
+	// remaining time, a periodic one its period
+	uint32 now = gameMillis();
+	const Common::HashMap<uint, Script::Timer> &timers = _script->getTimers();
+	Common::Array<uint> numbers;
+	for (Common::HashMap<uint, Script::Timer>::const_iterator it = timers.begin(); it != timers.end(); ++it)
+		numbers.push_back(it->_key);
+	for (uint i = 1; i < numbers.size(); i++) {
+		for (uint j = i; j > 0 && timers.getVal(numbers[j]).serial < timers.getVal(numbers[j - 1]).serial; j--)
+			SWAP(numbers[j], numbers[j - 1]);
+	}
+	save.timers.clear();
+	for (uint i = 0; i < numbers.size(); i++) {
+		const Script::Timer &timer = timers.getVal(numbers[i]);
+		uint32 time = timer.ms;
+		if (!timer.periodic && _timerStates.contains(numbers[i]) && _timerStates[numbers[i]].serial == timer.serial) {
+			uint32 elapsed = now - _timerStates[numbers[i]].started;
+			time = elapsed < timer.ms ? timer.ms - elapsed : 0;
+		}
+		save.timers.push_back(numbers[i]);
+		save.timers.push_back(time);
+		save.timers.push_back(timer.periodic ? 1 : 0);
+	}
+
+	// Sounds, with their position in ms from the start of the file
+	save.sounds.clear();
+	for (uint i = 0; i < _soundOrder.size(); i++) {
+		save.sounds.push_back(_soundOrder[i]);
+		save.sounds.push_back(1);
+		save.sounds.push_back(_sounds.getVal(_soundOrder[i]).movie->getTime());
+	}
+
+	// The asset the view shows, with its time in the file
+	save.clip = 0;
+	save.clipFlag = 0;
+	save.clipTime = 0;
+	if (!_layers.empty() && !_viewAssets.empty()) {
+		VCAsset asset;
+		if (_data->getAsset(_viewAssets[0], asset)) {
+			save.clip = asset.id;
+			save.clipFlag = (asset.flags & kAssetLoop) != 0;
+			save.clipTime = _layers[0]->getTime();
+		}
+	}
+	save.credits = _headCredits.getLastCredit();
 }
 
 } // End of namespace XFiles

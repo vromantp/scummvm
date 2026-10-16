@@ -74,7 +74,7 @@ public:
 	 * The engine's GameState_Save (XFiles.exe 0x4d9450): the Script's snapshot and what only
 	 * the engine knows: the timers' times, the sounds' positions, the view's clip and its
 	 * time, the head credits, the open dialog box. Photos on the camera are 0 until the
-	 * camera is ported.
+	 * camera is ported. (saveload.cpp)
 	 */
 	void fillSnapshot(VCSave &save);
 
@@ -146,8 +146,6 @@ private:
 	Common::Point getBandPosition(const Movie &movie) const;
 	bool openMovie(Movie &movie, uint32 assetId);
 
-	bool playIntro();
-	bool runMenu();
 	void runGame();
 	void createScript();
 	/** The new-game half of runGame (Game_Start, XFiles.exe 0x48cd70). */
@@ -161,7 +159,9 @@ private:
 	/** A queued load (loadGameStream): teardown, a new Script with the saved values, restore. */
 	void applyPendingLoad();
 
-	// The main menu, also the one the X corner opens during play
+	// The intro and the main menu, also the one the X corner opens during play (menu.cpp)
+	bool playIntro();
+	bool runMenu();
 	void startMenu();
 	void closeMenu();
 	void updateMenu();
@@ -173,11 +173,6 @@ private:
 	void menuChoice(MenuEntry entry);
 	/** XCorner_OpenMenu (0x4ab9e0): put the item back, pause, show the menu. */
 	void openGameMenu();
-
-	/** The game's own clock: getMillis() without the time spent paused. */
-	uint32 gameMillis() const;
-	/** Freeze or resume the game's time, its videos and sounds. Nested: each pause needs its resume. */
-	void pauseGame(bool pause);
 	/**
 	 * Menu_AskSave before New and Quit, by Pref_bSaveGameOnExit: 'A' asks (yes opens the save
 	 * dialog), 'Y' writes the autosave slot, 'N' does nothing. false: the player cancelled the
@@ -186,6 +181,11 @@ private:
 	bool saveOnExit();
 	/** The start-up menu's Previous: load the most recent save (autosave included). false if there is none. */
 	bool loadMostRecentSave();
+
+	/** The game's own clock: getMillis() without the time spent paused. */
+	uint32 gameMillis() const;
+	/** Freeze or resume the game's time, its videos and sounds. Nested: each pause needs its resume. */
+	void pauseGame(bool pause);
 
 	void playQueuedVideo(const Input &input);
 	void updateTimers();
@@ -315,7 +315,7 @@ private:
 	// Comparison with reference runs of the original (the research repo's
 	// docs/reference-runs.md, "Screenshots"): the xfiles_shots setting names a
 	// folder for screenshots taken at the events xfref.dll takes them at,
-	// xfiles_steps a step list (as Script::step takes) played from the start
+	// xfiles_steps a step list (as Script::step takes) played from the start (refrun.cpp)
 	void scheduleShot(const char *reason, uint32 id, uint32 delay);
 	void updateShots();
 	void saveShot();

@@ -9,12 +9,14 @@ MODULE_OBJS = \
 	discfiles.o \
 	headcredits.o \
 	interface.o \
+	menu.o \
 	metaengine.o \
 	movie.o \
 	neoaccess.o \
 	phone.o \
 	pda.o \
 	pictures.o \
+	refrun.o \
 	saveload.o \
 	script.o \
 	subliminal.o \
