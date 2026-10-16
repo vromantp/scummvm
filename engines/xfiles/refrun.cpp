@@ -139,7 +139,9 @@ void XFilesEngine::runSteps() {
 		}
 		if (step == "escape") {
 			// Engine only: the Escape key
-			if (!_menuOpen && queue.empty())
+			if (_menuLayout)
+				escapeMenuLayout();
+			else if (!_menuOpen && queue.empty())
 				openGameMenu();
 			return;
 		}

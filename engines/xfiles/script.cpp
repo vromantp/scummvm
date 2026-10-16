@@ -658,8 +658,8 @@ void Script::addCoreHooks() {
 		return false;
 	});
 
-	// Hooks only logged on purpose: the menu's Save, Load, Options and Help (B-061, B-063)
-	static const char *const kLoggedMenuHooks[] = {"ReturnMainMenu", "ReturnFromHelp", "SaveGameState", "SaveKeyPress",
+	// Hooks only logged on purpose: the menu's Save and Load (B-063)
+	static const char *const kLoggedMenuHooks[] = {"SaveGameState", "SaveKeyPress",
 		"SaveLoadComit", "SaveLoadInit", "SaveSlotSelect"};
 	for (uint i = 0; i < ARRAYSIZE(kLoggedMenuHooks); i++)
 		t.addLogged(kLoggedMenuHooks[i]);

@@ -218,6 +218,8 @@ public:
 	 * ask:ID.
 	 */
 	void step(const Common::String &step);
+	/** Display a layout from exe code, as the main menu's Options and Help do (the `layout:` step). */
+	void displayLayout(uint32 layoutId) { showLayout(layoutId); }
 
 	/** The video on screen ended: fire its Object Deactivation, start the next one. */
 	void finishVideo() { endVideo("ended"); }

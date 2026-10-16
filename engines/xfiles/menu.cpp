@@ -54,6 +54,12 @@ static const uint32 kMenuLoopSoundAsset = 94320; // Its sound, MIDloop.amv
 static const uint32 kMenuTopAsset = 49589;       // The top strip, TOPro.mov
 static const uint32 kMenuReturnAsset = 72895;    // return.pic, over Previous when the menu opens from the game
 
+// The layouts of the Options and Help entries, and the buttons that lead back (Game_KeyDown, Escape)
+static const uint32 kOptionsLayout = 49738;
+static const uint32 kHelpLayout = 50460;
+static const uint32 kOptionsBackItem = 49841;
+static const uint32 kHelpBackItem = 50464;
+
 // Main menu: the click sound (PrefClick.amv)
 static const uint32 kMenuClickAsset = 67518;
 
@@ -253,8 +259,14 @@ void XFilesEngine::menuChoice(MenuEntry entry) {
 		// A chosen save is queued; the next frame closes the menu and loads it
 		loadGameDialog();
 		break;
+	case kMenuOptions:
+		openMenuLayout(kOptionsLayout);
+		break;
+	case kMenuHelp:
+		openMenuLayout(kHelpLayout);
+		break;
 	default:
-		break; // Options and Help are not implemented (B-061)
+		break;
 	}
 }
 
@@ -325,6 +337,42 @@ void XFilesEngine::openGameMenu() {
 	_menuOpen = true;
 	startMenu();
 	debugC(1, kDebugScript, "-- menu open");
+}
+
+void XFilesEngine::openMenuLayout(uint32 layout) {
+	// MainMenu_OnMouseClick: hide the menu (the scene stays suspended) and display the layout
+	if (!_script)
+		return;
+	closeMenu();
+	_menuOpen = false;
+	_menuLayout = true;
+	_script->displayLayout(layout);
+}
+
+void XFilesEngine::reopenMenu() {
+	// The menu object is created again; the media show as stills (the fade-in plays once per run)
+	_menuReopen = false;
+	if (!_menuLayout)
+		return;
+	_menuLayout = false;
+	_menuOpen = true;
+	startMenu();
+	debugC(1, kDebugScript, "-- menu open");
+}
+
+void XFilesEngine::escapeMenuLayout() {
+	// Game_KeyDown: a shown item 50464 (Help) or 49841 (Preferences' main menu button) gets its Mouse Click
+	const Common::Array<Script::Layout> &layouts = _script->getLayouts();
+	for (uint i = 0; i < layouts.size(); i++) {
+		for (uint j = 0; j < layouts[i].items.size(); j++) {
+			uint32 item = layouts[i].items[j];
+			if (item == kHelpBackItem || item == kOptionsBackItem) {
+				_script->press(item);
+				_script->release();
+				return;
+			}
+		}
+	}
 }
 
 } // End of namespace XFiles

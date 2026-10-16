@@ -175,6 +175,12 @@ private:
 	void menuChoice(MenuEntry entry);
 	/** XCorner_OpenMenu (0x4ab9e0): put the item back, pause, show the menu. */
 	void openGameMenu();
+	/** Options and Help: hide the menu, show the layout over the paused game (the pause stays). */
+	void openMenuLayout(uint32 layout);
+	/** ReturnMainMenu / ReturnFromHelp, once the layout is unshown: the menu again. */
+	void reopenMenu();
+	/** Escape over Options or Help: Game_KeyDown fires the Mouse Click of item 50464 or 49841. */
+	void escapeMenuLayout();
 	/**
 	 * Menu_AskSave before New and Quit, by Pref_bSaveGameOnExit: 'A' asks (yes opens the save
 	 * dialog), 'Y' writes the autosave slot, 'N' does nothing. false: the player cancelled the
@@ -260,6 +266,8 @@ private:
 	bool _menuIntroDone;                  ///< g_menuIntroDone (0x6b1980): the fade-in has played this run, never cleared
 	bool _menuFading;                     ///< The X is still fading in, alone
 	bool _menuOpen;                       ///< The menu is up over the running game
+	bool _menuLayout;                     ///< Options or Help (layout 49738, 50460) is up over the paused game
+	bool _menuReopen;                     ///< ReturnMainMenu or ReturnFromHelp ran: the menu reopens next frame
 	bool _paused;
 	uint _pauseDepth;                     ///< Pauses asked for (menu, GMM, dialogs)
 	Graphics::ManagedSurface _menuShot;   ///< The screen when the menu opened (the saves' thumbnail)

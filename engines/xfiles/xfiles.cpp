@@ -60,7 +60,7 @@ static const int kMenuCornerLeft = 501, kMenuCornerBottom = 34;
 static const uint32 kXCursor = 25541;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
-	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuOpen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
+	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuOpen(false), _menuLayout(false), _menuReopen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
 	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _sound(_discFiles) {
 	g_engine = this;
 	addHooks();
@@ -352,8 +352,12 @@ void XFilesEngine::runGame() {
 		if (_pendingLoad.valid)
 			applyPendingLoad();
 		Input input = pollInput();
+		if (_menuReopen)
+			reopenMenu();
 		// The X corner and Escape open the menu, not during a video
-		if (input.escape && !_menuOpen && _script->getVideoQueue().empty())
+		if (input.escape && _menuLayout)
+			escapeMenuLayout();
+		else if (input.escape && !_menuOpen && _script->getVideoQueue().empty())
 			openGameMenu();
 		if (_menuOpen) {
 			updateMenu();
@@ -392,7 +396,9 @@ void XFilesEngine::runGame() {
 			_dialogBox.draw(_screen, _mouse);
 			_sound.drawClips(_screen);
 		}
-		_captions.drawCard(_screen);
+		// The location card is a timed overlay on the suspended scene: it would sit over Options and Help
+		if (!_menuLayout)
+			_captions.drawCard(_screen);
 		_headCredits.draw(_screen);
 		_subliminal.draw(_screen);
 		present();
@@ -429,6 +435,8 @@ bool XFilesEngine::teardownGame() {
 	// database again, so the game starts from the unchanged XFiles.gam
 	closeMenu();
 	_menuOpen = false;
+	_menuLayout = false;
+	_menuReopen = false;
 	_timerStates.clear();
 	_pressedItems.clear();
 	_sound.clear();
@@ -492,6 +500,15 @@ void XFilesEngine::addHooks() {
 	t.add("StartVideoText", [](XFilesEngine &e, const HookCall &c) {
 		e.startVideoText(c.action, c.args);
 		return true;
+	});
+	// The layouts' buttons unshow the layout, then these create the menu object again (MainMenu_ctor)
+	t.add("ReturnMainMenu", [](XFilesEngine &e, const HookCall &c) {
+		e._menuReopen = e._menuLayout;
+		return e._menuLayout;
+	});
+	t.add("ReturnFromHelp", [](XFilesEngine &e, const HookCall &c) {
+		e._menuReopen = e._menuLayout;
+		return e._menuLayout;
 	});
 	t.add("RegPreferences", [](XFilesEngine &e, const HookCall &c) {
 		e.registerPreferences(c.action);
@@ -848,6 +865,10 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 		_script->press(hit.id);
 		return;
 	}
+
+	// Over Options and Help the scene stays suspended: only the layout's items take clicks
+	if (_menuLayout)
+		return;
 
 	// The X corner (kind 26) comes after the interface items, before the
 	// dialog box and the modal layouts
