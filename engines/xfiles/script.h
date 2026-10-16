@@ -29,6 +29,7 @@
 #include "common/str-array.h"
 #include "common/ustr.h"
 
+#include "xfiles/computers.h"
 #include "xfiles/hooks.h"
 #include "xfiles/phone.h"
 #include "xfiles/vcdata.h"
@@ -151,6 +152,7 @@ public:
  */
 class Script {
 	// The areas with their own class use the Script services listed in docs/subsystems/interpreter.md
+	friend class ComputerHooks;
 	friend class PhoneHooks;
 
 public:
@@ -422,7 +424,6 @@ private:
 	/** Fill _hookTable: the Script's own hooks, then those of each area file. */
 	void addHooks();
 	void addCoreHooks();
-	void addComputerHooks(); // computers.cpp
 	void addPDAHooks();      // pda.cpp
 	void addEvidence(uint32 id);
 	void removeEvidence(uint32 id);
@@ -450,26 +451,6 @@ private:
 	/** RandGen(var, n): a number from 0 to n (0x49f6d0). */
 	void randGen(uint32 variableId, int32 n);
 	void isIItemHeld(uint32 variableId, int32 item);
-
-	// Computer text entry (computers.cpp)
-	void loginInit(char mode);
-	void loginKeyPress(int field, uint key, int event, const EventFields &fields);
-	void pswdConnect(uint32 variableId);
-	void ingInit();
-	void ingKeyPress(uint key, int event, const EventFields &fields);
-	void loginClick(int field);
-	void mediaInit();
-	void playAssetAt(uint32 asset, int x, int y);
-	/** Focus a log-in field (state 0 to 3) and put the caret behind its text (0x4867e0). */
-	void loginFocus(int field);
-	void moveLoginCaret(int field);
-	const Common::String &loginBuffer(int field) const;
-	/** The text asset equals the buffer (0x459e00): case ignored, two empty strings are equal. */
-	bool sameLoginText(const Common::String &buffer, uint32 textAsset);
-	/** The editor of 0x486e60: a key edits the buffer (at most max characters); true if it changed. */
-	static bool editText(uint key, Common::String &buffer, uint max);
-	/** Draw a computer field (Courier New 14, 0x4be2c0) into an item; an empty text clears it. */
-	void setFieldText(uint32 item, const Common::String &text);
 
 	/** Set an interface item's enabled flag; an item of a shown layout comes or goes with it. */
 	void setItemEnabled(uint32 item, bool enabled);
@@ -510,12 +491,19 @@ private:
 	bool hasNote(uint32 id) const;
 	bool dayHasNote(uint day, uint32 note) const;
 
-	// Services for the area classes (PhoneHooks) besides the public ones
+	// Services for the area classes (PhoneHooks, ComputerHooks) besides the public ones
 	void clearItemText(uint32 item) { _itemTexts.erase(item); }
 	/** Show an interface item pressed: its picture, enabled by the click, goes 100 ms later (takePressedItems). */
 	void pressItem(uint32 item) { _pressed.push_back(item); }
 	/** The node RegCurrNode's variable holds, 0 before RegCurrNode. */
 	int32 getCurrentNode() const { return _currNodeVariable ? getVariable(_currNodeVariable) : 0; }
+	void setFocus(uint32 item) { _focus = item; }
+	/** Where an item's text or picture is drawn from (getItemOrigin), e.g. a caret behind a field's text. */
+	void setItemOrigin(uint32 item, const Common::Point &origin) { _itemOrigins[item] = origin; }
+	/** The preference Pref_bArtificialIntuition is on (its variable from RegPreferences). */
+	bool isArtificialIntuitionOn() const { return _prefArtificialIntuition && getVariable(_prefArtificialIntuition); }
+	/** PlayAssetAt (0x491de0): start the asset unless it already plays; an XG clip is drawn at (x, y). */
+	void playAssetAt(uint32 asset, int x, int y);
 	/** DoActionList(trigger, actionList): another trigger's actions. */
 	void runActionList(uint32 actionList, int event, const EventFields &fields);
 	void endSound(uint32 id, const char *how);
@@ -555,6 +543,7 @@ private:
 	ScriptHooks *_hooks;
 	HookTable<Script> _hookTable; ///< The C++ function hooks Script implements, by name
 	PhoneHooks _phone;            ///< The phone's hooks and state (phone.cpp)
+	ComputerHooks _computer;      ///< The computers' text entry (computers.cpp)
 	Common::WinResources *_texts;
 	Common::HashMap<uint32, int32> _variables;
 	Common::HashMap<uint32, bool> _enabled;    ///< Objects without a VCEnabled are always enabled
@@ -595,18 +584,6 @@ private:
 	Common::HashMap<uint, int32> _preferences; ///< See setPreference()
 
 	/** The computer text entry buffers (XFiles.exe 0x6be918 and others). */
-	struct Computer {
-		Common::String user;      ///< LoginKeyPress 1, max 23
-		Common::String password;  ///< LoginKeyPress 2, max 23
-		Common::String field3;    ///< LoginKeyPress 3, max 21
-		Common::String query;     ///< INGKeyPressed, max 30
-		Common::String field4;    ///< The second pair's 4th field (LoginKeyPress 4 is not ported: stays empty)
-		int loginState;           ///< 0x6b9120: the focused log-in field, 0 to 3
-		bool connectedBefore;     ///< 0x6b16bc: copy of variable 4946, set by the first connection
-		int wrongTries;           ///< 0x6b16c4: failed connections with the right user name; not in a save
-		int mediaCounter;         ///< 0x6b9b94 (MediaInit)
-		Computer() : loginState(0), connectedBefore(false), wrongTries(0), mediaCounter(0) {}
-	} _computer;
 	Common::HashMap<uint32, Common::Point> _itemOrigins; ///< See getItemOrigin()
 	Common::Array<uint32> _videoQueue;
 	struct VideoPlay {

@@ -19,6 +19,7 @@
  *
  */
 
+#include "xfiles/computers.h"
 #include "xfiles/script.h"
 
 namespace XFiles {
@@ -83,40 +84,42 @@ enum {
 	kVkDelete = 0x2e
 };
 
-void Script::addComputerHooks() {
-	HookTable<Script> &t = _hookTable;
+ComputerHooks::ComputerHooks(Script &script) : _script(script), _loginState(0), _connectedBefore(false), _wrongTries(0), _mediaCounter(0) {
+}
+
+void ComputerHooks::addHooks(HookTable<Script> &t) {
 	t.add("LoginInit", [](Script &s, const HookCall &c) {
 		if (!c.has(1) || (char)c.args[0] != 'C')
 			return false;
-		s.loginInit('C'); // TODO B-075: LoginInit('P') (0x4b2970) is not read
+		s._computer.loginInit('C'); // TODO B-075: LoginInit('P') (0x4b2970) is not read
 		return true;
 	});
 	t.add("LoginKeyPress", [](Script &s, const HookCall &c) {
 		if (!c.has(2) || c.args[0] < 1 || c.args[0] > 3)
 			return false;
-		s.loginKeyPress(c.args[0], c.args[1], c.event, c.fields); // TODO B-075: 4 and 5
+		s._computer.loginKeyPress(c.args[0], c.args[1], c.event, c.fields); // TODO B-075: 4 and 5
 		return true;
 	});
 	t.add("LoginClick", [](Script &s, const HookCall &c) {
 		if (!c.has(1) || c.args[0] < 1 || c.args[0] > 4)
 			return false;
-		s.loginClick(c.args[0]);
+		s._computer.loginClick(c.args[0]);
 		return true;
 	});
 	t.add("PswdConnect", [](Script &s, const HookCall &c) {
 		if (!c.isVariable(0))
 			return false;
-		s.pswdConnect(c.action.args[0].value);
+		s._computer.pswdConnect(c.action.args[0].value);
 		return true;
 	});
 	t.add("INGInit", [](Script &s, const HookCall &c) {
-		s.ingInit();
+		s._computer.ingInit();
 		return true;
 	});
 	t.add("INGKeyPressed", [](Script &s, const HookCall &c) {
 		if (!c.has(1))
 			return false;
-		s.ingKeyPress(c.args[0], c.event, c.fields);
+		s._computer.ingKeyPress(c.args[0], c.event, c.fields);
 		return true;
 	});
 	t.add("PlayAssetAt", [](Script &s, const HookCall &c) {
@@ -126,7 +129,7 @@ void Script::addComputerHooks() {
 		return true;
 	});
 	t.add("MediaInit", [](Script &s, const HookCall &c) {
-		s.mediaInit();
+		s._computer.mediaInit();
 		return true;
 	});
 	// They release the screen's font only, or do nothing
@@ -135,7 +138,8 @@ void Script::addComputerHooks() {
 		t.add(kNothingToDo[i], [](Script &s, const HookCall &c) { return true; });
 }
 
-bool Script::editText(uint key, Common::String &buffer, uint max) {
+/** The editor of 0x486e60: a key edits the buffer (at most max characters); true if it changed. */
+static bool editText(uint key, Common::String &buffer, uint max) {
 	// 0x486e60: Backspace and 0x2e delete the last character, also when the buffer is full. The characters
 	// 0x486430 turns a key into are digits, letters, space (and - ( ) , .); a-z are upper-cased. The keys
 	// arrive as virtual-key codes, whose digits and letters are those characters.
@@ -156,76 +160,76 @@ bool Script::editText(uint key, Common::String &buffer, uint max) {
 	return true;
 }
 
-void Script::setFieldText(uint32 item, const Common::String &text) {
+void ComputerHooks::setFieldText(uint32 item, const Common::String &text) {
 	if (text.empty()) {
-		_itemTexts.erase(item);
+		_script.clearItemText(item);
 		return;
 	}
 	// 0x4be2c0: not wrapped
-	setItemText(item, Common::U32String(text), kFieldTextSize, false, kFieldTextColor, kAlignLeft, false, 0);
+	_script.setItemText(item, Common::U32String(text), kFieldTextSize, false, kFieldTextColor, Script::kAlignLeft, false, 0);
 }
 
-const Common::String &Script::loginBuffer(int field) const {
+const Common::String &ComputerHooks::loginBuffer(int field) const {
 	switch (field) {
 	case 1:
-		return _computer.user;
+		return _user;
 	case 2:
-		return _computer.password; // the caret is measured on the plain password
+		return _password; // the caret is measured on the plain password
 	case 3:
-		return _computer.field3;
+		return _field3;
 	default:
-		return _computer.field4;
+		return _field4;
 	}
 }
 
-void Script::moveLoginCaret(int field) {
+void ComputerHooks::moveLoginCaret(int field) {
 	// 0x4867e0: behind the text from the field's static point, only while the buffer is shorter than 24
 	const Common::String &buffer = loginBuffer(field);
 	if (buffer.size() >= kCaretMax)
 		return;
-	_itemOrigins[kLoginCarets[field > 2 ? 1 : 0]] = Common::Point(
-		kLoginOrigins[field - 1][0] + buffer.size() * kFieldCharWidth, kLoginOrigins[field - 1][1]);
+	_script.setItemOrigin(kLoginCarets[field > 2 ? 1 : 0],
+		Common::Point(kLoginOrigins[field - 1][0] + buffer.size() * kFieldCharWidth, kLoginOrigins[field - 1][1]));
 }
 
-void Script::loginFocus(int field) {
-	_computer.loginState = field - 1;
-	_focus = kLoginKeys[field - 1];
+void ComputerHooks::loginFocus(int field) {
+	_loginState = field - 1;
+	_script.setFocus(kLoginKeys[field - 1]);
 	moveLoginCaret(field);
 }
 
-void Script::loginInit(char mode) {
+void ComputerHooks::loginInit(char mode) {
 	// 0x468f00: the buffers are empty. Once the first connection was made, or with Artificial Intuition on, the
 	// user name is filled in and the password is next; otherwise the user name is
 	if (mode != 'C')
 		return;
-	_computer.user.clear();
-	_computer.password.clear();
-	_computer.connectedBefore = getVariable(kConnectedBefore) != 0;
-	if (_computer.connectedBefore || (_prefArtificialIntuition && getVariable(_prefArtificialIntuition))) {
+	_user.clear();
+	_password.clear();
+	_connectedBefore = _script.getVariable(kConnectedBefore) != 0;
+	if (_connectedBefore || _script.isArtificialIntuitionOn()) {
 		Common::U32String name;
-		if (getTextAsset(kLoginUserName, name))
-			_computer.user = name.encode();
+		if (_script.getTextAsset(kLoginUserName, name))
+			_user = name.encode();
 		loginFocus(2);
 	} else {
 		loginFocus(1);
 	}
-	setFieldText(kLoginUserText, _computer.user);
+	setFieldText(kLoginUserText, _user);
 	setFieldText(kLoginPasswordText, Common::String());
-	log("      login: " + Common::String::format("focus #%u", _focus));
+	_script.log("      login: " + Common::String::format("focus #%u", _script.getFocus()));
 }
 
-void Script::loginClick(int field) {
+void ComputerHooks::loginClick(int field) {
 	// 0x4b1200: the focus moves to the field as Tab does, only when the other field of its pair has it
 	static const int kNeededState[4] = { 1, 0, 3, 2 };
-	if (_computer.loginState == kNeededState[field - 1])
+	if (_loginState == kNeededState[field - 1])
 		loginFocus(field);
 }
 
-void Script::loginKeyPress(int field, uint key, int event, const EventFields &fields) {
+void ComputerHooks::loginKeyPress(int field, uint key, int event, const Common::Array<int32> &fields) {
 	// 0x4b31e0 first: Return presses the Connect button (field 3: the second pair's), Tab moves between the two
 	// fields of the pair
 	if (key == kVkReturn) {
-		runActionList(field == 3 ? kLoginReturn2Actions : kLoginReturnActions, event, fields);
+		_script.runActionList(field == 3 ? kLoginReturn2Actions : kLoginReturnActions, event, fields);
 		return;
 	}
 	if (key == kVkTab) {
@@ -235,108 +239,95 @@ void Script::loginKeyPress(int field, uint key, int event, const EventFields &fi
 	}
 	switch (field) {
 	case 1:
-		if (!editText(key, _computer.user, kLoginUserMax))
+		if (!editText(key, _user, kLoginUserMax))
 			return;
-		setFieldText(kLoginUserText, _computer.user);
+		setFieldText(kLoginUserText, _user);
 		break;
 	case 2:
 		// One * per character
-		if (!editText(key, _computer.password, kLoginPasswordMax))
+		if (!editText(key, _password, kLoginPasswordMax))
 			return;
-		setFieldText(kLoginPasswordText, Common::String(_computer.password.size(), '*'));
+		setFieldText(kLoginPasswordText, Common::String(_password.size(), '*'));
 		break;
 	default:
-		if (!editText(key, _computer.field3, kLoginField3Max))
+		if (!editText(key, _field3, kLoginField3Max))
 			return;
-		setFieldText(kLoginField3Text, _computer.field3);
+		setFieldText(kLoginField3Text, _field3);
 		break;
 	}
 	moveLoginCaret(field);
 }
 
-bool Script::sameLoginText(const Common::String &buffer, uint32 textAsset) {
+bool ComputerHooks::sameLoginText(const Common::String &buffer, uint32 textAsset) {
 	// 0x459e00 and 0x459fb0: two empty strings are equal, otherwise _mbsicmp
 	Common::U32String text;
 	Common::String other;
-	if (getTextAsset(textAsset, text))
+	if (_script.getTextAsset(textAsset, text))
 		other = text.encode();
 	return !scumm_stricmp(buffer.c_str(), other.c_str());
 }
 
-void Script::pswdConnect(uint32 variableId) {
+void ComputerHooks::pswdConnect(uint32 variableId) {
 	// 0x45a3a0: the user name and the password against two text assets
-	bool userOk = sameLoginText(_computer.user, kLoginUserName);
-	if (userOk && sameLoginText(_computer.password, kLoginPassword)) {
-		_variables[variableId] = 1;
-		_computer.wrongTries = 0;
-		if (!_computer.connectedBefore) {
-			_computer.connectedBefore = true;
-			_variables[kConnectedBefore] = 1;
+	bool userOk = sameLoginText(_user, kLoginUserName);
+	if (userOk && sameLoginText(_password, kLoginPassword)) {
+		_script.setVariable(variableId, 1);
+		_wrongTries = 0;
+		if (!_connectedBefore) {
+			_connectedBefore = true;
+			_script.setVariable(kConnectedBefore, 1);
 		}
-		log("      login: accepted");
+		_script.log("      login: accepted");
 		return;
 	}
-	_variables[variableId] = 0;
+	_script.setVariable(variableId, 0);
 	if (userOk)
-		_computer.wrongTries++;
-	uint32 message = _computer.wrongTries < kWrongTriesMax ? kMessageWrongUser : kMessageLocked;
-	if (sameLoginText(_computer.user, 92074) && sameLoginText(_computer.password, 92076)) {
+		_wrongTries++;
+	uint32 message = _wrongTries < kWrongTriesMax ? kMessageWrongUser : kMessageLocked;
+	if (sameLoginText(_user, 92074) && sameLoginText(_password, 92076)) {
 		message = 92089;
-	} else if (sameLoginText(_computer.password, 92087)) {
-		if (sameLoginText(_computer.user, 92078))
+	} else if (sameLoginText(_password, 92087)) {
+		if (sameLoginText(_user, 92078))
 			message = 92097;
-		else if (sameLoginText(_computer.user, 92083))
+		else if (sameLoginText(_user, 92083))
 			message = 92105;
-		else if (sameLoginText(_computer.user, 92085))
+		else if (sameLoginText(_user, 92085))
 			message = 92113;
 	}
 	// 0x4be800: the popup layout is shown (a type 5 action appended to the hook's list, which the
 	// exe runs without an action.run line), then the item
-	showLayout(kPopupLayout);
-	setItemEnabled(message, true);
-	log(Common::String::format("      login: refused (message #%u)", message));
+	_script.showLayout(kPopupLayout);
+	_script.setItemEnabled(message, true);
+	_script.log(Common::String::format("      login: refused (message #%u)", message));
 	// Then the fields are reset as LoginInit('C') does
 	loginInit('C');
 }
 
-void Script::ingInit() {
+void ComputerHooks::ingInit() {
 	// 0x407b90: font 4 size 14, item 36320 hidden (0x42abc0), the kept buffer drawn, the focus on the query
-	setItemEnabled(kIngHiddenItem, false);
-	setFieldText(kIngText, _computer.query);
-	_focus = kIngText;
+	_script.setItemEnabled(kIngHiddenItem, false);
+	setFieldText(kIngText, _query);
+	_script.setFocus(kIngText);
 }
 
-void Script::ingKeyPress(uint key, int event, const EventFields &fields) {
+void ComputerHooks::ingKeyPress(uint key, int event, const Common::Array<int32> &fields) {
 	// 0x486470: Return runs the Search button's click; any other key edits the query, which is drawn, and the
 	// caret goes behind it
 	if (key == kVkReturn) {
-		runActionList(kIngReturnActions, event, fields);
+		_script.runActionList(kIngReturnActions, event, fields);
 		return;
 	}
-	if (!editText(key, _computer.query, kIngMax))
+	if (!editText(key, _query, kIngMax))
 		return;
-	setFieldText(kIngText, _computer.query);
-	_itemOrigins[kIngCaret] = Common::Point(kIngCaretX + _computer.query.size() * kFieldCharWidth, kIngCaretY);
+	setFieldText(kIngText, _query);
+	_script.setItemOrigin(kIngCaret, Common::Point(kIngCaretX + _query.size() * kFieldCharWidth, kIngCaretY));
 }
 
-void Script::mediaInit() {
+void ComputerHooks::mediaInit() {
 	// 0x45c320: the counter, item 55036 hidden, the focus on item 50746
-	_computer.mediaCounter = 0;
-	setItemEnabled(kMediaHiddenItem, false);
-	_focus = kMediaFocusItem;
-}
-
-void Script::playAssetAt(uint32 asset, int x, int y) {
-	// 0x491de0: starts the asset as a Do Asset action would, unless it is already playing (0x491380).
-	if (_sounds.contains(asset) || _clips.contains(asset) || Common::find(_videoQueue.begin(), _videoQueue.end(), asset) != _videoQueue.end())
-		return;
-	// An XG clip is drawn once with its top-left at (x, y) over the screen, without a hold; its end fires
-	// the asset's Object Deactivation (ing-search run, B-071). Other assets play as a Do Asset action does
-	VCAsset a;
-	if (_data.getAsset(asset, a) && !a.files.empty() && a.files[0].file.hasPrefix("XG:"))
-		startClip(a, x, y);
-	else
-		playAsset(asset, kModePlayOnce, nullptr);
+	_mediaCounter = 0;
+	_script.setItemEnabled(kMediaHiddenItem, false);
+	_script.setFocus(kMediaFocusItem);
 }
 
 } // End of namespace XFiles

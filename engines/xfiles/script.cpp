@@ -100,7 +100,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _inboxTop(0), _pdaFontSize(12), _pdaLayout(false), _prefArtificialIntuition(0), _scrollItem(0), _addressIndex(0), _noteDay(0), _noteDays(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _inboxTop(0), _pdaFontSize(12), _pdaLayout(false), _prefArtificialIntuition(0), _scrollItem(0), _addressIndex(0), _noteDay(0), _noteDays(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	_jumpCut.first = _jumpCut.later = false;
 	memset(_flashlight, 0, sizeof(_flashlight));
 	memset(_tintColor, 0, sizeof(_tintColor));
@@ -494,7 +494,7 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 void Script::addHooks() {
 	addCoreHooks();
 	_phone.addHooks(_hookTable);
-	addComputerHooks();
+	_computer.addHooks(_hookTable);
 	addPDAHooks();
 }
 
@@ -802,6 +802,19 @@ void Script::endSound(uint32 id, const char *how) {
 	_sounds.erase(id);
 	log(Common::String::format("  << sound #%u %s", id, how));
 	fire(id, kEventObjectDeactivation);
+}
+
+void Script::playAssetAt(uint32 asset, int x, int y) {
+	// 0x491de0: starts the asset as a Do Asset action would, unless it is already playing (0x491380).
+	if (_sounds.contains(asset) || _clips.contains(asset) || Common::find(_videoQueue.begin(), _videoQueue.end(), asset) != _videoQueue.end())
+		return;
+	// An XG clip is drawn once with its top-left at (x, y) over the screen, without a hold; its end fires
+	// the asset's Object Deactivation (ing-search run, B-071). Other assets play as a Do Asset action does
+	VCAsset a;
+	if (_data.getAsset(asset, a) && !a.files.empty() && a.files[0].file.hasPrefix("XG:"))
+		startClip(a, x, y);
+	else
+		playAsset(asset, kModePlayOnce, nullptr);
 }
 
 void Script::startClip(const VCAsset &a, int x, int y) {
