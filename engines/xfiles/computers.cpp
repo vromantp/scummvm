@@ -301,10 +301,15 @@ void Script::mediaInit() {
 
 void Script::playAssetAt(uint32 asset, int x, int y) {
 	// 0x491de0: starts the asset as a Do Asset action would, unless it is already playing (0x491380).
-	// TODO B-075: the point (x, y) is not used: the engine has no placement for a clip
-	if (_sounds.contains(asset) || Common::find(_videoQueue.begin(), _videoQueue.end(), asset) != _videoQueue.end())
+	if (_sounds.contains(asset) || _clips.contains(asset) || Common::find(_videoQueue.begin(), _videoQueue.end(), asset) != _videoQueue.end())
 		return;
-	playAsset(asset, kModePlayOnce, nullptr);
+	// An XG clip is drawn once with its top-left at (x, y) over the screen, without a hold; its end fires
+	// the asset's Object Deactivation (ing-search run, B-071). Other assets play as a Do Asset action does
+	VCAsset a;
+	if (_data.getAsset(asset, a) && !a.files.empty() && a.files[0].file.hasPrefix("XG:"))
+		startClip(a, x, y);
+	else
+		playAsset(asset, kModePlayOnce, nullptr);
 }
 
 } // End of namespace XFiles

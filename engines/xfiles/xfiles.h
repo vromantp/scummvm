@@ -96,6 +96,7 @@ public:
 	bool callFunction(const VCAction &action, const Common::Array<int32> &args) override;
 	void playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) override;
 	void restoreSound(uint32 id, bool loop, uint32 startMs) override;
+	void playClip(uint32 id, int16 x, int16 y) override;
 	bool readAssetFile(uint32 id, Common::Array<byte> &data) override;
 	int measureText(const Common::U32String &text, int size, bool bold, bool sans) const override;
 	bool queryInventoryIcon(uint32 id, bool &hasIcon) const override;
@@ -239,6 +240,15 @@ private:
 	};
 
 	void stopSound(uint32 id);
+	/** A graphic clip PlayAssetAt placed: played once, drawn over the screen at (x, y). */
+	struct Clip {
+		Movie *movie;
+		int16 x, y;
+	};
+	void stopClip(uint32 id);
+	void clearClips();
+	void updateClips();
+	void drawClips();
 	void updateSounds();
 	/** Start a sound; startMs != 0 is its in point (where a loop goes back to). */
 	void startSound(uint32 id, bool loop, bool positional, int16 x, int16 y, uint32 startMs);
@@ -297,6 +307,7 @@ private:
 	static const uint32 kButtonUpDelay = 100;
 	Common::Array<PressedItem> _pressedItems;     ///< Phone buttons shown pressed (Script::takePressedItems)
 	Common::HashMap<uint32, Sound> _sounds;
+	Common::HashMap<uint32, Clip> _clips;
 	Common::Array<uint32> _soundOrder;    ///< The playing sounds in the order they started (a save lists them so)
 	uint32 _soundView;                    ///< The view the 3D sounds were placed for
 	Common::Point _soundFacing;           ///< The last facing found, kept for views without one

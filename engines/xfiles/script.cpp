@@ -674,6 +674,7 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 		if (_hooks)
 			_hooks->playAsset(id, mode, false, 0, 0);
 		endSound(id, "stopped");
+		endClip(id, "stopped");
 		// A video stopped while it plays ends; one still waiting never starts
 		for (uint i = _videoQueue.size(); i-- > 0; ) {
 			if (_videoQueue[i] != id) {
@@ -693,6 +694,22 @@ void Script::endSound(uint32 id, const char *how) {
 		return;
 	_sounds.erase(id);
 	log(Common::String::format("  << sound #%u %s", id, how));
+	fire(id, kEventObjectDeactivation);
+}
+
+void Script::startClip(const VCAsset &a, int x, int y) {
+	log(Common::String::format("      %s #%u ", kModeNames[kModePlayOnce], a.id) + formatFile(a.files[0]) + "  \"" + nameOrNone(_data, a.name) + "\"");
+	_clips[a.id] = true;
+	fire(a.id, kEventObjectActivation);
+	if (_hooks)
+		_hooks->playClip(a.id, x, y);
+}
+
+void Script::endClip(uint32 id, const char *how) {
+	if (!_clips.contains(id))
+		return;
+	_clips.erase(id);
+	log(Common::String::format("  << clip #%u %s", id, how));
 	fire(id, kEventObjectDeactivation);
 }
 

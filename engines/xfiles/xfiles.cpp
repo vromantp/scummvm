@@ -103,6 +103,7 @@ XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : E
 XFilesEngine::~XFilesEngine() {
 	for (Common::HashMap<uint32, Sound>::iterator it = _sounds.begin(); it != _sounds.end(); ++it)
 		delete it->_value.movie;
+	clearClips();
 	closeMenu();
 	closeView();
 	delete _interface;
@@ -525,6 +526,8 @@ void XFilesEngine::pauseGame(bool pause) {
 		_layers[i]->pause(pause);
 	for (Common::HashMap<uint32, Sound>::iterator it = _sounds.begin(); it != _sounds.end(); ++it)
 		it->_value.movie->pause(pause);
+	for (Common::HashMap<uint32, Clip>::iterator it = _clips.begin(); it != _clips.end(); ++it)
+		it->_value.movie->pause(pause);
 }
 
 void XFilesEngine::pauseEngineIntern(bool pause) {
@@ -622,6 +625,7 @@ void XFilesEngine::runGame() {
 		}
 		updateTimers();
 		updateSounds();
+		updateClips();
 		_captions.update(gameMillis());
 		_headCredits.update(gameMillis(), _script->getVideoQueue().empty() && !_dialogBox.isOpen());
 		// The words show over a view, the dialog box or the location card,
@@ -641,6 +645,7 @@ void XFilesEngine::runGame() {
 			updateCursor();
 			drawView();
 			_dialogBox.draw(_screen, _mouse);
+			drawClips();
 		}
 		_captions.drawCard(_screen);
 		_headCredits.draw(_screen);
@@ -682,6 +687,7 @@ bool XFilesEngine::teardownGame() {
 	_timerStates.clear();
 	_pressedItems.clear();
 	stopAllSounds();
+	clearClips();
 	_video->close();
 	_videoStarted = 0;
 	closeView();
@@ -1026,6 +1032,7 @@ void XFilesEngine::startVideoText(const VCAction &action, const Common::Array<in
 void XFilesEngine::playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) {
 	if (mode == kModeStop) {
 		stopSound(id);
+		stopClip(id);
 		return;
 	}
 	startSound(id, mode == kModePlayLoop, positional, x, y, 0);
@@ -1082,6 +1089,53 @@ bool XFilesEngine::readAssetFile(uint32 id, Common::Array<byte> &data) {
 
 int XFilesEngine::measureText(const Common::U32String &text, int size, bool bold, bool sans) const {
 	return _interface ? _interface->measureItemText(text, size, bold, sans) : -1;
+}
+
+void XFilesEngine::playClip(uint32 id, int16 x, int16 y) {
+	stopClip(id);
+	Clip clip;
+	clip.movie = new Movie();
+	clip.x = x;
+	clip.y = y;
+	if (!openMovie(*clip.movie, id)) {
+		delete clip.movie;
+		_script->finishSound(id);
+		return;
+	}
+	debugC(1, kDebugScript, "-- clip #%u at (%d, %d)", id, x, y);
+	clip.movie->play(false);
+	_clips[id] = clip;
+}
+
+void XFilesEngine::stopClip(uint32 id) {
+	if (!_clips.contains(id))
+		return;
+	delete _clips[id].movie;
+	_clips.erase(id);
+}
+
+void XFilesEngine::clearClips() {
+	for (Common::HashMap<uint32, Clip>::iterator it = _clips.begin(); it != _clips.end(); ++it)
+		delete it->_value.movie;
+	_clips.clear();
+}
+
+void XFilesEngine::updateClips() {
+	Common::Array<uint32> ended;
+	for (Common::HashMap<uint32, Clip>::iterator it = _clips.begin(); it != _clips.end(); ++it) {
+		it->_value.movie->update();
+		if (it->_value.movie->hasEnded())
+			ended.push_back(it->_key);
+	}
+	for (uint i = 0; i < ended.size(); i++) {
+		stopClip(ended[i]);
+		_script->finishSound(ended[i]);
+	}
+}
+
+void XFilesEngine::drawClips() {
+	for (Common::HashMap<uint32, Clip>::const_iterator it = _clips.begin(); it != _clips.end(); ++it)
+		blit(it->_value.movie->getFrame(), it->_value.x, it->_value.y);
 }
 
 void XFilesEngine::stopSound(uint32 id) {

@@ -96,6 +96,8 @@ public:
 	 * positional: a 3D Sound action, at (x, y) on the viewpoint grid.
 	 */
 	virtual void playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) {}
+	/** PlayAssetAt: draw the graphic clip once with its top-left at (x, y) over the screen; Script::finishSound ends it. */
+	virtual void playClip(uint32 id, int16 x, int16 y) {}
 	/**
 	 * A sound playing in a restored save: it plays (and a loop loops) from
 	 * startMs in its file (the sound's in point, 0x4a88d0).
@@ -211,7 +213,10 @@ public:
 	/** The video on screen ended: fire its Object Deactivation, start the next one. */
 	void finishVideo() { endVideo("ended"); }
 	/** A sound played by an Asset action ended (or was stopped by the engine): its Object Deactivation. */
-	void finishSound(uint32 id) { endSound(id, "ended"); }
+	void finishSound(uint32 id) {
+		endSound(id, "ended");
+		endClip(id, "ended");
+	}
 	/** Mouse Click on an object (icon, hotspot, explorable...), if it is enabled. */
 	void click(uint32 id);
 	/** Mouse-down on an interface item: the click, and the item stays held (IsIItemHeld) until release(). */
@@ -515,6 +520,10 @@ private:
 	/** DoActionList(trigger, actionList): another trigger's actions. */
 	void runActionList(uint32 actionList, int event, const EventFields &fields);
 	void endSound(uint32 id, const char *how);
+	/** A placed clip (PlayAssetAt) ends: its Object Deactivation fires as at a sound's end. */
+	void endClip(uint32 id, const char *how);
+	/** PlayAssetAt of an XG clip: it plays once with its top-left at (x, y); no hold. */
+	void startClip(const VCAsset &a, int x, int y);
 	/** StopEnvSounds (0x4cc9c0): every sound without a picture ends. */
 	void stopEnvSounds();
 	/** RegPreferences (0x4ccda0): the registry's values go into the variables. */
@@ -581,6 +590,7 @@ private:
 	Common::Array<uint32> _pressed;            ///< See takePressedItems()
 	uint32 _held;                              ///< The interface item the mouse button is down on (press()), 0 for none
 	Common::HashMap<uint32, bool> _sounds;     ///< Sounds playing (asset objects active)
+	Common::HashMap<uint32, bool> _clips;      ///< Graphic clips placed by PlayAssetAt and playing
 	Common::HashMap<uint, int32> _preferences; ///< See setPreference()
 
 	/** The phone's state (XFiles.exe globals 0x6b1900-0x6b190c, list 0x6ba5c8). */
