@@ -33,6 +33,7 @@
 #include "xfiles/hooks.h"
 #include "xfiles/pda.h"
 #include "xfiles/phone.h"
+#include "xfiles/prefs.h"
 #include "xfiles/vcdata.h"
 
 namespace Common {
@@ -156,6 +157,7 @@ class Script {
 	friend class ComputerHooks;
 	friend class PdaHooks;
 	friend class PhoneHooks;
+	friend class PrefHooks;
 
 public:
 	/** A character's stock replies: the atoms of its topic without a label. */
@@ -537,6 +539,7 @@ private:
 	PhoneHooks _phone;            ///< The phone's hooks and state (phone.cpp)
 	ComputerHooks _computer;      ///< The computers' text entry (computers.cpp)
 	PdaHooks _pda;                ///< The PDA: e-mail, address book, notepad (pda.cpp)
+	PrefHooks _prefs;             ///< The Game Preferences screens (prefs.cpp)
 	Common::WinResources *_texts;
 	Common::HashMap<uint32, int32> _variables;
 	Common::HashMap<uint32, bool> _enabled;    ///< Objects without a VCEnabled are always enabled
@@ -592,6 +595,7 @@ private:
 		int x, y;
 	};
 	Common::Array<HeldSound> _heldSounds;      ///< Sounds waiting for the videos to end
+	uint32 _prefVariables[kPrefCount];         ///< The variable RegPreferences gave each preference, or 0
 	uint32 _prefArtificialIntuition;           ///< The variable RegPreferences gives Pref_bArtificialIntuition, or 0
 	uint32 _uberParanoia;                      ///< The variable RegUberVars gives iUberParanoia, or 0
 

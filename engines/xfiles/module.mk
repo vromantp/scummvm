@@ -17,6 +17,7 @@ MODULE_OBJS = \
 	phone.o \
 	pda.o \
 	pictures.o \
+	prefs.o \
 	refrun.o \
 	saveload.o \
 	script.o \

@@ -100,7 +100,8 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+	memset(_prefVariables, 0, sizeof(_prefVariables));
 	_jumpCut.first = _jumpCut.later = false;
 	memset(_flashlight, 0, sizeof(_flashlight));
 	memset(_tintColor, 0, sizeof(_tintColor));
@@ -455,6 +456,7 @@ void Script::addHooks() {
 	_phone.addHooks(_hookTable);
 	_computer.addHooks(_hookTable);
 	_pda.addHooks(_hookTable);
+	_prefs.addHooks(_hookTable);
 }
 
 void Script::addCoreHooks() {
@@ -838,11 +840,13 @@ void Script::regPreferences(const VCAction &a) {
 	for (uint index = 0; index < a.args.size() && index < kPrefCount; index++) {
 		if (a.args[index].kind != kOperandVariable)
 			continue;
+		_prefVariables[index] = a.args[index].value;
+		// What a Preferences screen hook stored (PrefHooks) or setPreference() set is the registry's value
 		int32 value = 0;
-		if (_hooks && _hooks->queryPreference(index, value))
-			_variables[a.args[index].value] = value;
-		else if (_preferences.contains(index))
+		if (_preferences.contains(index))
 			_variables[a.args[index].value] = _preferences[index];
+		else if (_hooks && _hooks->queryPreference(index, value))
+			_variables[a.args[index].value] = value;
 	}
 }
 
