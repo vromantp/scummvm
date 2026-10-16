@@ -363,7 +363,8 @@ void ComputerHooks::setFieldAsset(uint32 item, uint32 asset, int size, uint32 co
 }
 
 bool ComputerHooks::loadText(uint32 asset, Common::U32String &text) {
-	return _script.getTextAsset(asset, text) || _script.readTextFile(asset, text);
+	// 0x45f690: a file asset's file first (getTextAsset would return its name)
+	return _script.readTextFile(asset, text) || _script.getTextAsset(asset, text);
 }
 
 void ComputerHooks::itemMembers(uint32 item, Common::Array<uint32> &members) {

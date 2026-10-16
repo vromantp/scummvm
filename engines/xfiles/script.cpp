@@ -544,6 +544,31 @@ void Script::addCoreHooks() {
 		s.regPreferences(c.action);
 		return true;
 	});
+	t.add("SetIItemText", [](Script &s, const HookCall &c) {
+		// (item, text, colour, font, size, shadow, align): 0x47de90 -> 0x4be1e0, laid out at twice
+		// the item's width (+0x194 is 0), as the PDA texts
+		if (!c.has(7))
+			return false;
+		Common::U32String text;
+		if (!s.readTextFile(c.args[1], text) && !s.getTextAsset(c.args[1], text))
+			return false;
+		uint32 color = 0x000000;
+		if (c.args[2] == 'w')
+			color = 0xffffff;
+		else if (c.args[2] == 'x')
+			color = 0x2e6b8c;
+		Script::TextAlign align = Script::kAlignLeft;
+		if (c.args[6] == 'c')
+			align = Script::kAlignCenter;
+		else if (c.args[6] == 'r')
+			align = Script::kAlignRight;
+		VCInterfaceItem item;
+		int width = 0;
+		if (s._data.getInterfaceItem(c.args[0], item))
+			width = (item.rect.right - item.rect.left) * 2;
+		s.setItemText(c.args[0], text, c.args[4], false, color, align, c.args[5] == 'y', width, c.args[3] == 'H');
+		return true;
+	});
 	t.add("SetIItemFocus", [](Script &s, const HookCall &c) {
 		if (!c.has(1))
 			return false;
