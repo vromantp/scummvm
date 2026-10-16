@@ -141,8 +141,11 @@ private:
 	/** Load XFiles.hdb and the game state; fromSave: xfiles_save takes the place of XFiles.gam. */
 	bool loadDatabases(bool fromSave);
 	Input pollInput();
-	/** The Windows virtual-key code of a key, 0 for keys the game does not take. */
-	static uint getVirtualKey(const Common::KeyState &kbd);
+	/**
+	 * What a Key Press event carries (Game_KeyDown 0x458280): the virtual-key code of Backspace, Tab, Return and
+	 * Delete, else the character of WM_CHAR (lowercase letters, digits, - ( ) , and so on). 0 for other keys.
+	 */
+	static uint getKeyValue(const Common::KeyState &kbd);
 	void present();
 	void blit(const Graphics::Surface &src, int x, int y);
 	Common::Point getBandPosition(const Movie &movie) const;

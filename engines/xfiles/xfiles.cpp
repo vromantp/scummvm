@@ -196,32 +196,37 @@ XFilesEngine::Input XFilesEngine::pollInput() {
 			input.skip = true;
 			input.escape = true;
 		} else if (event.type == Common::EVENT_KEYDOWN && _script && _steps.empty()) {
-			uint vk = getVirtualKey(event.kbd);
-			if (vk)
-				_script->keyPress(vk);
+			uint key = getKeyValue(event.kbd);
+			if (key)
+				_script->keyPress(key);
 		}
 	}
 	return input;
 }
 
-uint XFilesEngine::getVirtualKey(const Common::KeyState &kbd) {
-	// Key Press events carry a Windows virtual-key code
-	if (kbd.keycode >= Common::KEYCODE_0 && kbd.keycode <= Common::KEYCODE_9)
-		return '0' + (kbd.keycode - Common::KEYCODE_0);
-	if (kbd.keycode >= Common::KEYCODE_KP0 && kbd.keycode <= Common::KEYCODE_KP9)
-		return 0x60 + (kbd.keycode - Common::KEYCODE_KP0); // VK_NUMPAD0
-	if (kbd.keycode >= Common::KEYCODE_a && kbd.keycode <= Common::KEYCODE_z)
-		return 'A' + (kbd.keycode - Common::KEYCODE_a);
-	if (kbd.keycode == Common::KEYCODE_BACKSPACE)
+uint XFilesEngine::getKeyValue(const Common::KeyState &kbd) {
+	// The exe posts a Key Press for the key-down of Backspace, Tab, Return and Delete (virtual-key codes), and
+	// otherwise for the character of WM_CHAR (docs/subsystems/computers.md, "Text entry")
+	switch (kbd.keycode) {
+	case Common::KEYCODE_BACKSPACE:
 		return 0x08;
-	if (kbd.keycode == Common::KEYCODE_TAB)
+	case Common::KEYCODE_TAB:
 		return 0x09;
-	if (kbd.keycode == Common::KEYCODE_SPACE)
-		return 0x20;
-	if (kbd.keycode == Common::KEYCODE_DELETE)
-		return 0x2e;
-	if (kbd.keycode == Common::KEYCODE_RETURN || kbd.keycode == Common::KEYCODE_KP_ENTER)
+	case Common::KEYCODE_RETURN:
+	case Common::KEYCODE_KP_ENTER:
 		return 0x0d;
+	case Common::KEYCODE_DELETE:
+		return 0x2e;
+	default:
+		break;
+	}
+	if (kbd.ascii >= 0x20 && kbd.ascii < 0x7f)
+		return kbd.ascii;
+	// The numpad without an ascii value
+	if (kbd.keycode >= Common::KEYCODE_KP0 && kbd.keycode <= Common::KEYCODE_KP9)
+		return '0' + (kbd.keycode - Common::KEYCODE_KP0);
+	if (kbd.keycode == Common::KEYCODE_KP_MINUS)
+		return '-';
 	return 0;
 }
 
@@ -595,6 +600,8 @@ void XFilesEngine::registerUberVariables(const VCAction &action) {
 	// subliminal words read them (0x468cf0)
 	for (uint i = 0; i < action.args.size() && i < ARRAYSIZE(_uberVariables); i++)
 		_uberVariables[i] = action.args[i].kind == kOperandVariable ? action.args[i].value : 0;
+	if (_script)
+		_script->registerUberParanoia(_uberVariables[1]);
 }
 
 int32 XFilesEngine::getUberVariable(uint index) const {

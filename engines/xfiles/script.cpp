@@ -100,7 +100,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	_jumpCut.first = _jumpCut.later = false;
 	memset(_flashlight, 0, sizeof(_flashlight));
 	memset(_tintColor, 0, sizeof(_tintColor));
@@ -153,12 +153,12 @@ const Script::ItemText *Script::getItemText(uint32 itemId) const {
 	return _itemTexts.contains(itemId) ? &_itemTexts[itemId] : nullptr;
 }
 
-void Script::keyPress(uint vk) {
+void Script::keyPress(uint key) {
 	// The focused item's Key Press triggers; the event's field 0 is the key
 	if (!_focus)
 		return;
 	EventFields fields;
-	fields.push_back(vk);
+	fields.push_back(key);
 	fire(_focus, kEventKeyPress, fields);
 }
 
@@ -353,51 +353,8 @@ void Script::execute(const VCAction &a, int event, const EventFields &fields, Lo
 	case kActionEnable: {
 		uint32 target;
 		bool enabled;
-		if (_data.getEnabled(a.target, target, enabled) && target) {
-			bool was = isEnabled(target);
-			_enabled[target] = a.value != 0;
-			if (!a.value)
-				_spent.erase(target);
-			// The held item disabled goes back (0x436c20)
-			if (!a.value && _heldCursorItem && _heldCursorItem == target)
-				putBack();
-			// An evidence icon gets its object when it is enabled (0x4201a0),
-			// firing its Object Activation; disabling removes its kit icon too
-			// (0x4a1940)
-			if (_data.getClassOf(target) == kClassEvidenceIcon) {
-				Common::Array<uint32>::iterator it = Common::find(_kit.begin(), _kit.end(), target);
-				if (a.value && !was)
-					fire(target, kEventObjectActivation);
-				else if (!a.value && it != _kit.end())
-					_kit.erase(it);
-				// The group 0 object joins the evidence list, or goes
-				if (a.value)
-					addEvidence(target);
-				else
-					removeEvidence(target);
-			}
-			// An inventory icon's object joins the bar at the end, or goes
-			// (0x4201a0); the bar's order is what a save keeps
-			if (_data.getClassOf(target) == kClassInventory) {
-				Common::Array<uint32>::iterator it = Common::find(_inventory.begin(), _inventory.end(), target);
-				if (a.value && it == _inventory.end())
-					_inventory.push_back(target);
-				else if (!a.value && it != _inventory.end())
-					_inventory.erase(it);
-			}
-			// A topic enabled while its box is open joins the box (0x476340)
-			if (a.value && _box && isBoxTopic(_box, target))
-				activateTopic(target);
-			// A character view, nav or explorable of the view comes and goes
-			// with its flag (0x492170, 0x46de10, 0x46efc0; 0x47ff40)
-			if (a.value && !was)
-				activateViewObject(target);
-			else if (!a.value && was)
-				deactivateViewObject(target);
-			if ((a.value != 0) != was && _data.getClassOf(target) == kClassAssetRef)
-				updateViewAsset(target);
-			updateLayoutItem(target, a.value != 0);
-		}
+		if (_data.getEnabled(a.target, target, enabled) && target)
+			enableTarget(target, a.value != 0);
 		break;
 	}
 	case kActionAsset:
@@ -1671,6 +1628,58 @@ void Script::hideLayout(uint32 layoutId) {
 			_phone.closed();
 		return;
 	}
+}
+
+void Script::enableTarget(uint32 target, bool value) {
+	// An Enable action (kActionEnable), or code that does the same (0x4083d0)
+	bool was = isEnabled(target);
+	_enabled[target] = value;
+	if (!value)
+		_spent.erase(target);
+	// The held item disabled goes back (0x436c20)
+	if (!value && _heldCursorItem && _heldCursorItem == target)
+		putBack();
+	// An evidence icon gets its object when it is enabled (0x4201a0),
+	// firing its Object Activation; disabling removes its kit icon too
+	// (0x4a1940)
+	if (_data.getClassOf(target) == kClassEvidenceIcon) {
+		Common::Array<uint32>::iterator it = Common::find(_kit.begin(), _kit.end(), target);
+		if (value && !was)
+			fire(target, kEventObjectActivation);
+		else if (!value && it != _kit.end())
+			_kit.erase(it);
+		// The group 0 object joins the evidence list, or goes
+		if (value)
+			addEvidence(target);
+		else
+			removeEvidence(target);
+	}
+	// An inventory icon's object joins the bar at the end, or goes
+	// (0x4201a0); the bar's order is what a save keeps
+	if (_data.getClassOf(target) == kClassInventory) {
+		Common::Array<uint32>::iterator it = Common::find(_inventory.begin(), _inventory.end(), target);
+		if (value && it == _inventory.end())
+			_inventory.push_back(target);
+		else if (!value && it != _inventory.end())
+			_inventory.erase(it);
+	}
+	// A topic enabled while its box is open joins the box (0x476340)
+	if (value && _box && isBoxTopic(_box, target))
+		activateTopic(target);
+	// A character view, nav or explorable of the view comes and goes
+	// with its flag (0x492170, 0x46de10, 0x46efc0; 0x47ff40)
+	if (value && !was)
+		activateViewObject(target);
+	else if (!value && was)
+		deactivateViewObject(target);
+	if ((value) != was && _data.getClassOf(target) == kClassAssetRef)
+		updateViewAsset(target);
+	updateLayoutItem(target, value);
+}
+
+void Script::addUberParanoia(int32 n) {
+	if (_uberParanoia)
+		_variables[_uberParanoia] = getVariable(_uberParanoia) + n;
 }
 
 void Script::setItemEnabled(uint32 item, bool enabled) {

@@ -391,10 +391,12 @@ public:
 	/** The interface item with the keyboard focus (SetIItemFocus), or 0. */
 	uint32 getFocus() const { return _focus; }
 	/**
-	 * A key went down while an item has the focus: its Key Press triggers,
-	 * with the key's Windows virtual-key code as the event's field.
+	 * A key went down while an item has the focus: its Key Press triggers, with the key as the event's field: the
+	 * character of WM_CHAR for a printable key, else the Windows virtual-key code (Backspace, Tab, Return, Delete).
 	 */
-	void keyPress(uint vk);
+	void keyPress(uint key);
+	/** RegUberVars: the variable iUberParanoia, 0 before it (for iUberParanoia += n, 0x4bf500). */
+	void registerUberParanoia(uint32 variable) { _uberParanoia = variable; }
 	/**
 	 * Take the phone's buttons pressed since the last call. Each goes up
 	 * (is disabled again) 100 ms after it was pressed: releaseItem().
@@ -457,6 +459,10 @@ private:
 
 	/** Set an interface item's enabled flag; an item of a shown layout comes or goes with it. */
 	void setItemEnabled(uint32 item, bool enabled);
+	/** What an Enable action does to its target (an asset, item, icon...), for code that enables one itself (0x4083d0). */
+	void enableTarget(uint32 target, bool value);
+	/** iUberParanoia += n (0x4bf500). */
+	void addUberParanoia(int32 n);
 
 	// Item texts (itemtext.cpp)
 	/** Lay out and set the text of an item (0x4be2c0); wrapWidth 0: a line per newline only. */
@@ -587,6 +593,7 @@ private:
 	};
 	Common::Array<HeldSound> _heldSounds;      ///< Sounds waiting for the videos to end
 	uint32 _prefArtificialIntuition;           ///< The variable RegPreferences gives Pref_bArtificialIntuition, or 0
+	uint32 _uberParanoia;                      ///< The variable RegUberVars gives iUberParanoia, or 0
 
 	/** FixJumpCut(first, later) of a topic's Object Activation (0x47ca30). */
 	struct JumpCut {

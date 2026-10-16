@@ -113,7 +113,7 @@ static void listRemove(Common::Array<uint32> &list, uint32 id) {
 
 PdaHooks::PdaHooks(Script &script, const VCData &data)
 	: _script(script), _data(data), _inboxTop(0), _pdaFontSize(kPDAFontSize), _pdaLayout(false), _scrollItem(0),
-	  _addressIndex(0), _noteDay(0), _noteDays(0) {
+	  _scrollSize(kPDAFontSize), _scrollColor(0), _scrollBold(false), _scrollSans(false), _addressIndex(0), _noteDay(0), _noteDays(0) {
 }
 
 void PdaHooks::addHooks(HookTable<Script> &t) {
@@ -348,7 +348,16 @@ void PdaHooks::setScrollText(uint32 item, const Common::U32String &text, int siz
 	if (_scrollItem && _scrollItem != item)
 		_script.clearItemText(_scrollItem);
 	_scrollItem = item;
+	_scrollSize = size;
+	_scrollColor = color;
+	_scrollBold = bold;
+	_scrollSans = sans;
 	_script.setPDAText(item, text, size, false, color, bold, sans);
+}
+
+void PdaHooks::replaceScrollText(const Common::U32String &text) {
+	if (_scrollItem)
+		_script.setPDAText(_scrollItem, text, _scrollSize, false, _scrollColor, _scrollBold, _scrollSans);
 }
 
 void PdaHooks::scrollTextList(int32 item, int32 asset, int32 color, int32 font, int32 size) {

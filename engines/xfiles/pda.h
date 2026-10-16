@@ -52,6 +52,10 @@ public:
 	const Common::Array<uint32> &getEmailsRead() const { return _emailsRead; }
 	const Common::Array<uint32> &getEmailsPending() const { return _emailPending; }
 	const Common::Array<uint32> &getNotes() const { return _notes; }
+	/** EnablePDANote (0x4e6660): a note is kept; one of the next day opens that day. */
+	void enablePDANote(uint32 id);
+	/** 0x4be560: the current scroll text gets another text, in its style; nothing if there is none. */
+	void replaceScrollText(const Common::U32String &text);
 	/** Take the lists from a save. */
 	void restore(const VCSave &save);
 	/** Write the lists into a save. */
@@ -71,7 +75,6 @@ private:
 	void pdaFlipAddr(int32 n);
 	void showAddress();
 	void buildAddressList();
-	void enablePDANote(uint32 id);
 	void enableAllNotes();
 	void notePadInit();
 	void noteFlipDay(int32 n);
@@ -94,6 +97,9 @@ private:
 	bool _pdaLayout;                           ///< EmailInit('P'): the PDA's item tables
 	Common::HashMap<uint32, Common::U32StringArray> _emailLines;  ///< Lines of the e-mail files read
 	uint32 _scrollItem;                        ///< The item of the scroll text (0x42ca30), or 0
+	int _scrollSize;                           ///< Its style, as setScrollText was given it
+	uint32 _scrollColor;
+	bool _scrollBold, _scrollSans;
 	Common::Array<uint32> _addressList;        ///< Enabled assets of item 45307 (0x6b8390)
 	uint _addressIndex;                        ///< 0x6b16b0
 	Common::Array<uint32> _notes;              ///< VCPDANotes
