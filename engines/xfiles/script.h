@@ -515,6 +515,9 @@ private:
 	/** An enabled character view, nav or explorable of the current view gets activated. */
 	void activateViewObject(uint32 id);
 	void deactivateViewObject(uint32 id);
+	/** An asset of the current view enabled or disabled: the view picks the asset it shows again. */
+	void updateViewAsset(uint32 id);
+	void activateViewAsset();
 	bool isInView(uint32 id) const;
 	void spendIcons(uint32 classId);
 	/** Whether the Timer Expiration actions of an object test for timer n. */
@@ -598,6 +601,7 @@ private:
 	uint32 _travelTo[4];                       ///< Node, location, viewpoint and view of the pending travel
 	bool _viewHeld;                            ///< The view is entered but not activated until the video ends
 	bool _viewActive;                          ///< The view's activation has run
+	bool _viewAssetHeld;                       ///< The view's new asset is activated when the video ends
 };
 
 } // End of namespace XFiles

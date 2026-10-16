@@ -100,7 +100,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _prefArtificialIntuition(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	_jumpCut.first = _jumpCut.later = false;
 	memset(_flashlight, 0, sizeof(_flashlight));
 	memset(_tintColor, 0, sizeof(_tintColor));
@@ -394,6 +394,8 @@ void Script::execute(const VCAction &a, int event, const EventFields &fields, Lo
 				activateViewObject(target);
 			else if (!a.value && was)
 				deactivateViewObject(target);
+			if ((a.value != 0) != was && _data.getClassOf(target) == kClassAssetRef)
+				updateViewAsset(target);
 			updateLayoutItem(target, a.value != 0);
 		}
 		break;
@@ -950,6 +952,8 @@ void Script::endVideo(const char *how) {
 	// the one already queued
 	if (_viewHeld)
 		activateView();
+	else if (_viewAssetHeld)
+		activateViewAsset();
 	fire(id, kEventObjectDeactivation);
 	if (next)
 		startVideo();
@@ -990,6 +994,7 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, 
 	if (first < 4) {
 		_viewHeld = false;
 		_viewActive = false;
+		_viewAssetHeld = false;
 	}
 	_node = node;
 	_location = location;
@@ -1104,6 +1109,50 @@ void Script::deactivateViewObject(uint32 id) {
 		return;
 	_viewObjects.erase(it);
 	fire(id, kEventObjectDeactivation);
+}
+
+void Script::updateViewAsset(uint32 id) {
+	// 0x4494d0 (disable), 0x47a260 (enable): for an asset of the current
+	// view's list, unless a view change is pending (0x46f210), the view
+	// object is made again: its old asset is deactivated at once (event kind
+	// 12), the first enabled one activated by kind 11, which a video holds
+	// (exe-map.md "Held events"). Crime Lab view 10788: Amis's greeting 71783
+	// disables the clip 33974, whose Deactivation stops timer 0 (B-052).
+	// Only a change of the shown asset is modelled
+	VCView v;
+	if (!_viewActive || _viewHeld || _travelPending || !_data.getView(_view, v))
+		return;
+	Common::Array<uint32> ids;
+	_data.getMembers(v.assets, ids);
+	if (Common::find(ids.begin(), ids.end(), id) == ids.end())
+		return;
+	uint32 background;
+	getViewAssets(ids, background);
+	uint32 shown = ids.empty() ? 0 : ids[0];
+	for (uint i = 0; i < _viewObjects.size(); i++) {
+		if (_data.getClassOf(_viewObjects[i]) != kClassAssetRef)
+			continue;
+		uint32 old = _viewObjects[i];
+		if (old == shown)
+			return;
+		_viewObjects.remove_at(i);
+		fire(old, kEventObjectDeactivation);
+		break;
+	}
+	_viewAssetHeld = !_videoQueue.empty();
+	if (!_viewAssetHeld)
+		activateViewAsset();
+}
+
+void Script::activateViewAsset() {
+	_viewAssetHeld = false;
+	Common::Array<uint32> ids;
+	uint32 background;
+	getViewAssets(ids, background);
+	if (ids.empty() || Common::find(_viewObjects.begin(), _viewObjects.end(), ids[0]) != _viewObjects.end())
+		return;
+	_viewObjects.push_back(ids[0]);
+	fire(ids[0], kEventObjectActivation);
 }
 
 void Script::getViewAssets(Common::Array<uint32> &assets, uint32 &background) const {
