@@ -63,6 +63,7 @@ XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : E
 	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuOpen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _soundView(0), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
 	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0) {
 	g_engine = this;
+	addHooks();
 	_loadedSave = false;
 	_pendingClipTime = -1;
 	memset(_prefVariables, 0, sizeof(_prefVariables));
@@ -488,50 +489,74 @@ bool XFilesEngine::teardownGame() {
 
 // -- C++ functions ------------------------------------------------------------
 
-bool XFilesEngine::callFunction(const VCAction &action, const Common::Array<int32> &args) {
-	if (action.function == "StartVideoText")
-		startVideoText(action, args);
-	else if (action.function == "RegPreferences")
-		registerPreferences(action);
-	else if (action.function == "RollHdCredits")
-		_headCredits.roll(gameMillis(), getPreference(kPrefSkipIntro));
-	else if (action.function == "SetStartView" && getPreference(kPrefSubliminalMessages))
-		_subliminal.start(gameMillis()); // Game_BuildObjects 0x477940 calls Prefs_Apply 0x452b20
-	else if (action.function == "RegUberVars")
-		registerUberVariables(action);
-	else
-		return callInventoryFunction(action, args);
-	return true;
+bool XFilesEngine::callFunction(const HookCall &call) {
+	return _hookTable.run(*this, call) == kHookHandled;
 }
 
-bool XFilesEngine::callInventoryFunction(const VCAction &action, const Common::Array<int32> &args) {
-	const Common::String &name = action.function;
-	// RegCurrInvVar, OnInvClick and OnIntInvClick are handled by Script (iCurrInventory)
-	if (name == "RollOnEvKit" && args.size() >= 2) {
+void XFilesEngine::addHooks() {
+	HookTable<XFilesEngine> &t = _hookTable;
+	t.add("StartVideoText", [](XFilesEngine &e, const HookCall &c) {
+		e.startVideoText(c.action, c.args);
+		return true;
+	});
+	t.add("RegPreferences", [](XFilesEngine &e, const HookCall &c) {
+		e.registerPreferences(c.action);
+		return true;
+	});
+	t.add("RollHdCredits", [](XFilesEngine &e, const HookCall &c) {
+		e._headCredits.roll(e.gameMillis(), e.getPreference(kPrefSkipIntro));
+		return true;
+	});
+	t.add("SetStartView", [](XFilesEngine &e, const HookCall &c) {
+		if (!e.getPreference(kPrefSubliminalMessages))
+			return false;
+		e._subliminal.start(e.gameMillis()); // Game_BuildObjects 0x477940 calls Prefs_Apply 0x452b20
+		return true;
+	});
+	t.add("RegUberVars", [](XFilesEngine &e, const HookCall &c) {
+		e.registerUberVariables(c.action);
+		return true;
+	});
+
+	// The inventory bar and the evidence kit; RegCurrInvVar, OnInvClick and OnIntInvClick are handled by Script
+	// (iCurrInventory)
+	t.add("RollOnEvKit", [](XFilesEngine &e, const HookCall &c) {
+		if (!c.has(2))
+			return false;
 		// 0x4efda0: nothing while that item is in hand; open the kit above
 		// the item's icon, or close it once the mouse has left it
 		Common::Rect from;
-		if ((uint32)args[0] == _interface->getHeld())
+		if ((uint32)c.args[0] == e._interface->getHeld())
 			return true;
-		if (args[1] && _interface->getInventoryRect(args[0], &from))
-			_interface->openKit(from);
-		else if (!args[1] && !_interface->isMouseInKit())
-			_interface->closeKit();
-	} else if (name == "EvKitIconClick") {
+		if (c.args[1] && e._interface->getInventoryRect(c.args[0], &from))
+			e._interface->openKit(from);
+		else if (!c.args[1] && !e._interface->isMouseInKit())
+			e._interface->closeKit();
+		return true;
+	});
+	t.add("EvKitIconClick", [](XFilesEngine &e, const HookCall &c) {
 		// 0x4efc90: the kit is taken in hand; the hidden bar closes
-		_interface->closeKit();
-		if (_prefVariables[kPrefInventory] && _script->getVariable(_prefVariables[kPrefInventory]) == 'H')
-			_interface->closeBar();
-	} else if (name == "DispEvIcons" && args.size() >= 1) {
-		_interface->setEvidenceRowShown(args[0] != 0);
-	} else if (name == "AddIFLExcept" && args.size() >= 1) {
-		_interface->addModalException(args[0]);
-	} else if (name == "ClearIFLExcept") {
-		_interface->clearModalExceptions();
-	} else {
-		return false;
-	}
-	return true;
+		e._interface->closeKit();
+		if (e._prefVariables[kPrefInventory] && e._script->getVariable(e._prefVariables[kPrefInventory]) == 'H')
+			e._interface->closeBar();
+		return true;
+	});
+	t.add("DispEvIcons", [](XFilesEngine &e, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		e._interface->setEvidenceRowShown(c.args[0] != 0);
+		return true;
+	});
+	t.add("AddIFLExcept", [](XFilesEngine &e, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		e._interface->addModalException(c.args[0]);
+		return true;
+	});
+	t.add("ClearIFLExcept", [](XFilesEngine &e, const HookCall &c) {
+		e._interface->clearModalExceptions();
+		return true;
+	});
 }
 
 void XFilesEngine::registerPreferences(const VCAction &action) {

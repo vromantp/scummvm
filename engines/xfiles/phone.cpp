@@ -106,30 +106,43 @@ static const PhoneKey kPhoneKeys[] = {
 	{ '9', 43270, 43272 }
 };
 
-static uint32 getVariableArg(const VCAction &a, uint i) {
-	return i < a.args.size() && a.args[i].kind == kOperandVariable ? a.args[i].value : 0;
-}
-
-bool Script::callPhone(const VCAction &a, const Common::Array<int32> &args, int event, const EventFields &fields) {
-	const Common::String &name = a.function;
-	bool handled = true;
-	if (name == "PhoneInit")
-		phoneInit(getVariableArg(a, 0));
-	else if (name == "PhoneButton" && args.size() >= 3)
-		phoneButton((char)args[0], getVariableArg(a, 1), args[2]);
-	else if (name == "PhoneClear")
-		phoneClear(getVariableArg(a, 0));
-	else if (name == "PhoneMenuInit")
-		phoneMenuInit(getVariableArg(a, 0));
-	else if (name == "PhoneFlipName" && args.size() >= 2)
-		phoneFlipName(args[0] != 0, getVariableArg(a, 1));
-	else if (name == "PhoneSend")
-		phoneSend(getVariableArg(a, 0), getVariableArg(a, 1), getVariableArg(a, 2), event, fields);
-	else if (name == "PhoneKeyPress" && !args.empty())
-		phoneKeyPress(args[0], event, fields);
-	else
-		handled = false; // PhoneDestroy only frees the display's font
-	return handled;
+void Script::addPhoneHooks() {
+	HookTable<Script> &t = _hookTable;
+	t.add("PhoneInit", [](Script &s, const HookCall &c) {
+		s.phoneInit(c.variableArg(0));
+		return true;
+	});
+	t.add("PhoneButton", [](Script &s, const HookCall &c) {
+		if (!c.has(3))
+			return false;
+		s.phoneButton((char)c.args[0], c.variableArg(1), c.args[2]);
+		return true;
+	});
+	t.add("PhoneClear", [](Script &s, const HookCall &c) {
+		s.phoneClear(c.variableArg(0));
+		return true;
+	});
+	t.add("PhoneMenuInit", [](Script &s, const HookCall &c) {
+		s.phoneMenuInit(c.variableArg(0));
+		return true;
+	});
+	t.add("PhoneFlipName", [](Script &s, const HookCall &c) {
+		if (!c.has(2))
+			return false;
+		s.phoneFlipName(c.args[0] != 0, c.variableArg(1));
+		return true;
+	});
+	t.add("PhoneSend", [](Script &s, const HookCall &c) {
+		s.phoneSend(c.variableArg(0), c.variableArg(1), c.variableArg(2), c.event, c.fields);
+		return true;
+	});
+	t.add("PhoneKeyPress", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		s.phoneKeyPress(c.args[0], c.event, c.fields);
+		return true;
+	});
+	t.addLogged("PhoneDestroy"); // It only frees the display's font
 }
 
 void Script::setPhoneDisplay(const Common::U32String &text) {

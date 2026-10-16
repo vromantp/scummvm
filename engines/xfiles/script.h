@@ -29,6 +29,7 @@
 #include "common/str-array.h"
 #include "common/ustr.h"
 
+#include "xfiles/hooks.h"
 #include "xfiles/vcdata.h"
 
 namespace Common {
@@ -87,10 +88,10 @@ public:
 	virtual ~ScriptHooks() {}
 
 	/**
-	 * A C++ Function action other than DoActionList; args are the evaluated operands.
+	 * A C++ Function action other than DoActionList, after the Script's own hooks ran.
 	 * Returns whether the engine acted on it (the hook coverage, tools/hook_coverage.py).
 	 */
-	virtual bool callFunction(const VCAction &action, const Common::Array<int32> &args) { return false; }
+	virtual bool callFunction(const HookCall &call) { return false; }
 	/**
 	 * A play, loop or stop of an asset that is not a blocking video.
 	 * positional: a 3D Sound action, at (x, y) on the viewpoint grid.
@@ -413,9 +414,13 @@ private:
 	void execute(const VCAction &action, int event, const EventFields &fields, LocalVariables &locals);
 	int32 getValue(const VCOperand &operand, const EventFields &fields, const LocalVariables &locals) const;
 	bool test(const VCExpression &condition, const EventFields &fields, const LocalVariables &locals) const;
-	void logHook(const Common::String &name, bool handled);
-	/** Record the arguments of the hooks a save keeps (SetAIList, SetFLightProps...). */
-	void recordState(const Common::String &function, const Common::Array<int32> &args);
+	void logHook(const Common::String &name, HookStatus status);
+	/** Fill _hookTable: the Script's own hooks, then those of each area file. */
+	void addHooks();
+	void addCoreHooks();
+	void addPhoneHooks();    // phone.cpp
+	void addComputerHooks(); // computers.cpp
+	void addPDAHooks();      // pda.cpp
 	void addEvidence(uint32 id);
 	void removeEvidence(uint32 id);
 	void callFunction(const VCAction &action, int event, const EventFields &fields, const LocalVariables &locals);
@@ -444,8 +449,6 @@ private:
 	void isIItemHeld(uint32 variableId, int32 item);
 
 	// Computer text entry (computers.cpp)
-	/** Run one of the log-in and ING hooks; false for those not ported. */
-	bool callComputer(const VCAction &action, const Common::Array<int32> &args, int event, const EventFields &fields);
 	void loginInit(char mode);
 	void loginKeyPress(int field, uint key, int event, const EventFields &fields);
 	void pswdConnect(uint32 variableId);
@@ -466,8 +469,6 @@ private:
 	void setFieldText(uint32 item, const Common::String &text);
 
 	// PDA e-mail (pda.cpp)
-	/** Run one of the e-mail hooks (SendEmail, DisplayInBox...). */
-	bool callEmail(const VCAction &action, const Common::Array<int32> &args, int event, const EventFields &fields);
 	void displayInBox(int32 value);
 	void initEmailRead(int32 item, int32 email);
 	void setItemEnabled(uint32 item, bool enabled);
@@ -503,8 +504,6 @@ private:
 	bool dayHasNote(uint day, uint32 note) const;
 
 	// Phone (phone.cpp)
-	/** Run one of the Phone hooks (PhoneInit, PhoneButton...). */
-	bool callPhone(const VCAction &action, const Common::Array<int32> &args, int event, const EventFields &fields);
 	void phoneInit(uint32 numberVar);
 	void phoneButton(char key, uint32 numberVar, uint32 pressedItem);
 	void phoneClear(uint32 numberVar);
@@ -554,6 +553,7 @@ private:
 
 	const VCData &_data;
 	ScriptHooks *_hooks;
+	HookTable<Script> _hookTable; ///< The C++ function hooks Script implements, by name
 	Common::WinResources *_texts;
 	Common::HashMap<uint32, int32> _variables;
 	Common::HashMap<uint32, bool> _enabled;    ///< Objects without a VCEnabled are always enabled

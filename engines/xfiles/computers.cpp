@@ -83,29 +83,56 @@ enum {
 	kVkDelete = 0x2e
 };
 
-bool Script::callComputer(const VCAction &a, const Common::Array<int32> &args, int event, const EventFields &fields) {
-	const Common::String &name = a.function;
-	if (name == "LoginInit" && !args.empty() && (char)args[0] == 'C')
-		loginInit('C'); // TODO B-075: LoginInit('P') (0x4b2970) is not read
-	else if (name == "LoginKeyPress" && args.size() >= 2 && args[0] >= 1 && args[0] <= 3)
-		loginKeyPress(args[0], args[1], event, fields); // TODO B-075: 4 and 5
-	else if (name == "LoginClick" && !args.empty() && args[0] >= 1 && args[0] <= 4)
-		loginClick(args[0]);
-	else if (name == "PswdConnect" && !a.args.empty() && a.args[0].kind == kOperandVariable)
-		pswdConnect(a.args[0].value);
-	else if (name == "INGInit")
-		ingInit();
-	else if (name == "INGKeyPressed" && !args.empty())
-		ingKeyPress(args[0], event, fields);
-	else if (name == "PlayAssetAt" && args.size() >= 3)
-		playAssetAt(args[0], args[1], args[2]);
-	else if (name == "MediaInit")
-		mediaInit();
-	else if (name == "INGDestroy" || name == "MediaDestroy" || name == "PswdInit" || name == "PwbkInit")
-		return true; // release the screen's font only, or nothing
-	else
-		return false;
-	return true;
+void Script::addComputerHooks() {
+	HookTable<Script> &t = _hookTable;
+	t.add("LoginInit", [](Script &s, const HookCall &c) {
+		if (!c.has(1) || (char)c.args[0] != 'C')
+			return false;
+		s.loginInit('C'); // TODO B-075: LoginInit('P') (0x4b2970) is not read
+		return true;
+	});
+	t.add("LoginKeyPress", [](Script &s, const HookCall &c) {
+		if (!c.has(2) || c.args[0] < 1 || c.args[0] > 3)
+			return false;
+		s.loginKeyPress(c.args[0], c.args[1], c.event, c.fields); // TODO B-075: 4 and 5
+		return true;
+	});
+	t.add("LoginClick", [](Script &s, const HookCall &c) {
+		if (!c.has(1) || c.args[0] < 1 || c.args[0] > 4)
+			return false;
+		s.loginClick(c.args[0]);
+		return true;
+	});
+	t.add("PswdConnect", [](Script &s, const HookCall &c) {
+		if (!c.isVariable(0))
+			return false;
+		s.pswdConnect(c.action.args[0].value);
+		return true;
+	});
+	t.add("INGInit", [](Script &s, const HookCall &c) {
+		s.ingInit();
+		return true;
+	});
+	t.add("INGKeyPressed", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		s.ingKeyPress(c.args[0], c.event, c.fields);
+		return true;
+	});
+	t.add("PlayAssetAt", [](Script &s, const HookCall &c) {
+		if (!c.has(3))
+			return false;
+		s.playAssetAt(c.args[0], c.args[1], c.args[2]);
+		return true;
+	});
+	t.add("MediaInit", [](Script &s, const HookCall &c) {
+		s.mediaInit();
+		return true;
+	});
+	// They release the screen's font only, or do nothing
+	static const char *const kNothingToDo[] = {"INGDestroy", "MediaDestroy", "PswdInit", "PwbkInit"};
+	for (uint i = 0; i < ARRAYSIZE(kNothingToDo); i++)
+		t.add(kNothingToDo[i], [](Script &s, const HookCall &c) { return true; });
 }
 
 bool Script::editText(uint key, Common::String &buffer, uint max) {

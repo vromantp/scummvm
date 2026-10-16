@@ -165,68 +165,125 @@ static void listRemove(Common::Array<uint32> &list, uint32 id) {
 		list.erase(it);
 }
 
-bool Script::callEmail(const VCAction &a, const Common::Array<int32> &args, int event, const EventFields &fields) {
-	const Common::String &name = a.function;
-	bool handled = true;
-	if (name == "ScrollTextList" && args.size() >= 5) {
-		scrollTextList(args[0], args[1], args[2], args[3], args[4]);
-	} else if (name == "ScrollTextInit" && !args.empty()) {
-		scrollTextList(args[0], 0, 'b', 'c', kPDAFontSize);
-	} else if (name == "SendEmail" && !args.empty()) {
-		_emailPending.push_back(args[0]);
-	} else if (name == "EmailFlushMess") {
-		for (uint i = 0; i < _emailPending.size(); i++) {
-			if (!listHas(_emails, _emailPending[i]))
-				_emails.push_back(_emailPending[i]);
+void Script::addPDAHooks() {
+	HookTable<Script> &t = _hookTable;
+	t.add("ScrollTextList", [](Script &s, const HookCall &c) {
+		if (!c.has(5))
+			return false;
+		s.scrollTextList(c.args[0], c.args[1], c.args[2], c.args[3], c.args[4]);
+		return true;
+	});
+	t.add("ScrollTextInit", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		s.scrollTextList(c.args[0], 0, 'b', 'c', kPDAFontSize);
+		return true;
+	});
+	t.add("SendEmail", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		s._emailPending.push_back(c.args[0]);
+		return true;
+	});
+	t.add("EmailFlushMess", [](Script &s, const HookCall &c) {
+		for (uint i = 0; i < s._emailPending.size(); i++) {
+			if (!listHas(s._emails, s._emailPending[i]))
+				s._emails.push_back(s._emailPending[i]);
 		}
-		_emailPending.clear();
-	} else if (name == "EmailDelete" && !args.empty()) {
-		listRemove(_emails, args[0]);
-		listRemove(_emailsRead, args[0]);
-	} else if (name == "EmailInit" && !args.empty()) {
-		if (args[0] == 'a' || args[0] == 'b') {
-			if (_emails.size() != _emailsRead.size())
-				runActionList(args[0] == 'a' ? kEmailInitA : kEmailInitB, event, fields);
+		s._emailPending.clear();
+		return true;
+	});
+	t.add("EmailDelete", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		listRemove(s._emails, c.args[0]);
+		listRemove(s._emailsRead, c.args[0]);
+		return true;
+	});
+	t.add("EmailInit", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		if (c.args[0] == 'a' || c.args[0] == 'b') {
+			if (s._emails.size() != s._emailsRead.size())
+				s.runActionList(c.args[0] == 'a' ? kEmailInitA : kEmailInitB, c.event, c.fields);
 		} else {
-			_inboxRows.clear();
-			_inboxTop = 0;
-			_pdaLayout = args[0] == 'P';
-			_pdaFontSize = _pdaLayout ? kPDAFontSize : kMailFontSize;
+			s._inboxRows.clear();
+			s._inboxTop = 0;
+			s._pdaLayout = c.args[0] == 'P';
+			s._pdaFontSize = s._pdaLayout ? kPDAFontSize : kMailFontSize;
 		}
-	} else if (name == "DisplayInBox" && !args.empty()) {
-		displayInBox(args[0]);
-	} else if (name == "GetCurrEmail" && args.size() >= 2 && a.args[1].kind == kOperandVariable) {
-		uint i = _inboxTop + args[0];
-		_variables[a.args[1].value] = i < _inboxRows.size() ? (int32)_inboxRows[i].id : 0;
-	} else if (name == "MarkEmailRead" && !args.empty()) {
-		uint i = _inboxTop + args[0];
-		if (i < _inboxRows.size() && !_inboxRows[i].read) {
-			_emailsRead.push_back(_inboxRows[i].id);
-			_inboxRows[i].read = true;
+		return true;
+	});
+	t.add("DisplayInBox", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		s.displayInBox(c.args[0]);
+		return true;
+	});
+	t.add("GetCurrEmail", [](Script &s, const HookCall &c) {
+		if (!c.has(2) || !c.isVariable(1))
+			return false;
+		uint i = s._inboxTop + c.args[0];
+		s._variables[c.action.args[1].value] = i < s._inboxRows.size() ? (int32)s._inboxRows[i].id : 0;
+		return true;
+	});
+	t.add("MarkEmailRead", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		uint i = s._inboxTop + c.args[0];
+		if (i < s._inboxRows.size() && !s._inboxRows[i].read) {
+			s._emailsRead.push_back(s._inboxRows[i].id);
+			s._inboxRows[i].read = true;
 		}
-	} else if (name == "InitEmailRead" && args.size() >= 2) {
-		initEmailRead(args[0], args[1]);
-	} else if (name == "MainScroll" && !args.empty()) {
-		mainScroll(args[0]);
-	} else if (name == "ScrollTextKill") {
-		_itemTexts.erase(_scrollItem);
-		_scrollItem = 0;
-	} else if (name == "PDAInitAddr") {
-		pdaInitAddr();
-	} else if (name == "PDAFlipAddr" && !args.empty()) {
-		pdaFlipAddr(args[0]);
-	} else if (name == "EnablePDANote" && !args.empty()) {
-		enablePDANote(args[0]);
-	} else if (name == "EnableAllNotes") {
-		enableAllNotes();
-	} else if (name == "NotePadInit") {
-		notePadInit();
-	} else if (name == "NoteFlipDay" && !args.empty()) {
-		noteFlipDay(args[0]);
-	} else {
-		handled = false;
-	}
-	return handled;
+		return true;
+	});
+	t.add("InitEmailRead", [](Script &s, const HookCall &c) {
+		if (!c.has(2))
+			return false;
+		s.initEmailRead(c.args[0], c.args[1]);
+		return true;
+	});
+	t.add("MainScroll", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		s.mainScroll(c.args[0]);
+		return true;
+	});
+	t.add("ScrollTextKill", [](Script &s, const HookCall &c) {
+		s._itemTexts.erase(s._scrollItem);
+		s._scrollItem = 0;
+		return true;
+	});
+	t.add("PDAInitAddr", [](Script &s, const HookCall &c) {
+		s.pdaInitAddr();
+		return true;
+	});
+	t.add("PDAFlipAddr", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		s.pdaFlipAddr(c.args[0]);
+		return true;
+	});
+	t.add("EnablePDANote", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		s.enablePDANote(c.args[0]);
+		return true;
+	});
+	t.add("EnableAllNotes", [](Script &s, const HookCall &c) {
+		s.enableAllNotes();
+		return true;
+	});
+	t.add("NotePadInit", [](Script &s, const HookCall &c) {
+		s.notePadInit();
+		return true;
+	});
+	t.add("NoteFlipDay", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		s.noteFlipDay(c.args[0]);
+		return true;
+	});
 }
 
 void Script::displayInBox(int32 value) {

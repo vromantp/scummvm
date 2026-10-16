@@ -93,7 +93,7 @@ public:
 	Graphics::ManagedSurface *getMenuShot() { return _menuOpen ? &_menuShot : nullptr; }
 
 	// ScriptHooks
-	bool callFunction(const VCAction &action, const Common::Array<int32> &args) override;
+	bool callFunction(const HookCall &call) override;
 	void playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) override;
 	void restoreSound(uint32 id, bool loop, uint32 startMs) override;
 	void playClip(uint32 id, int16 x, int16 y) override;
@@ -218,7 +218,8 @@ private:
 	bool isHolding() const;
 	/** Put the item in hand back into the bar (Inv_PutBack, XFiles.exe 0x429f00). */
 	void putBack();
-	bool callInventoryFunction(const VCAction &action, const Common::Array<int32> &args);
+	/** Fill _hookTable with the hooks the engine implements. */
+	void addHooks();
 	void openDialogBox(const VCCharView &charView);
 	/** Close the box if its character left the view, and update its topics. */
 	void updateDialogBox();
@@ -275,6 +276,7 @@ private:
 	Common::SeekableReadStream *_textsDll; ///< XFilesT.dll; _texts reads it lazily, so it lives as long as _texts
 	Common::WinResources *_texts;         ///< XFilesT.dll: topic texts (string table)
 	Common::Point _mouse;
+	HookTable<XFilesEngine> _hookTable;   ///< The C++ function hooks the engine implements, by name
 	Movie *_menuX;                        ///< The main menu's movies (49583 the X, 49587 the entries)
 	Movie *_menuEntries;
 	Movie *_menuClick;                    ///< The click sound of an entry

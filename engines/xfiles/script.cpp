@@ -107,6 +107,7 @@ Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _texts(nullpt
 	_phone.bookSize = _phone.bookIndex = 0;
 	_phone.showsName = false;
 	_phone.tone = 0;
+	addHooks();
 	Common::Array<NeoEntry> entries;
 	data.getGam().getObjects(kClassVariable, entries);
 	for (uint i = 0; i < entries.size(); i++) {
@@ -450,6 +451,7 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 	Common::Array<int32> args;
 	for (uint i = 0; i < a.args.size(); i++)
 		args.push_back(getValue(a.args[i], fields, locals));
+	HookCall call(a, args, event, fields);
 
 	if (a.function == "SetStartView" && args.size() >= 4) {
 		// Game_BuildObjects (0x477940) makes an object for every enabled
@@ -467,16 +469,15 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 		// The exe also builds the game objects there (0x486a10 calls
 		// Game_BuildObjects 0x477940)
 		if (_hooks)
-			_hooks->callFunction(a, args);
-		logHook(a.function, true);
+			_hooks->callFunction(call);
+		logHook(a.function, kHookHandled);
 	} else if ((a.function == "DoActionList" || a.function == "DoActionListID") && args.size() >= 2) {
 		// DoActionListID takes the two IDs from variables (0x50a200)
 		if (a.function == "DoActionListID")
 			log(Common::String::format("      call %s(%d, %d)", a.function.c_str(), args[0], args[1]));
 		runActionList(args[1], event, fields);
-		logHook(a.function, true);
+		logHook(a.function, kHookHandled);
 	} else {
-		bool handled = true;
 		// The values of its variable arguments follow, as a reference run
 		// logs them
 		Common::String values;
@@ -485,89 +486,190 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 				values += Common::String::format("%s%d", values.empty() ? "" : ", ", args[i]);
 		}
 		log("      call " + describeAction(_data, a.id, event, false) + (values.empty() ? "" : " [" + values + "]"));
-		if (a.function == "SwapDisc" && args.size() >= 4) {
-			// The last call in an event wins (0x4cfc70 replaces the pending travel)
-			for (int i = 0; i < 4; i++)
-				_travelTo[i] = args[i];
-			_travelPending = true;
-		} else if (a.function == "EnableKitIcon" && !args.empty())
-			enableKitIcon(args[0]);
-		else if (a.function == "RandGen" && args.size() >= 2 && a.args[0].kind == kOperandVariable)
-			randGen(a.args[0].value, args[1]);
-		else if (a.function == "IsIItemHeld" && args.size() >= 2 && a.args[1].kind == kOperandVariable)
-			isIItemHeld(a.args[1].value, args[0]);
-		else if (a.function == "RegCurrNode" && !a.args.empty() && a.args[0].kind == kOperandVariable)
-			_currNodeVariable = a.args[0].value; // 0x4926a0
-		else if (a.function == "RegCurrInvVar" && args.size() >= 2 && a.args[0].kind == kOperandVariable) {
-			// 0x458e60: the variable starts as "nothing in hand"
-			_heldVariable = a.args[0].value;
-			_heldNone = args[1];
-			_variables[_heldVariable] = _heldNone;
-		} else if (a.function == "OnInvClick" && !args.empty()) {
-			// Inv_Select 0x49b410: the item's value goes into the variable
-			if (_heldVariable)
-				_variables[_heldVariable] = args[0];
-		} else if (a.function == "SelectInv" && !args.empty()) {
-			// 0x50a390: if the item has an icon, put back what is in hand and
-			// take the item, as a click on its icon would
-			if (hasInventoryIcon(args[0]))
-				selectInventory(args[0]);
-		} else if (a.function == "DeselectInv" && !args.empty()) {
-			// 0x50a570: 0 puts back any item, else only that one
-			if (args[0] == 0 || _heldCursorItem == (uint32)args[0])
-				putBack();
-		} else if (a.function == "OnIntInvClick") {
-			// 0x467fb0: the PDA and phone icons never set iCurrInventory;
-			// this only clears the held cursor (Inv_SetHeldCursor(0))
-			_heldCursorItem = 0;
-			if (_hooks)
-				_hooks->heldItemChanged(0);
-		} else if (a.function == "StopEnvSounds")
-			stopEnvSounds();
-		else if (a.function == "RegPreferences")
-			regPreferences(a);
-		else if (a.function == "SetIItemFocus" && !args.empty())
-			_focus = args[0];
-		else if (a.function == "RegViewState" && !a.args.empty() && a.args[0].kind == kOperandVariable)
-			_variables[a.args[0].value] = 0; // 0x47e9d0 clears the variable it registers
-		else if (a.function == "PDAEscape" && !args.empty())
-			runActionList(args[0] == 1 ? kPDAEscapeOnActions : kPDAEscapeOffActions, event, fields);
-		else if (a.function.hasPrefix("Phone"))
-			handled = callPhone(a, args, event, fields);
-		else if (a.function == "LoginInit" || a.function == "LoginKeyPress" || a.function == "PswdConnect" ||
-				a.function == "INGInit" || a.function == "INGKeyPressed" || a.function == "LoginClick" ||
-				a.function == "PlayAssetAt" || a.function == "MediaInit" || a.function == "INGDestroy" ||
-				a.function == "MediaDestroy" || a.function == "PswdInit" || a.function == "PwbkInit")
-			handled = callComputer(a, args, event, fields);
-		else if (a.function.contains("Email") || a.function == "DisplayInBox" || a.function == "InitEmailRead" ||
-				a.function == "MainScroll" || a.function == "ScrollTextKill" || a.function.hasPrefix("PDAInitAddr") ||
-				a.function == "PDAFlipAddr" || a.function == "NotePadInit" || a.function == "NoteFlipDay" ||
-				a.function == "EnablePDANote" || a.function == "EnableAllNotes" || a.function == "ScrollTextList" ||
-				a.function == "ScrollTextInit")
-			handled = callEmail(a, args, event, fields);
-		else {
-			// The hooks the save keeps are recorded; none is drawn or logged as handled
-			recordState(a.function, args);
-			handled = false;
-		}
-		if (_hooks && _hooks->callFunction(a, args))
-			handled = true;
-		logHook(a.function, handled);
+		// The Script's own hooks first (this file and the area files), then the engine's
+		HookStatus status = _hookTable.run(*this, call);
+		if (_hooks && _hooks->callFunction(call))
+			status = kHookHandled;
+		logHook(a.function, status);
 	}
 }
 
-void Script::logHook(const Common::String &name, bool handled) {
-	// Hooks the engine only logs on purpose: the menu's Save, Load, Options and Help (B-061, B-063) and
-	// PhoneDestroy, which only frees the display's font
-	static const char *const kLogged[] = { "ReturnMainMenu", "ReturnFromHelp", "SaveGameState", "SaveKeyPress",
-		"SaveLoadComit", "SaveLoadInit", "SaveSlotSelect", "PhoneDestroy" };
-	const char *status = handled ? "handled" : "unknown";
-	for (uint i = 0; i < ARRAYSIZE(kLogged); i++) {
-		if (!handled && name == kLogged[i])
-			status = "logged";
-	}
+void Script::addHooks() {
+	addCoreHooks();
+	addPhoneHooks();
+	addComputerHooks();
+	addPDAHooks();
+}
+
+void Script::addCoreHooks() {
+	HookTable<Script> &t = _hookTable;
+	t.add("SwapDisc", [](Script &s, const HookCall &c) {
+		if (!c.has(4))
+			return false;
+		// The last call in an event wins (0x4cfc70 replaces the pending travel)
+		for (int i = 0; i < 4; i++)
+			s._travelTo[i] = c.args[i];
+		s._travelPending = true;
+		return true;
+	});
+	t.add("EnableKitIcon", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		s.enableKitIcon(c.args[0]);
+		return true;
+	});
+	t.add("RandGen", [](Script &s, const HookCall &c) {
+		if (!c.has(2) || !c.isVariable(0))
+			return false;
+		s.randGen(c.action.args[0].value, c.args[1]);
+		return true;
+	});
+	t.add("IsIItemHeld", [](Script &s, const HookCall &c) {
+		if (!c.has(2) || !c.isVariable(1))
+			return false;
+		s.isIItemHeld(c.action.args[1].value, c.args[0]);
+		return true;
+	});
+	t.add("RegCurrNode", [](Script &s, const HookCall &c) {
+		if (!c.isVariable(0))
+			return false;
+		s._currNodeVariable = c.action.args[0].value; // 0x4926a0
+		return true;
+	});
+	t.add("RegCurrInvVar", [](Script &s, const HookCall &c) {
+		if (!c.has(2) || !c.isVariable(0))
+			return false;
+		// 0x458e60: the variable starts as "nothing in hand"
+		s._heldVariable = c.action.args[0].value;
+		s._heldNone = c.args[1];
+		s._variables[s._heldVariable] = s._heldNone;
+		return true;
+	});
+	t.add("OnInvClick", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		// Inv_Select 0x49b410: the item's value goes into the variable
+		if (s._heldVariable)
+			s._variables[s._heldVariable] = c.args[0];
+		return true;
+	});
+	t.add("SelectInv", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		// 0x50a390: if the item has an icon, put back what is in hand and
+		// take the item, as a click on its icon would
+		if (s.hasInventoryIcon(c.args[0]))
+			s.selectInventory(c.args[0]);
+		return true;
+	});
+	t.add("DeselectInv", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		// 0x50a570: 0 puts back any item, else only that one
+		if (c.args[0] == 0 || s._heldCursorItem == (uint32)c.args[0])
+			s.putBack();
+		return true;
+	});
+	t.add("OnIntInvClick", [](Script &s, const HookCall &c) {
+		// 0x467fb0: the PDA and phone icons never set iCurrInventory;
+		// this only clears the held cursor (Inv_SetHeldCursor(0))
+		s._heldCursorItem = 0;
+		if (s._hooks)
+			s._hooks->heldItemChanged(0);
+		return true;
+	});
+	t.add("StopEnvSounds", [](Script &s, const HookCall &c) {
+		s.stopEnvSounds();
+		return true;
+	});
+	t.add("RegPreferences", [](Script &s, const HookCall &c) {
+		s.regPreferences(c.action);
+		return true;
+	});
+	t.add("SetIItemFocus", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		s._focus = c.args[0];
+		return true;
+	});
+	t.add("RegViewState", [](Script &s, const HookCall &c) {
+		if (!c.isVariable(0))
+			return false;
+		s._variables[c.action.args[0].value] = 0; // 0x47e9d0 clears the variable it registers
+		return true;
+	});
+	t.add("PDAEscape", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		s.runActionList(c.args[0] == 1 ? kPDAEscapeOnActions : kPDAEscapeOffActions, c.event, c.fields);
+		return true;
+	});
+
+	// The hooks whose arguments a save keeps (GameState_Save 0x4d9450): recorded, but the engine draws none of
+	// them yet, so they are not handled
+	t.add("SetAIList", [](Script &s, const HookCall &c) {
+		// SetAIList(trigger, list)
+		if (c.has(2)) {
+			s._hintTrigger = c.args[0];
+			s._hintList = c.args[1];
+		}
+		return false;
+	});
+	t.add("ClearAIList", [](Script &s, const HookCall &c) {
+		s._hintTrigger = s._hintList = 0;
+		return false;
+	});
+	t.add("SetAIGlow", [](Script &s, const HookCall &c) {
+		// A level above 1 is kept
+		if (c.has(1))
+			s._hintGlow = c.args[0] > 1 ? c.args[0] : 0;
+		return false;
+	});
+	t.add("SetFLightProps", [](Script &s, const HookCall &c) {
+		// 0x44bda0 turns the arguments into the three values the save keeps:
+		// 2 -> 1 (else 0), 'O' -> 1 (else 0), 'B' -> 0, 'D' -> 2, else 1
+		if (c.has(3)) {
+			s._flashlight[0] = c.args[0] == 2;
+			s._flashlight[1] = c.args[1] == 'O';
+			s._flashlight[2] = 1;
+			if (c.args[2] == 'B')
+				s._flashlight[2] = 0;
+			else if (c.args[2] == 'D')
+				s._flashlight[2] = 2;
+		}
+		return false;
+	});
+	t.add("SetLBoxTint", [](Script &s, const HookCall &c) {
+		if (c.has(3)) {
+			s._tint = 1;
+			s._tintColor[0] = c.args[2];
+			s._tintColor[1] = c.args[1];
+			s._tintColor[2] = c.args[0];
+		}
+		return false;
+	});
+	t.add("ClearLBoxTint", [](Script &s, const HookCall &c) {
+		s._tint = 0;
+		return false;
+	});
+	t.add("DispEvIcons", [](Script &s, const HookCall &c) {
+		// The engine shows or hides the row (XFilesEngine)
+		if (c.has(1))
+			s._evidenceRowShown = c.args[0] != 0;
+		return false;
+	});
+
+	// Hooks only logged on purpose: the menu's Save, Load, Options and Help (B-061, B-063)
+	static const char *const kLoggedMenuHooks[] = {"ReturnMainMenu", "ReturnFromHelp", "SaveGameState", "SaveKeyPress",
+		"SaveLoadComit", "SaveLoadInit", "SaveSlotSelect"};
+	for (uint i = 0; i < ARRAYSIZE(kLoggedMenuHooks); i++)
+		t.addLogged(kLoggedMenuHooks[i]);
+}
+
+void Script::logHook(const Common::String &name, HookStatus status) {
+	static const char *const kStatus[] = {"unknown", "logged", "handled"};
 	// Level 2 and not log(): vcdump's sim has no hooks, and its logs stay as they are (tools/hook_coverage.py)
-	debugC(2, kDebugScript, "hook %s %s", name.c_str(), status);
+	debugC(2, kDebugScript, "hook %s %s", name.c_str(), kStatus[status]);
 }
 
 bool Script::isHolding() const {
@@ -768,7 +870,7 @@ void Script::loadPreferences() {
 				Common::Array<int32> args;
 				for (uint k = 0; k < a.args.size(); k++)
 					args.push_back(getValue(a.args[k], EventFields(), LocalVariables()));
-				_hooks->callFunction(a, args);
+				_hooks->callFunction(HookCall(a, args, -1, EventFields()));
 			}
 			return;
 		}
@@ -1148,40 +1250,6 @@ void Script::restore(const VCSave &save) {
 	if (save.dialogBox)
 		log(Common::String::format("  dialog box of #%u", save.dialogBox));
 	_restoreMode = -1;
-}
-
-void Script::recordState(const Common::String &function, const Common::Array<int32> &args) {
-	// The hooks whose arguments a save keeps (GameState_Save 0x4d9450); the
-	// engine draws none of them yet
-	if (function == "SetAIList" && args.size() >= 2) {
-		// SetAIList(trigger, list)
-		_hintTrigger = args[0];
-		_hintList = args[1];
-	} else if (function == "ClearAIList") {
-		_hintTrigger = _hintList = 0;
-	} else if (function == "SetAIGlow" && !args.empty()) {
-		// A level above 1 is kept
-		_hintGlow = args[0] > 1 ? args[0] : 0;
-	} else if (function == "SetFLightProps" && args.size() >= 3) {
-		// 0x44bda0 turns the arguments into the three values the save keeps:
-		// 2 -> 1 (else 0), 'O' -> 1 (else 0), 'B' -> 0, 'D' -> 2, else 1
-		_flashlight[0] = args[0] == 2;
-		_flashlight[1] = args[1] == 'O';
-		_flashlight[2] = 1;
-		if (args[2] == 'B')
-			_flashlight[2] = 0;
-		else if (args[2] == 'D')
-			_flashlight[2] = 2;
-	} else if (function == "SetLBoxTint" && args.size() >= 3) {
-		_tint = 1;
-		_tintColor[0] = args[2];
-		_tintColor[1] = args[1];
-		_tintColor[2] = args[0];
-	} else if (function == "ClearLBoxTint") {
-		_tint = 0;
-	} else if (function == "DispEvIcons" && !args.empty()) {
-		_evidenceRowShown = args[0] != 0;
-	}
 }
 
 void Script::addEvidence(uint32 id) {
