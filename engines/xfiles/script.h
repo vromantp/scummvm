@@ -31,6 +31,7 @@
 
 #include "xfiles/computers.h"
 #include "xfiles/hooks.h"
+#include "xfiles/pda.h"
 #include "xfiles/phone.h"
 #include "xfiles/vcdata.h"
 
@@ -153,6 +154,7 @@ public:
 class Script {
 	// The areas with their own class use the Script services listed in docs/subsystems/interpreter.md
 	friend class ComputerHooks;
+	friend class PdaHooks;
 	friend class PhoneHooks;
 
 public:
@@ -309,11 +311,11 @@ public:
 	uint getAskCount(uint32 id) const { return _asked.getValOrDefault(id, 0); }
 	int32 getVariable(uint32 id) const;
 	/** The e-mail lists, for the state dump. */
-	const Common::Array<uint32> &getEmails() const { return _emails; }
-	const Common::Array<uint32> &getEmailsRead() const { return _emailsRead; }
-	const Common::Array<uint32> &getEmailsPending() const { return _emailPending; }
+	const Common::Array<uint32> &getEmails() const { return _pda.getEmails(); }
+	const Common::Array<uint32> &getEmailsRead() const { return _pda.getEmailsRead(); }
+	const Common::Array<uint32> &getEmailsPending() const { return _pda.getEmailsPending(); }
 	/** The notepad's notes (VCPDANotes), for the state dump. */
-	const Common::Array<uint32> &getPDANotes() const { return _notes; }
+	const Common::Array<uint32> &getPDANotes() const { return _pda.getNotes(); }
 	void setVariable(uint32 id, int32 value) { _variables[id] = value; }
 	/** The variable registered by RegCurrInvVar (iCurrInventory); 0 before it. */
 	uint32 getHeldVariable() const { return _heldVariable; }
@@ -424,7 +426,6 @@ private:
 	/** Fill _hookTable: the Script's own hooks, then those of each area file. */
 	void addHooks();
 	void addCoreHooks();
-	void addPDAHooks();      // pda.cpp
 	void addEvidence(uint32 id);
 	void removeEvidence(uint32 id);
 	void callFunction(const VCAction &action, int event, const EventFields &fields, const LocalVariables &locals);
@@ -467,32 +468,10 @@ private:
 	/** The text of a file asset: Windows-1252, carriage returns dropped. */
 	bool readTextFile(uint32 asset, Common::U32String &text);
 
-	// PDA e-mail (pda.cpp)
-	void displayInBox(int32 value);
-	void initEmailRead(int32 item, int32 email);
-	/** Lines of an e-mail's file (To, From, Subject, body), empty if it has none; cached. */
-	const Common::U32StringArray &getEmailLines(uint32 email);
-	void showInboxTexts();
-	void setScrollText(uint32 item, const Common::U32String &text, int size, uint32 color = 0, bool bold = false,
-		bool sans = false);
-	void scrollTextList(int32 item, int32 asset, int32 color, int32 font, int32 size);
-	void mainScroll(int32 n);
-	void pdaInitAddr();
-	void pdaFlipAddr(int32 n);
-	void showAddress();
-	void buildAddressList();
-	void enablePDANote(uint32 id);
-	void enableAllNotes();
-	void notePadInit();
-	void noteFlipDay(int32 n);
-	void showNoteDay();
-	void showNoteDayText();
-	void showNoteMarker();
-	bool hasNote(uint32 id) const;
-	bool dayHasNote(uint day, uint32 note) const;
-
-	// Services for the area classes (PhoneHooks, ComputerHooks) besides the public ones
+	// Services for the area classes (PhoneHooks, ComputerHooks, PdaHooks) besides the public ones
 	void clearItemText(uint32 item) { _itemTexts.erase(item); }
+	/** The text of an item to change in place (a scroll), or nullptr. */
+	ItemText *findItemText(uint32 item) { return _itemTexts.contains(item) ? &_itemTexts[item] : nullptr; }
 	/** Show an interface item pressed: its picture, enabled by the click, goes 100 ms later (takePressedItems). */
 	void pressItem(uint32 item) { _pressed.push_back(item); }
 	/** The node RegCurrNode's variable holds, 0 before RegCurrNode. */
@@ -544,6 +523,7 @@ private:
 	HookTable<Script> _hookTable; ///< The C++ function hooks Script implements, by name
 	PhoneHooks _phone;            ///< The phone's hooks and state (phone.cpp)
 	ComputerHooks _computer;      ///< The computers' text entry (computers.cpp)
+	PdaHooks _pda;                ///< The PDA: e-mail, address book, notepad (pda.cpp)
 	Common::WinResources *_texts;
 	Common::HashMap<uint32, int32> _variables;
 	Common::HashMap<uint32, bool> _enabled;    ///< Objects without a VCEnabled are always enabled
@@ -591,23 +571,7 @@ private:
 		bool loop;      ///< Plays until stopped
 	};
 	Common::Array<VideoPlay> _videoPlays;      ///< Per queued video
-	/** PDA e-mail: VCEmail, VCEmailRead and VCEmailPending, and the inbox (globals 0x6bd914, 0x6bd86c). */
-	Common::Array<uint32> _emails, _emailsRead, _emailPending;
-	struct InboxRow {
-		uint32 id;
-		bool read;
-	};
-	Common::Array<InboxRow> _inboxRows;
-	uint _inboxTop;
-	int _pdaFontSize;                          ///< EmailInit(c): 12 for 'P', else 14
-	bool _pdaLayout;                           ///< EmailInit('P'): the PDA's item tables
-	Common::HashMap<uint32, Common::U32StringArray> _emailLines;  ///< Lines of the e-mail files read
 	uint32 _prefArtificialIntuition;           ///< The variable RegPreferences gives Pref_bArtificialIntuition, or 0
-	uint32 _scrollItem;                        ///< The item of the scroll text (0x42ca30), or 0
-	Common::Array<uint32> _addressList;        ///< Enabled assets of item 45307 (0x6b8390)
-	uint _addressIndex;                        ///< 0x6b16b0
-	Common::Array<uint32> _notes;              ///< VCPDANotes
-	uint _noteDay, _noteDays;                  ///< 0x6b1a4c, 0x6b1a54
 
 	/** FixJumpCut(first, later) of a topic's Object Activation (0x47ca30). */
 	struct JumpCut {

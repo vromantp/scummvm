@@ -21,6 +21,7 @@
 
 #include "common/algorithm.h"
 
+#include "xfiles/pda.h"
 #include "xfiles/script.h"
 
 namespace XFiles {
@@ -110,128 +111,153 @@ static void listRemove(Common::Array<uint32> &list, uint32 id) {
 		list.erase(it);
 }
 
-void Script::addPDAHooks() {
-	HookTable<Script> &t = _hookTable;
+PdaHooks::PdaHooks(Script &script, const VCData &data)
+	: _script(script), _data(data), _inboxTop(0), _pdaFontSize(kPDAFontSize), _pdaLayout(false), _scrollItem(0),
+	  _addressIndex(0), _noteDay(0), _noteDays(0) {
+}
+
+void PdaHooks::addHooks(HookTable<Script> &t) {
 	t.add("ScrollTextList", [](Script &s, const HookCall &c) {
 		if (!c.has(5))
 			return false;
-		s.scrollTextList(c.args[0], c.args[1], c.args[2], c.args[3], c.args[4]);
+		s._pda.scrollTextList(c.args[0], c.args[1], c.args[2], c.args[3], c.args[4]);
 		return true;
 	});
 	t.add("ScrollTextInit", [](Script &s, const HookCall &c) {
 		if (!c.has(1))
 			return false;
-		s.scrollTextList(c.args[0], 0, 'b', 'c', kPDAFontSize);
+		s._pda.scrollTextList(c.args[0], 0, 'b', 'c', kPDAFontSize);
 		return true;
 	});
 	t.add("SendEmail", [](Script &s, const HookCall &c) {
+		PdaHooks &p = s._pda;
 		if (!c.has(1))
 			return false;
-		s._emailPending.push_back(c.args[0]);
+		p._emailPending.push_back(c.args[0]);
 		return true;
 	});
 	t.add("EmailFlushMess", [](Script &s, const HookCall &c) {
-		for (uint i = 0; i < s._emailPending.size(); i++) {
-			if (!listHas(s._emails, s._emailPending[i]))
-				s._emails.push_back(s._emailPending[i]);
+		PdaHooks &p = s._pda;
+		for (uint i = 0; i < p._emailPending.size(); i++) {
+			if (!listHas(p._emails, p._emailPending[i]))
+				p._emails.push_back(p._emailPending[i]);
 		}
-		s._emailPending.clear();
+		p._emailPending.clear();
 		return true;
 	});
 	t.add("EmailDelete", [](Script &s, const HookCall &c) {
+		PdaHooks &p = s._pda;
 		if (!c.has(1))
 			return false;
-		listRemove(s._emails, c.args[0]);
-		listRemove(s._emailsRead, c.args[0]);
+		listRemove(p._emails, c.args[0]);
+		listRemove(p._emailsRead, c.args[0]);
 		return true;
 	});
 	t.add("EmailInit", [](Script &s, const HookCall &c) {
+		PdaHooks &p = s._pda;
 		if (!c.has(1))
 			return false;
 		if (c.args[0] == 'a' || c.args[0] == 'b') {
-			if (s._emails.size() != s._emailsRead.size())
+			if (p._emails.size() != p._emailsRead.size())
 				s.runActionList(c.args[0] == 'a' ? kEmailInitA : kEmailInitB, c.event, c.fields);
 		} else {
-			s._inboxRows.clear();
-			s._inboxTop = 0;
-			s._pdaLayout = c.args[0] == 'P';
-			s._pdaFontSize = s._pdaLayout ? kPDAFontSize : kMailFontSize;
+			p._inboxRows.clear();
+			p._inboxTop = 0;
+			p._pdaLayout = c.args[0] == 'P';
+			p._pdaFontSize = p._pdaLayout ? kPDAFontSize : kMailFontSize;
 		}
 		return true;
 	});
 	t.add("DisplayInBox", [](Script &s, const HookCall &c) {
 		if (!c.has(1))
 			return false;
-		s.displayInBox(c.args[0]);
+		s._pda.displayInBox(c.args[0]);
 		return true;
 	});
 	t.add("GetCurrEmail", [](Script &s, const HookCall &c) {
+		PdaHooks &p = s._pda;
 		if (!c.has(2) || !c.isVariable(1))
 			return false;
-		uint i = s._inboxTop + c.args[0];
-		s._variables[c.action.args[1].value] = i < s._inboxRows.size() ? (int32)s._inboxRows[i].id : 0;
+		uint i = p._inboxTop + c.args[0];
+		s.setVariable(c.action.args[1].value, i < p._inboxRows.size() ? (int32)p._inboxRows[i].id : 0);
 		return true;
 	});
 	t.add("MarkEmailRead", [](Script &s, const HookCall &c) {
+		PdaHooks &p = s._pda;
 		if (!c.has(1))
 			return false;
-		uint i = s._inboxTop + c.args[0];
-		if (i < s._inboxRows.size() && !s._inboxRows[i].read) {
-			s._emailsRead.push_back(s._inboxRows[i].id);
-			s._inboxRows[i].read = true;
+		uint i = p._inboxTop + c.args[0];
+		if (i < p._inboxRows.size() && !p._inboxRows[i].read) {
+			p._emailsRead.push_back(p._inboxRows[i].id);
+			p._inboxRows[i].read = true;
 		}
 		return true;
 	});
 	t.add("InitEmailRead", [](Script &s, const HookCall &c) {
 		if (!c.has(2))
 			return false;
-		s.initEmailRead(c.args[0], c.args[1]);
+		s._pda.initEmailRead(c.args[0], c.args[1]);
 		return true;
 	});
 	t.add("MainScroll", [](Script &s, const HookCall &c) {
 		if (!c.has(1))
 			return false;
-		s.mainScroll(c.args[0]);
+		s._pda.mainScroll(c.args[0]);
 		return true;
 	});
 	t.add("ScrollTextKill", [](Script &s, const HookCall &c) {
-		s._itemTexts.erase(s._scrollItem);
-		s._scrollItem = 0;
+		PdaHooks &p = s._pda;
+		s.clearItemText(p._scrollItem);
+		p._scrollItem = 0;
 		return true;
 	});
 	t.add("PDAInitAddr", [](Script &s, const HookCall &c) {
-		s.pdaInitAddr();
+		s._pda.pdaInitAddr();
 		return true;
 	});
 	t.add("PDAFlipAddr", [](Script &s, const HookCall &c) {
 		if (!c.has(1))
 			return false;
-		s.pdaFlipAddr(c.args[0]);
+		s._pda.pdaFlipAddr(c.args[0]);
 		return true;
 	});
 	t.add("EnablePDANote", [](Script &s, const HookCall &c) {
 		if (!c.has(1))
 			return false;
-		s.enablePDANote(c.args[0]);
+		s._pda.enablePDANote(c.args[0]);
 		return true;
 	});
 	t.add("EnableAllNotes", [](Script &s, const HookCall &c) {
-		s.enableAllNotes();
+		s._pda.enableAllNotes();
 		return true;
 	});
 	t.add("NotePadInit", [](Script &s, const HookCall &c) {
-		s.notePadInit();
+		s._pda.notePadInit();
 		return true;
 	});
 	t.add("NoteFlipDay", [](Script &s, const HookCall &c) {
 		if (!c.has(1))
 			return false;
-		s.noteFlipDay(c.args[0]);
+		s._pda.noteFlipDay(c.args[0]);
 		return true;
 	});
 }
 
-void Script::displayInBox(int32 value) {
+void PdaHooks::restore(const VCSave &save) {
+	_emails = save.emails;
+	_emailsRead = save.emailsRead;
+	_emailPending = save.emailsPending;
+	_notes = save.notes;
+}
+
+void PdaHooks::snapshot(VCSave &save) const {
+	save.notes = _notes;
+	save.emails = _emails;
+	save.emailsRead = _emailsRead;
+	save.emailsPending = _emailPending;
+}
+
+void PdaHooks::displayInBox(int32 value) {
 	listRemove(_emails, kRemovedEmail);
 	_inboxRows.clear();
 	for (uint i = 0; i < _emails.size(); i++) {
@@ -258,7 +284,7 @@ void Script::displayInBox(int32 value) {
 	showInboxTexts();
 }
 
-void Script::initEmailRead(int32 item, int32 email) {
+void PdaHooks::initEmailRead(int32 item, int32 email) {
 	// 0x43df10: the whole file goes into a scroll text over the item, or over the text item
 	// of the three special e-mails
 	uint32 textItem = item;
@@ -267,23 +293,23 @@ void Script::initEmailRead(int32 item, int32 email) {
 		if ((int32)e.email != email || e.readerItem != (item == (int32)kEmailReadItem))
 			continue;
 		for (uint j = 0; j < 4; j++)
-			setItemEnabled(e.show[j], true);
+			_script.setItemEnabled(e.show[j], true);
 		if (e.hide)
-			setItemEnabled(e.hide, false);
+			_script.setItemEnabled(e.hide, false);
 		textItem = e.textItem;
 		break;
 	}
 	Common::U32String text;
-	if (readTextFile(email, text))
+	if (_script.readTextFile(email, text))
 		setScrollText(textItem, text, _pdaFontSize);
 }
 
-const Common::U32StringArray &Script::getEmailLines(uint32 email) {
+const Common::U32StringArray &PdaHooks::getEmailLines(uint32 email) {
 	if (!_emailLines.contains(email)) {
 		// 0x48ca50: split on newlines: To, From, Subject, then the body
 		Common::U32StringArray &lines = _emailLines[email];
 		Common::U32String text;
-		if (readTextFile(email, text)) {
+		if (_script.readTextFile(email, text)) {
 			Common::U32String line;
 			for (uint i = 0; i <= text.size(); i++) {
 				if (i < text.size() && text[i] != '\n') {
@@ -298,7 +324,7 @@ const Common::U32StringArray &Script::getEmailLines(uint32 email) {
 	return _emailLines[email];
 }
 
-void Script::showInboxTexts() {
+void PdaHooks::showInboxTexts() {
 	// 0x48c680: rows top ... top + 7 fill the slots: the From and Subject lines, and the
 	// marker if the e-mail was read. Slots past the last row are empty.
 	for (uint k = 0; k < kInboxRows; k++) {
@@ -306,43 +332,44 @@ void Script::showInboxTexts() {
 		uint row = _inboxTop + k;
 		if (row < _inboxRows.size()) {
 			const Common::U32StringArray &lines = getEmailLines(_inboxRows[row].id);
-			setPDAText(from, lines.size() > 1 ? lines[1] : Common::U32String(), _pdaFontSize, true);
-			setPDAText(subject, lines.size() > 2 ? lines[2] : Common::U32String(), _pdaFontSize, true);
-			setItemEnabled(markerItem(_pdaLayout, k), _inboxRows[row].read);
+			_script.setPDAText(from, lines.size() > 1 ? lines[1] : Common::U32String(), _pdaFontSize, true);
+			_script.setPDAText(subject, lines.size() > 2 ? lines[2] : Common::U32String(), _pdaFontSize, true);
+			_script.setItemEnabled(markerItem(_pdaLayout, k), _inboxRows[row].read);
 		} else {
-			_itemTexts.erase(from);
-			_itemTexts.erase(subject);
-			setItemEnabled(markerItem(_pdaLayout, k), false);
+			_script.clearItemText(from);
+			_script.clearItemText(subject);
+			_script.setItemEnabled(markerItem(_pdaLayout, k), false);
 		}
 	}
 }
 
-void Script::setScrollText(uint32 item, const Common::U32String &text, int size, uint32 color, bool bold, bool sans) {
+void PdaHooks::setScrollText(uint32 item, const Common::U32String &text, int size, uint32 color, bool bold, bool sans) {
 	// 0x4be340: a scroll text replaces the earlier one; wrapped at the item's width
 	if (_scrollItem && _scrollItem != item)
-		_itemTexts.erase(_scrollItem);
+		_script.clearItemText(_scrollItem);
 	_scrollItem = item;
-	setPDAText(item, text, size, false, color, bold, sans);
+	_script.setPDAText(item, text, size, false, color, bold, sans);
 }
 
-void Script::scrollTextList(int32 item, int32 asset, int32 color, int32 font, int32 size) {
+void PdaHooks::scrollTextList(int32 item, int32 asset, int32 color, int32 font, int32 size) {
 	// 0x481160 / 0x45e280 -> 0x4be340. The asset is a file asset (its file, as for an e-mail), a text asset
 	// or a string of XFilesT.dll (0x45f690). 'H' is Arial made bold, anything else Courier New 400.
 	// The colours: 'w' white, 'x' Color_TextBlue, 'b' and anything else black.
 	uint32 rgb = color == 'w' ? 0xffffff : color == 'x' ? 0x2e6b8c : 0;
 	bool arial = font == 'H';
 	Common::U32String text;
-	if (asset && !readTextFile(asset, text))
-		getTextAsset(asset, text);
+	if (asset && !_script.readTextFile(asset, text))
+		_script.getTextAsset(asset, text);
 	// Arial 12 is 15 px per line (font.metrics, regular); the bold one is assumed to match
 	setScrollText(item, text, size, rgb, arial, arial);
 }
 
-void Script::mainScroll(int32 n) {
+void PdaHooks::mainScroll(int32 n) {
 	// 0x42ce60: a line or a page (the lines that fit the item) up or down, kept inside the text
-	if (!_scrollItem || !_itemTexts.contains(_scrollItem))
+	Script::ItemText *text = _scrollItem ? _script.findItemText(_scrollItem) : nullptr;
+	if (!text)
 		return;
-	ItemText &t = _itemTexts[_scrollItem];
+	Script::ItemText &t = *text;
 	VCInterfaceItem data;
 	if (!_data.getInterfaceItem(_scrollItem, data))
 		return;
@@ -370,7 +397,7 @@ void Script::mainScroll(int32 n) {
 
 // -- Address book -------------------------------------------------------------
 
-void Script::buildAddressList() {
+void PdaHooks::buildAddressList() {
 	// 0x435590: the enabled assets of the item's list
 	_addressList.clear();
 	VCInterfaceItem item;
@@ -378,30 +405,30 @@ void Script::buildAddressList() {
 	if (_data.getInterfaceItem(kAddressSource, item))
 		_data.getMembers(item.assets, entries);
 	for (uint i = 0; i < entries.size(); i++) {
-		if (isEnabled(entries[i]))
+		if (_script.isEnabled(entries[i]))
 			_addressList.push_back(entries[i]);
 	}
 }
 
-void Script::showAddress() {
+void PdaHooks::showAddress() {
 	Common::U32String text, entry;
-	if (_addressIndex < _addressList.size() && getTextAsset(_addressList[_addressIndex], entry)) {
+	if (_addressIndex < _addressList.size() && _script.getTextAsset(_addressList[_addressIndex], entry)) {
 		for (uint i = 0; i < entry.size(); i++) {
 			if (entry[i] != '\r')
 				text += entry[i];
 		}
 	}
-	setPDAText(kAddressItem, text, kAddressFontSize, true);
+	_script.setPDAText(kAddressItem, text, kAddressFontSize, true);
 }
 
-void Script::pdaInitAddr() {
+void PdaHooks::pdaInitAddr() {
 	buildAddressList();
 	if (_addressIndex >= _addressList.size())
 		_addressIndex = 0;
 	showAddress();
 }
 
-void Script::pdaFlipAddr(int32 n) {
+void PdaHooks::pdaFlipAddr(int32 n) {
 	// Only with two or more entries
 	uint count = _addressList.size();
 	if (count <= 1)
@@ -418,7 +445,7 @@ void Script::pdaFlipAddr(int32 n) {
 	case 2:
 	case 3:
 		for (uint i = 0; i < 2; i++)
-			setItemEnabled(kAddressEnable[i], n == 2);
+			_script.setItemEnabled(kAddressEnable[i], n == 2);
 		break;
 	case 4:
 		buildAddressList();
@@ -430,11 +457,11 @@ void Script::pdaFlipAddr(int32 n) {
 
 // -- Notepad ------------------------------------------------------------------
 
-bool Script::hasNote(uint32 id) const {
+bool PdaHooks::hasNote(uint32 id) const {
 	return listHas(_notes, id);
 }
 
-bool Script::dayHasNote(uint day, uint32 note) const {
+bool PdaHooks::dayHasNote(uint day, uint32 note) const {
 	VCInterfaceItem item;
 	Common::Array<uint32> members;
 	if (day >= kNoteDayCount || !_data.getInterfaceItem(kNoteDayItems[day], item) || !_data.getMembers(item.assets, members))
@@ -442,14 +469,14 @@ bool Script::dayHasNote(uint day, uint32 note) const {
 	return listHas(members, note);
 }
 
-void Script::enablePDANote(uint32 id) {
+void PdaHooks::enablePDANote(uint32 id) {
 	// 0x4e6660: a note of the next day opens that day
 	_notes.push_back(id);
 	if (_noteDays < kNoteDayCount && dayHasNote(_noteDays, id))
 		_noteDays++;
 }
 
-void Script::enableAllNotes() {
+void PdaHooks::enableAllNotes() {
 	// 0x4e6810: every note of every day, in order
 	for (uint day = 0; day < kNoteDayCount; day++) {
 		VCInterfaceItem item;
@@ -462,7 +489,7 @@ void Script::enableAllNotes() {
 	_noteDays = kNoteDayCount;
 }
 
-void Script::showNoteDayText() {
+void PdaHooks::showNoteDayText() {
 	// 0x4e71a0: the scroll text starts with a blank, then each note of the day in list order
 	VCInterfaceItem item;
 	Common::Array<uint32> members;
@@ -471,22 +498,22 @@ void Script::showNoteDayText() {
 	Common::U32String text(" ");
 	for (uint i = 0; i < _notes.size(); i++) {
 		Common::U32String note;
-		if (listHas(members, _notes[i]) && readTextFile(_notes[i], note))
+		if (listHas(members, _notes[i]) && _script.readTextFile(_notes[i], note))
 			text += note;
 	}
 	setScrollText(kNoteTextItem, text, kNoteFontSize);
 }
 
-void Script::showNoteMarker() {
+void PdaHooks::showNoteMarker() {
 	// The day label, and the marker: the day's key note is in the list (day 2 needs two more)
-	setPDAText(kNoteLabelItem, Common::U32String(Common::String::format("%u", _noteDay + 1)), kNoteFontSize, true);
+	_script.setPDAText(kNoteLabelItem, Common::U32String(Common::String::format("%u", _noteDay + 1)), kNoteFontSize, true);
 	bool shown = _noteDay < kNoteDayCount && hasNote(kNoteKeys[_noteDay]);
 	if (shown && _noteDay == kNoteMarkerDay)
 		shown = hasNote(kNoteMarkerExtra[0]) && hasNote(kNoteMarkerExtra[1]);
-	setItemEnabled(kNoteMarkerItem, shown);
+	_script.setItemEnabled(kNoteMarkerItem, shown);
 }
 
-void Script::notePadInit() {
+void PdaHooks::notePadInit() {
 	// 0x4e6220: the days are those from the first on that each have a note, at least one
 	uint days = 0;
 	while (days < kNoteDayCount) {
@@ -502,7 +529,7 @@ void Script::notePadInit() {
 	showNoteMarker();
 }
 
-void Script::noteFlipDay(int32 n) {
+void PdaHooks::noteFlipDay(int32 n) {
 	// 0x4e6a70
 	uint day = _noteDay;
 	if (n == 0 && _noteDay + 1 < _noteDays)
@@ -511,9 +538,9 @@ void Script::noteFlipDay(int32 n) {
 		day--;
 	if (day != _noteDay) {
 		_noteDay = day;
-		setItemEnabled(kNoteTextItem, false);
+		_script.setItemEnabled(kNoteTextItem, false);
 		showNoteDayText();
-		setItemEnabled(kNoteTextItem, true);
+		_script.setItemEnabled(kNoteTextItem, true);
 	}
 	showNoteMarker();
 }
