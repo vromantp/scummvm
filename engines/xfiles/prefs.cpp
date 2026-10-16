@@ -26,7 +26,7 @@ namespace XFiles {
 
 // The Game Preferences screens: PrefInit, AudioInit, PrefDialogVol, PrefMusicVol, PrefEffectVol, PrefVolume, the
 // cycles and the toggles. The values go into the preference store (Script::setPreference, which RegPreferences
-// writes into the variables at the next game) and into the hook's variable. TODO B-068: Prefs_Apply (0x452b20),
+// writes into the variables at the next game) and into the hook's variable. TODO B-091: Prefs_Apply (0x452b20),
 // which carries them to the registry and the running game when the screen closes, and PrefDefaults.
 
 /** PrefClick.amv, played by every hook that changes a value. */
@@ -179,7 +179,7 @@ void PrefHooks::cycle(uint index, uint32 variable, const char *table) {
 	int32 value = getValue(index, variable);
 	const char *found = value > 0 && value < 256 ? strchr(table, value) : nullptr;
 	if (!found)
-		return; // TODO B-068: what the exe does with a value outside the table is not known
+		return; // TODO B-091: what the exe does with a value outside the table is not known
 	found++;
 	setValue(index, variable, static_cast<byte>(*found ? *found : table[0]));
 }
