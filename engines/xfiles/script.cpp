@@ -724,6 +724,14 @@ void Script::randGen(uint32 variableId, int32 n) {
 	log(Common::String::format("      %s = %d", name.encode().c_str(), value));
 }
 
+void Script::isIItemHeld(uint32 variableId, int32 item) {
+	// 0x4b3850: 1 when the object the last mouse-down captured is the interface item
+	_variables[variableId] = _held && _held == (uint32)item ? 1 : 0;
+	Common::U32String name;
+	_data.getVariableName(variableId, name);
+	log(Common::String::format("      %s = %d", name.encode().c_str(), _variables[variableId]));
+}
+
 void Script::enableKitIcon(uint32 id) {
 	// XFiles.exe 0x4effd0: enable the evidence icon and give it an object in
 	// the kit, whose activation fires its Object Activation
@@ -1584,6 +1592,11 @@ void Script::hideLayout(uint32 layoutId) {
 			_phone.closed();
 		return;
 	}
+}
+
+void Script::setItemEnabled(uint32 item, bool enabled) {
+	_enabled[item] = enabled;
+	updateLayoutItem(item, enabled);
 }
 
 void Script::updateLayoutItem(uint32 itemId, bool enabled) {

@@ -9,6 +9,7 @@ MODULE_OBJS = \
 	discfiles.o \
 	headcredits.o \
 	interface.o \
+	itemtext.o \
 	menu.o \
 	metaengine.o \
 	movie.o \

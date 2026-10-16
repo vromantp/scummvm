@@ -471,10 +471,10 @@ private:
 	/** Draw a computer field (Courier New 14, 0x4be2c0) into an item; an empty text clears it. */
 	void setFieldText(uint32 item, const Common::String &text);
 
-	// PDA e-mail (pda.cpp)
-	void displayInBox(int32 value);
-	void initEmailRead(int32 item, int32 email);
+	/** Set an interface item's enabled flag; an item of a shown layout comes or goes with it. */
 	void setItemEnabled(uint32 item, bool enabled);
+
+	// Item texts (itemtext.cpp)
 	/** Lay out and set the text of an item (0x4be2c0); wrapWidth 0: a line per newline only. */
 	void setItemText(uint32 item, const Common::U32String &text, int size, bool bold, uint32 color, TextAlign align,
 		bool shadow, int wrapWidth, bool sans = false);
@@ -483,10 +483,14 @@ private:
 		bool bold = false, bool sans = false);
 	/** The text of a text asset (or a string of XFilesT.dll), false if it has none. */
 	bool getTextAsset(uint32 entry, Common::U32String &text);
-	/** Lines of an e-mail's file (To, From, Subject, body), empty if it has none; cached. */
-	const Common::U32StringArray &getEmailLines(uint32 email);
 	/** The text of a file asset: Windows-1252, carriage returns dropped. */
 	bool readTextFile(uint32 asset, Common::U32String &text);
+
+	// PDA e-mail (pda.cpp)
+	void displayInBox(int32 value);
+	void initEmailRead(int32 item, int32 email);
+	/** Lines of an e-mail's file (To, From, Subject, body), empty if it has none; cached. */
+	const Common::U32StringArray &getEmailLines(uint32 email);
 	void showInboxTexts();
 	void setScrollText(uint32 item, const Common::U32String &text, int size, uint32 color = 0, bool bold = false,
 		bool sans = false);

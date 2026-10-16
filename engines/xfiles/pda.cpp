@@ -20,7 +20,6 @@
  */
 
 #include "common/algorithm.h"
-#include "common/formats/winexe.h"
 
 #include "xfiles/script.h"
 
@@ -100,60 +99,6 @@ static const uint32 kNoteMarkerItem = 63423;
 static const uint32 kNoteMarkerExtra[2] = { 63282, 63284 };
 static const uint kNoteMarkerDay = 2;
 static const int kNoteFontSize = 12;
-
-/** Pixels from line to line (font.metrics of pda-usage-run1: 12 gives 15, 14 gives 17; the phone's 15 gives 17). */
-static int lineHeightOf(int size) {
-	return size <= 12 ? 15 : 17;
-}
-
-/** Courier New's advance: 7 px at 12, 8 px at 14. */
-static int charWidthOf(int size) {
-	return (size * 6 + 5) / 10;
-}
-
-/** The width of a text: Courier New's fixed advance, or Arial through the hook (an estimate without one). */
-struct TextMeter {
-	const ScriptHooks *hooks;
-	int size;
-	bool bold, sans;
-
-	int width(const Common::U32String &text) const {
-		if (!sans)
-			return text.size() * charWidthOf(size);
-		int w = hooks ? hooks->measureText(text, size, bold, sans) : -1;
-		// Without fonts (vcdump): Arial 12 averages 5 px per character
-		return w >= 0 ? w : text.size() * size * 5 / 12;
-	}
-};
-
-/** Word-wrap a line (DT_WORDBREAK): break after the last space that fits, or inside a word longer than a line. */
-static void wrapLine(const Common::U32String &line, int limit, const TextMeter &meter, Common::U32StringArray &out) {
-	Common::U32String rest = line;
-	while (meter.width(rest) > limit) {
-		int at = -1;
-		uint fit = 0; // the characters that fit
-		for (uint i = 0; i < rest.size(); i++) {
-			if (meter.width(rest.substr(0, i + 1)) > limit)
-				break;
-			fit = i + 1;
-		}
-		for (uint i = 0; i <= fit && i < rest.size(); i++) {
-			if (rest[i] == ' ')
-				at = i;
-		}
-		if (at > 0) {
-			out.push_back(rest.substr(0, at));
-			while ((uint)at < rest.size() && rest[at] == ' ')
-				at++;
-			rest = rest.substr(at);
-		} else {
-			fit = MAX<uint>(fit, 1);
-			out.push_back(rest.substr(0, fit));
-			rest = rest.substr(fit);
-		}
-	}
-	out.push_back(rest);
-}
 
 static bool listHas(const Common::Array<uint32> &list, uint32 id) {
 	return Common::find(list.begin(), list.end(), id) != list.end();
@@ -313,11 +258,6 @@ void Script::displayInBox(int32 value) {
 	showInboxTexts();
 }
 
-void Script::setItemEnabled(uint32 item, bool enabled) {
-	_enabled[item] = enabled;
-	updateLayoutItem(item, enabled);
-}
-
 void Script::initEmailRead(int32 item, int32 email) {
 	// 0x43df10: the whole file goes into a scroll text over the item, or over the text item
 	// of the three special e-mails
@@ -336,81 +276,6 @@ void Script::initEmailRead(int32 item, int32 email) {
 	Common::U32String text;
 	if (readTextFile(email, text))
 		setScrollText(textItem, text, _pdaFontSize);
-}
-
-void Script::isIItemHeld(uint32 variableId, int32 item) {
-	// 0x4b3850: 1 when the object the last mouse-down captured is the interface item
-	_variables[variableId] = _held && _held == (uint32)item ? 1 : 0;
-	Common::U32String name;
-	_data.getVariableName(variableId, name);
-	log(Common::String::format("      %s = %d", name.encode().c_str(), _variables[variableId]));
-}
-
-// -- Text ---------------------------------------------------------------------
-
-void Script::setItemText(uint32 item, const Common::U32String &text, int size, bool bold, uint32 color, TextAlign align,
-		bool shadow, int wrapWidth, bool sans) {
-	ItemText &t = _itemTexts[item];
-	t.lines.clear();
-	t.color = color;
-	t.bold = bold;
-	t.sans = sans;
-	t.size = size;
-	t.lineHeight = lineHeightOf(size);
-	t.align = align;
-	t.shadow = shadow;
-	t.firstLine = 0;
-	// Courier New wraps at whole characters; Arial at the pixel width
-	TextMeter meter = { _hooks, size, bold, sans };
-	int limit = sans ? wrapWidth : MAX(1, wrapWidth / charWidthOf(size)) * charWidthOf(size);
-	Common::U32String line;
-	for (uint i = 0; i <= text.size(); i++) {
-		if (i < text.size() && text[i] != '\n') {
-			line += text[i];
-			continue;
-		}
-		if (wrapWidth > 0)
-			wrapLine(line, limit, meter, t.lines);
-		else
-			t.lines.push_back(line);
-		line.clear();
-	}
-}
-
-void Script::setPDAText(uint32 item, const Common::U32String &text, int size, bool doubleWidth, uint32 color, bool bold,
-		bool sans) {
-	// 0x4be2c0: Courier New 400, black, left, no shadow; laid out at twice the item's width unless
-	// +0x194 is set (it is 0 for every PDA text, which the callers pass as doubleWidth)
-	VCInterfaceItem data;
-	int width = 0;
-	if (_data.getInterfaceItem(item, data))
-		width = (data.rect.right - data.rect.left) * (doubleWidth ? 2 : 1);
-	setItemText(item, text, size, bold, color, kAlignLeft, false, width, sans);
-}
-
-bool Script::getTextAsset(uint32 entry, Common::U32String &text) {
-	// A text asset, or one that names a string of XFilesT.dll
-	uint32 type, resource;
-	if (_data.getResourceRef(entry, type, resource)) {
-		if (!_texts || type != 6)
-			return false;
-		text = _texts->loadString(resource).decode(Common::kWindows1252);
-		return true;
-	}
-	return _data.getText(entry, text);
-}
-
-bool Script::readTextFile(uint32 asset, Common::U32String &text) {
-	Common::Array<byte> data;
-	if (!_hooks || !_hooks->readAssetFile(asset, data))
-		return false;
-	Common::String raw;
-	for (uint i = 0; i < data.size(); i++) {
-		if (data[i] != '\r')
-			raw += (char)data[i];
-	}
-	text = Common::U32String(raw, Common::kWindows1252);
-	return true;
 }
 
 const Common::U32StringArray &Script::getEmailLines(uint32 email) {
