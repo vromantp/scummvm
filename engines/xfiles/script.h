@@ -503,6 +503,8 @@ private:
 	void startVideo();
 	/** The video on screen ended or was stopped (how is logged). */
 	void endVideo(const char *how);
+	/** Starts the sounds the videos held back, in the order they were played. */
+	void releaseHeldSounds();
 	void enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, bool deactivateAll = false);
 	void travel();
 	void showView();
@@ -571,6 +573,14 @@ private:
 		bool loop;      ///< Plays until stopped
 	};
 	Common::Array<VideoPlay> _videoPlays;      ///< Per queued video
+	/** A sound's play held back by a video (see playAsset()). */
+	struct HeldSound {
+		uint32 id;
+		byte mode;
+		bool positional;
+		int x, y;
+	};
+	Common::Array<HeldSound> _heldSounds;      ///< Sounds waiting for the videos to end
 	uint32 _prefArtificialIntuition;           ///< The variable RegPreferences gives Pref_bArtificialIntuition, or 0
 
 	/** FixJumpCut(first, later) of a topic's Object Activation (0x47ca30). */

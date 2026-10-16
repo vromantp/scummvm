@@ -774,10 +774,21 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 		if (!a.files.empty() && a.files[0].file.hasPrefix("XS:"))
 			_sounds[id] = true;
 		fire(id, kEventObjectActivation);
-		if (_hooks)
-			_hooks->playAsset(id, mode, sound3D != nullptr, sound3D ? sound3D->x : 0, sound3D ? sound3D->y : 0);
+		// The sound object's event is held while a video plays (0x433000,
+		// raised by 0x44f860), so the sound starts after the videos, in
+		// order; its asset object is active at once (media2.log: 30399
+		// 'asset.start' 42996, 'movie.start' 49706, after the video's end)
+		HeldSound held = { id, mode, sound3D != nullptr, sound3D ? sound3D->x : 0, sound3D ? sound3D->y : 0 };
+		if (!_videoQueue.empty())
+			_heldSounds.push_back(held);
+		else if (_hooks)
+			_hooks->playAsset(held.id, held.mode, held.positional, held.x, held.y);
 	} else if (mode == kModeStop) {
 		log(Common::String::format("      stop #%u ", id) + file);
+		for (uint i = _heldSounds.size(); i-- > 0; ) {
+			if (_heldSounds[i].id == id)
+				_heldSounds.remove_at(i);
+		}
 		if (_hooks)
 			_hooks->playAsset(id, mode, false, 0, 0);
 		endSound(id, "stopped");
@@ -793,6 +804,15 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 				_videoPlays.remove_at(i);
 			}
 		}
+	}
+}
+
+void Script::releaseHeldSounds() {
+	Common::Array<HeldSound> held;
+	held.swap(_heldSounds);
+	for (uint i = 0; i < held.size(); i++) {
+		if (_hooks)
+			_hooks->playAsset(held[i].id, held[i].mode, held[i].positional, held[i].x, held[i].y);
 	}
 }
 
@@ -840,6 +860,7 @@ void Script::stopEnvSounds() {
 	// players stop first, so a sound a trigger starts is not cut
 	if (_hooks)
 		_hooks->stopAllSounds();
+	_heldSounds.clear();
 	Common::Array<uint32> ids;
 	for (Common::HashMap<uint32, bool>::const_iterator it = _sounds.begin(); it != _sounds.end(); ++it)
 		ids.push_back(it->_key);
@@ -932,8 +953,10 @@ void Script::endVideo(const char *how) {
 	fire(id, kEventObjectDeactivation);
 	if (next)
 		startVideo();
-	else if (_videoQueue.empty())
+	else if (_videoQueue.empty()) {
+		releaseHeldSounds();
 		showView(); // Back to the view, with whatever the video's triggers changed
+	}
 }
 
 // -- Navigation ---------------------------------------------------------------
