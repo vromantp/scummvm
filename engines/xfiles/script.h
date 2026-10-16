@@ -428,6 +428,10 @@ private:
 	void execute(const VCAction &action, int event, const EventFields &fields, LocalVariables &locals);
 	int32 getValue(const VCOperand &operand, const EventFields &fields, const LocalVariables &locals) const;
 	bool test(const VCExpression &condition, const EventFields &fields, const LocalVariables &locals) const;
+	/** Whether the operand is a string variable (type 3), with its text. */
+	bool getStringOperand(const VCOperand &operand, Common::String &text) const;
+	/** == of the exe (0x5d5ef0), which compares string variables by their text. */
+	bool testEqual(const VCExpression &condition, int32 a, int32 b) const;
 	void logHook(const Common::String &name, HookStatus status);
 	/** Fill _hookTable: the Script's own hooks, then those of each area file. */
 	void addHooks();

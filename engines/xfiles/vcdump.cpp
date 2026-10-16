@@ -366,6 +366,18 @@ Common::String dumpState(const VCData &data, const Script &script, const VCSave 
 	}
 	Common::String out = "{\n \"format\": \"xfiles-engine-state 1\",\n \"variables\": " + jsonMap(ids, values);
 
+	// VCString values the game changed, as hex bytes: {"id": "hex", ...}
+	Script::SavedValues saved;
+	script.getSaved(saved);
+	out += ",\n \"strings\": {";
+	for (uint i = 0; i < saved.stringIds.size(); i++) {
+		out += Common::String::format("%s\"%u\": \"", i ? ", " : "", saved.stringIds[i]);
+		for (uint j = 0; j < saved.strings[i].size(); j++)
+			out += Common::String::format("%02x", (byte)saved.strings[i][j]);
+		out += "\"";
+	}
+	out += "}";
+
 	// By VCEnabled ID, as in a save's delta (the Script keeps them by target)
 	entries.clear();
 	ids.clear();

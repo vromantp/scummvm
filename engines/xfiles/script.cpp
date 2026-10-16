@@ -287,9 +287,9 @@ bool Script::test(const VCExpression &c, const EventFields &fields, const LocalV
 	int32 b = getValue(c.rhs, fields, locals);
 	switch (c.op) {
 	case kCondEqual:
-		return a == b;
+		return testEqual(c, a, b);
 	case kCondNotEqual:
-		return a != b;
+		return !testEqual(c, a, b);
 	case kCondGreater:
 		return a > b;
 	case kCondLess:
@@ -306,6 +306,31 @@ bool Script::test(const VCExpression &c, const EventFields &fields, const LocalV
 		warning("Script: unknown condition operator %u", c.op);
 		return false;
 	}
+}
+
+bool Script::getStringOperand(const VCOperand &operand, Common::String &text) const {
+	VCVariable variable;
+	if (operand.kind != kOperandVariable || !_data.getVariable(operand.value, variable) || (variable.flags & 0x7f) != 3)
+		return false;
+	text = getString(operand.value);
+	return true;
+}
+
+bool Script::testEqual(const VCExpression &c, int32 a, int32 b) const {
+	// A string variable's number is its first character; it equals a number only while it is one
+	// character long (0x5cf870, 0x5cfc20). Locals and event fields against a string are not checked.
+	Common::String lhs, rhs;
+	bool lhsString = getStringOperand(c.lhs, lhs);
+	bool rhsString = getStringOperand(c.rhs, rhs);
+	if (lhsString && rhsString)
+		return lhs == rhs;
+	if (lhsString)
+		return lhs.size() == 1 && (int32)(int8)lhs[0] == b;
+	if (rhsString && c.lhs.kind == kOperandVariable)
+		return rhs.size() == 1 && (int32)(int8)rhs[0] == a;
+	if (rhsString && (c.lhs.kind == kOperandInt || c.lhs.kind == kOperandChar))
+		return rhs.size() < 2 && (int32)(int8)(rhs.empty() ? 0 : rhs[0]) == a;
+	return a == b;
 }
 
 void Script::execute(const VCAction &a, int event, const EventFields &fields, LocalVariables &locals) {
@@ -542,6 +567,20 @@ void Script::addCoreHooks() {
 	});
 	t.add("RegPreferences", [](Script &s, const HookCall &c) {
 		s.regPreferences(c.action);
+		return true;
+	});
+	t.add("SetLanguage", [](Script &s, const HookCall &c) {
+		// (text, var): 0x48b680 reads the text asset (0x45f690: a file asset's file first) and writes it
+		// into the string variable only if it differs (0x41bcb0)
+		if (!c.has(2))
+			return false;
+		Common::U32String text;
+		if (!s.readTextFile(c.args[0], text) && !s.getTextAsset(c.args[0], text))
+			return false;
+		Common::String value = text.encode(Common::kWindows1252);
+		uint32 variable = c.action.args[1].value;
+		if (s.getString(variable) != value)
+			s.setString(variable, value);
 		return true;
 	});
 	t.add("SetIItemText", [](Script &s, const HookCall &c) {
