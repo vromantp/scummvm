@@ -577,6 +577,8 @@ private:
 	void endVideo(const char *how);
 	/** Starts the sounds the videos held back, in the order they were played. */
 	void releaseHeldSounds();
+	/** A travel ends every sound, clip and queued video as a stop (0x493090), between the old and new activations. */
+	void stopAllForTravel();
 	void enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, bool deactivateAll = false);
 	void travel();
 	void showView();

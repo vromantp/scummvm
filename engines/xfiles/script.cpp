@@ -1140,6 +1140,39 @@ void Script::travel() {
 	_fireDepth--;
 }
 
+void Script::stopAllForTravel() {
+	// 0x493090 deactivates every active sound object before it travels (script-flow.md "Every sound stops
+	// before the travel", read from the exe only: no log has a sound still active at a SwapDisc). Each one
+	// stops as at a Stop action, with its Object Deactivation, after the old path's and before the new
+	// node's activation. It is no end: a playlist gets no "child ended", so queued topic clips are dropped
+	// without a topic end or a box re-show (SoundObj_OnDeactivate 0x43a970)
+	if (_hooks)
+		_hooks->stopAllSounds();
+	Common::Array<uint32> clips;
+	for (Common::HashMap<uint32, bool>::const_iterator it = _clips.begin(); it != _clips.end(); ++it)
+		clips.push_back(it->_key);
+	Common::sort(clips.begin(), clips.end());
+	for (uint i = 0; i < clips.size() && _hooks; i++)
+		_hooks->playAsset(clips[i], kModeStop, false, 0, 0);
+	Common::Array<uint32> sounds;
+	for (Common::HashMap<uint32, bool>::const_iterator it = _sounds.begin(); it != _sounds.end(); ++it)
+		sounds.push_back(it->_key);
+	Common::sort(sounds.begin(), sounds.end());
+	Common::Array<uint32> videos;
+	videos.swap(_videoQueue);
+	_videoPlays.clear();
+	_heldSounds.clear();
+	_pendingStops.clear();
+	for (uint i = 0; i < sounds.size(); i++)
+		endSound(sounds[i], "stopped");
+	for (uint i = 0; i < clips.size(); i++)
+		endClip(clips[i], "stopped");
+	for (uint i = 0; i < videos.size(); i++) {
+		log(Common::String::format("  << video #%u stopped", videos[i]));
+		fire(videos[i], kEventObjectDeactivation);
+	}
+}
+
 void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, bool deactivateAll) {
 	const uint32 newPath[4] = { node, location, viewPoint, view };
 	const uint32 oldPath[4] = { _node, _location, _viewPoint, _view };
@@ -1169,6 +1202,8 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, 
 	_box = 0;
 	log("  == enter " + getObjectLabel(_data, node) + " / " + getObjectLabel(_data, location) + " / " +
 		getObjectLabel(_data, viewPoint) + " / " + getObjectLabel(_data, view));
+	if (deactivateAll)
+		stopAllForTravel();
 	for (int i = first; i < 3; i++)
 		fire(newPath[i], kEventObjectActivation);
 	if (first < 4) {
