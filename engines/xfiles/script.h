@@ -597,6 +597,7 @@ private:
 	struct VideoPlay {
 		uint32 limit;   ///< ms to play, 0 for all
 		bool loop;      ///< Plays until stopped
+		uint serial;    ///< _fireSerial of the event that queued it
 	};
 	Common::Array<VideoPlay> _videoPlays;      ///< Per queued video
 	/** A sound's play held back by a video (see playAsset()). */
@@ -621,6 +622,9 @@ private:
 	bool _clipQueued;                          ///< A clip after the question is queued (topic +0x150)
 	uint32 _node, _location, _viewPoint, _view;
 	Common::Array<uint32> _viewObjects;        ///< Activated with the view, in activation order
+	uint _fireSerial;                          ///< Counts the events fired from outside (see _viewSerial)
+	bool _inEvent;                             ///< An event spans several fire() calls: they share a _fireSerial
+	uint _viewSerial;                          ///< _fireSerial of the event that held the view: the videos it waits for
 	uint _fireDepth;                           ///< Nesting of fire(): a pending travel runs when it returns to 0
 	bool _travelPending;                       ///< SwapDisc was called in this event (0x6b19a8)
 	uint32 _travelTo[4];                       ///< Node, location, viewpoint and view of the pending travel

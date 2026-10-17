@@ -103,7 +103,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	_jumpCut.first = _jumpCut.later = false;
 	memset(_flashlight, 0, sizeof(_flashlight));
@@ -216,6 +216,8 @@ bool Script::firesOnRestore(uint32 id) const {
 void Script::fire(uint32 id, int event, const EventFields &fields) {
 	if (_restoreMode >= 0 && event == kEventObjectActivation && !firesOnRestore(id))
 		return;
+	if (_fireDepth == 0 && !_inEvent)
+		_fireSerial++;
 	_fireDepth++;
 	fireTriggers(id, event, fields);
 	_fireDepth--;
@@ -961,7 +963,7 @@ void Script::loadPreferences() {
 }
 
 void Script::queueVideo(uint32 id, uint32 limit, bool loop) {
-	VideoPlay play = { limit, loop };
+	VideoPlay play = { limit, loop, _fireSerial };
 	_videoQueue.push_back(id);
 	_videoPlays.push_back(play);
 	if (_videoQueue.size() == 1)
@@ -985,14 +987,16 @@ void Script::endVideo(const char *how) {
 		return;
 	}
 	uint32 id = _videoQueue.remove_at(0);
+	bool viewVideo = _videoPlays[0].serial == _viewSerial;
 	_videoPlays.remove_at(0);
 	log(Common::String::format("  << video #%u %s", id, how));
 	bool next = !_videoQueue.empty();
-	// A held view comes first, before the video's Object Deactivation (its
-	// asset object is deactivated after the view's activation); a video the
-	// view queues starts at once if the queue was empty, otherwise after
-	// the one already queued
-	if (_viewHeld)
+	bool nextVideo = next && _videoPlays[0].serial == _viewSerial;
+	// A held view comes at the stop of the last video it waits for, before
+	// that video's Object Deactivation (its asset object is deactivated
+	// after the view's activation); a video the view queues starts at once
+	// if the queue was empty, otherwise after the one already queued
+	if (_viewHeld && (!nextVideo || !viewVideo))
 		activateView();
 	else if (_viewAssetHeld)
 		activateViewAsset();
@@ -1058,6 +1062,12 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, 
 			activateView();
 		} else {
 			_viewHeld = true;
+			// It waits for the videos queued in this event, those queued
+			// after it too (comityinn-to-warehouse: 20061 and 19937), but
+			// not for one a later event queues (newgame-to-comityinn: 19802
+			// and 19806 behind 19796) nor those queued before it that
+			// already play
+			_viewSerial = _fireSerial;
 			log("      view held until the video ends");
 		}
 	}
@@ -1857,8 +1867,12 @@ void Script::ask(uint32 conversationId) {
 		}
 	}
 	_history.push_back(conversationId);
+	// The playlist and the triggers are one event (see _viewSerial)
+	_fireSerial++;
+	_inEvent = true;
 	playTopic(conversationId, true);
 	fire(conversationId, kEventMouseClick);
+	_inEvent = false;
 }
 
 bool Script::findIdeaTopic(uint32 charViewId, uint32 iconId, uint32 &conversation) const {
