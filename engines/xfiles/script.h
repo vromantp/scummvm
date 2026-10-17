@@ -121,6 +121,11 @@ public:
 	 * held item disabled): id is the item now in hand, 0 when it was put back.
 	 */
 	virtual void heldItemChanged(uint32 id) {}
+	/**
+	 * Play an asset (as Script::playReaction) ms from now, in game time. Returns false when the engine does not
+	 * delay: the script then plays it at once.
+	 */
+	virtual bool delayPlay(uint32 asset, uint ms) { return false; }
 	/** The bytes of the file of a file asset (an e-mail's text), false if there is none. */
 	virtual bool readAssetFile(uint32 id, Common::Array<byte> &data) { return false; }
 	/** The width in pixels of a text in an item's font (Courier New, or Arial when sans), -1 if unknown. */
@@ -165,7 +170,9 @@ public:
 	/** A character's stock replies: the atoms of its topic without a label. */
 	enum {
 		kStockWhatsTheMatter = 2,   ///< "What's the matter with you?"
-		kStockAtomCount = 7
+		kStockAtomCount = 7,
+		kReactionSlots = 9,         ///< A character view's reaction slots: S0-S6, then 19656 and 19654
+		kReactionNone = 10          ///< No slot for the held item (CharView_ReactionSlot 0x490d50)
 	};
 
 	Script(const VCData &data);
@@ -319,7 +326,14 @@ public:
 	 * condition tests a variable and holds now (XFiles.exe 0x4d23c0 asks
 	 * this of iCurrInventory: the object takes the item in hand).
 	 */
-	bool isTestedOnClick(uint32 id, uint32 variable) const;
+	bool isTestedOnClick(uint32 id, uint32 variable, int event = kEventMouseClick) const;
+	/**
+	 * The last click() on a character view leaves the dialog box to the caller (0x436080): nothing is in hand, or the
+	 * held item has no reaction clip and no trigger took it.
+	 */
+	bool opensBoxOnClick() const { return _clickOpensBox; }
+	/** A tool's delayed reaction clip is due (the engine's timer for ScriptHooks::delayPlay). */
+	void playReaction(uint32 asset) { playStock(asset); }
 	/** How often a conversation topic was asked. */
 	uint getAskCount(uint32 id) const { return _asked.getValOrDefault(id, 0); }
 	int32 getVariable(uint32 id) const;
@@ -462,6 +476,16 @@ private:
 	/** The looping asset of the current view, or 0. */
 	uint32 getViewLoop() const;
 	bool getStockAtoms(uint32 conversationId, uint32 (&atoms)[kStockAtomCount]) const;
+	/** The atoms of the first topic of a character view, if it has no label (0x43d3d0). */
+	bool getCharViewAtoms(const VCCharView &charView, uint32 (&atoms)[kStockAtomCount]) const;
+	/** A character view's reaction slots (CharView_ctor +0x13c); false, all 0, without an Atoms topic. */
+	bool getReactionSlots(uint32 charViewId, uint32 (&slots)[kReactionSlots]) const;
+	/** The reaction clip of the item in hand on a character view (0x490d50), 0 for none. Rolls for the cattle prod. */
+	uint32 getHeldReaction(uint32 charViewId);
+	/** Tool_CharReaction 0x4e2160: the first enabled character view of the view with the item's slot plays it 2 s later. */
+	void toolReaction(int32 item);
+	/** Tool_SpecialView 0x51bc70 for the binoculars: one of the views with a view change of its own. */
+	bool isSpecialView() const;
 	/** The topics of a character view, in box order. */
 	void getBoxTopics(uint32 charViewId, Common::Array<uint32> &topics) const;
 	bool isBoxTopic(uint32 charViewId, uint32 conversationId) const;
@@ -594,6 +618,8 @@ private:
 	Common::HashMap<uint32, ItemText> _itemTexts;
 	uint32 _focus;
 	uint32 _currNodeVariable;                  ///< RegCurrNode
+	uint32 _viewSpecialVariable;               ///< RegViewSpecial: iCurrViewSpecial
+	bool _clickOpensBox;                       ///< See opensBoxOnClick()
 	uint32 _heldVariable;                      ///< RegCurrInvVar: iCurrInventory
 	int32 _heldNone;                           ///< Its Inventory_None value
 	uint32 _heldCursorItem;                    ///< Inv_Held() + 4 (0x6b8974): the VCInventory ID whose cursor is held

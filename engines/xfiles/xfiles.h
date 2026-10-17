@@ -104,6 +104,7 @@ public:
 	int measureText(const Common::U32String &text, int size, bool bold, bool sans) const override;
 	bool queryInventoryIcon(uint32 id, bool &hasIcon) const override;
 	void heldItemChanged(uint32 id) override;
+	bool delayPlay(uint32 asset, uint ms) override;
 	bool queryPreference(uint index, int32 &value) const override;
 	void stopAllSounds() override;
 
@@ -298,6 +299,11 @@ private:
 		uint32 since;
 	};
 	static const uint32 kButtonUpDelay = 100;
+	struct DelayedPlay {
+		uint32 asset;
+		uint32 due; ///< gameMillis()
+	};
+	Common::Array<DelayedPlay> _delayedPlays;     ///< A tool's reaction clip, 2 s after the click (Script::toolReaction)
 	Common::Array<PressedItem> _pressedItems;     ///< Phone buttons shown pressed (Script::takePressedItems)
 	SoundPlayer _sound;                           ///< The sounds and placed clips (sound.cpp)
 

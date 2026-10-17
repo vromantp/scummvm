@@ -103,7 +103,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	_jumpCut.first = _jumpCut.later = false;
 	memset(_flashlight, 0, sizeof(_flashlight));
@@ -252,14 +252,14 @@ void Script::fireTriggers(uint32 id, int event, const EventFields &fields) {
 	}
 }
 
-bool Script::isTestedOnClick(uint32 id, uint32 variable) const {
+bool Script::isTestedOnClick(uint32 id, uint32 variable, int event) const {
 	// 0x4d2ee0 looks at the conditional actions of each Mouse Click action
 	// list for one with the variable as an operand
 	Common::Array<uint32> triggers;
 	_data.getMembers(getTriggers(id), triggers);
 	for (uint i = 0; i < triggers.size(); i++) {
 		VCTrigger t;
-		if (!_data.getTrigger(triggers[i], t) || t.event != kEventMouseClick)
+		if (!_data.getTrigger(triggers[i], t) || t.event != event)
 			continue;
 		for (uint j = 0; j < t.actions.size(); j++) {
 			VCAction a;
@@ -550,6 +550,54 @@ void Script::addCoreHooks() {
 		if (!c.isVariable(0))
 			return false;
 		s._currNodeVariable = c.action.args[0].value; // 0x4926a0
+		return true;
+	});
+	t.add("RegViewSpecial", [](Script &s, const HookCall &c) {
+		if (!c.isVariable(0))
+			return false;
+		s._viewSpecialVariable = c.action.args[0].value; // 0x481140
+		return true;
+	});
+	t.add("OnBinocClick", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		// 0x4e1b30: the item goes into the variable if it is not in hand; then, unless the view has a view change of the
+		// binoculars' own (not ported), a character reacts
+		if (s._heldVariable && s.getVariable(s._heldVariable) != c.args[0]) {
+			s._variables[s._heldVariable] = c.args[0];
+			if (s.isSpecialView())
+				s.log("  (binoculars' view change of this view not ported)");
+			else
+				s.toolReaction(c.args[0]);
+		}
+		return true;
+	});
+	t.add("OnFLightClick", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		// 0x4e1d80
+		if (s._heldVariable && s.getVariable(s._heldVariable) != c.args[0]) {
+			s._variables[s._heldVariable] = c.args[0];
+			s.toolReaction(c.args[0]);
+		}
+		return true;
+	});
+	t.add("OnNVisionClick", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		// 0x4e1f80
+		if (s._heldVariable && s.getVariable(s._heldVariable) != c.args[0]) {
+			s._variables[s._heldVariable] = c.args[0];
+			s.toolReaction(c.args[0]);
+		}
+		return true;
+	});
+	t.add("OnCameraClick", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		// 0x4e1c50: no character reaction for the camera (it passes 3 to Tool_CharReaction)
+		if (s._heldVariable && s.getVariable(s._heldVariable) != c.args[0])
+			s._variables[s._heldVariable] = c.args[0];
 		return true;
 	});
 	t.add("RegCurrInvVar", [](Script &s, const HookCall &c) {
@@ -1598,6 +1646,7 @@ void Script::click(uint32 id) {
 	// in box-click-kinds and newgame-to-comityinn); one on an interface item, an emotion icon or an action icon leaves it open
 	// (the next topic click is still a box click, the box's topics are not activated again)
 	uint32 clickClass = _data.getClassOf(id);
+	_clickOpensBox = !isHolding();
 	if (clickClass != kClassInterfaceItem && clickClass != kClassEmotionIcon && clickClass != kClassActionIcon)
 		_box = 0;
 	if (!isEnabled(id)) {
@@ -1605,6 +1654,16 @@ void Script::click(uint32 id) {
 		return;
 	}
 	fire(id, kEventMouseClick);
+	// A character view with an item in hand that no trigger took (0x436080): the slot's clip plays as a sound, with
+	// no trigger; none (slot 10 or empty) opens the box as with nothing in hand. With the gun the exe first plays
+	// the held item's animation once (blocking; not ported)
+	_clickOpensBox = !isHolding();
+	if (clickClass == kClassCharView && isHolding() && !isTestedOnClick(id, _heldVariable)) {
+		if (uint32 asset = getHeldReaction(id))
+			playStock(asset);
+		else
+			_clickOpensBox = true;
+	}
 	// A click on an emotion or action icon removes all of them (0x49bfe0, 0x4c0660); each one's deactivation
 	// (0x485020, 0x4c0610) also clears its enable flag (0x40f050)
 	uint32 classId = _data.getClassOf(id);
@@ -1642,8 +1701,17 @@ void Script::doubleClick(uint32 id) {
 }
 
 void Script::roll(uint32 id, bool into) {
-	if (isEnabled(id))
-		fire(id, into ? kEventRollInto : kEventRollOutOf);
+	if (!isEnabled(id))
+		return;
+	fire(id, into ? kEventRollInto : kEventRollOutOf);
+	// CharView_OnRoll 0x443010: rolling into a character with an Atoms topic with the gun, handcuffs or stiletto in
+	// hand that its triggers do not take: S5 "Don't do that"
+	if (into && isHolding() && _data.getClassOf(id) == kClassCharView && !isTestedOnClick(id, _heldVariable, kEventRollInto)) {
+		int32 item = getVariable(_heldVariable);
+		uint32 slots[kReactionSlots];
+		if ((item == 9 || item == 10 || item == 23) && getReactionSlots(id, slots))
+			playStock(slots[5]);
+	}
 }
 
 bool Script::holdsTimer(uint32 id, uint n) const {
@@ -2178,17 +2246,120 @@ bool Script::getStockAtoms(uint32 conversationId, uint32 (&atoms)[kStockAtomCoun
 		if (!_data.getCharView(charViews[i], charView) || !_data.getMembers(charView.conversations, topics) ||
 				Common::find(topics.begin(), topics.end(), conversationId) == topics.end())
 			continue;
-		VCConversation first;
-		Common::Array<uint32> assets;
-		if (!_data.getConversation(topics[0], first) || first.label || !_data.getMembers(first.atom, assets))
-			return false;
-		for (uint j = 0; j < kStockAtomCount; j++) {
-			VCAsset asset;
-			atoms[j] = j < assets.size() && _data.getAsset(assets[j], asset) && !asset.files.empty() ? assets[j] : 0;
-		}
-		return true;
+		return getCharViewAtoms(charView, atoms);
 	}
 	return false;
+}
+
+bool Script::getCharViewAtoms(const VCCharView &charView, uint32 (&atoms)[kStockAtomCount]) const {
+	Common::Array<uint32> topics;
+	VCConversation first;
+	Common::Array<uint32> assets;
+	if (!_data.getMembers(charView.conversations, topics) || topics.empty() || !_data.getConversation(topics[0], first) ||
+			first.label || !_data.getMembers(first.atom, assets))
+		return false;
+	for (uint j = 0; j < kStockAtomCount; j++) {
+		VCAsset asset;
+		atoms[j] = j < assets.size() && _data.getAsset(assets[j], asset) && !asset.files.empty() ? assets[j] : 0;
+	}
+	return true;
+}
+
+bool Script::getReactionSlots(uint32 charViewId, uint32 (&slots)[kReactionSlots]) const {
+	for (uint i = 0; i < kReactionSlots; i++)
+		slots[i] = 0;
+	VCCharView charView;
+	uint32 atoms[kStockAtomCount];
+	if (!_data.getCharView(charViewId, charView) || !getCharViewAtoms(charView, atoms))
+		return false;
+	for (uint i = 0; i < kStockAtomCount; i++)
+		slots[i] = atoms[i];
+	slots[7] = 19656; // prisonA.mov, an end game
+	slots[8] = 19654; // Out of FBIA.mov, an end game
+	return true;
+}
+
+uint32 Script::getHeldReaction(uint32 charViewId) {
+	uint32 slots[kReactionSlots];
+	if (!isHolding() || !getReactionSlots(charViewId, slots))
+		return 0;
+	// 0x490d50
+	int slot = kReactionNone;
+	switch (getVariable(_heldVariable)) {
+	case 1:
+	case 4:
+	case 6:
+	case 7:
+	case 11:
+	case 12:
+	case 21:
+	case 22:
+	case 25:
+	case 26:
+	case 30:
+	case 31:
+		slot = 4;
+		break;
+	case 5: // the cattle prod
+		if (slots[3] && slots[5]) {
+			Dice dice = newDice(0x490d50);
+			slot = roll(dice, 1, 2) == 1 ? 3 : 5;
+		} else {
+			slot = slots[5] ? 5 : 3;
+		}
+		break;
+	case 16:
+	case 17:
+	case 18:
+	case 19:
+	case 20:
+		slot = 6;
+		break;
+	case 9:
+	case 23:
+		slot = 7;
+		break;
+	case 10:
+		slot = 8;
+		break;
+	default:
+		break;
+	}
+	return slot == kReactionNone ? 0 : slots[slot];
+}
+
+bool Script::isSpecialView() const {
+	static const int32 kViews[] = { 1, 1228, 1236, 7878, 7879, 19684, 19688, 19692, 23486, 70706, 70710, 70712, 71914, 84307 };
+	if (!_viewSpecialVariable)
+		return false;
+	int32 value = getVariable(_viewSpecialVariable);
+	for (uint i = 0; i < ARRAYSIZE(kViews); i++) {
+		if (kViews[i] == value)
+			return true;
+	}
+	return false;
+}
+
+void Script::toolReaction(int32 item) {
+	// 0x4e2160: S2 for the binoculars and the flashlight, S3 for night vision
+	uint slot = 0;
+	if (item == 2 || item == 8)
+		slot = 2;
+	else if (item == 13)
+		slot = 3;
+	VCView view;
+	Common::Array<uint32> charViews;
+	if (!slot || !_data.getView(_view, view) || !_data.getMembers(view.characters, charViews))
+		return;
+	for (uint i = 0; i < charViews.size(); i++) {
+		uint32 slots[kReactionSlots];
+		if (!isEnabled(charViews[i]) || !getReactionSlots(charViews[i], slots) || !slots[slot])
+			continue;
+		// A one-shot delay of 2000 ms (0x483f90); without an engine the sim plays it at once
+		if (!_hooks || !_hooks->delayPlay(slots[slot], 2000))
+			playStock(slots[slot]);
+		return;
+	}
 }
 
 void Script::followNav(uint32 navId) {
@@ -2277,7 +2448,7 @@ void Script::step(const Common::String &s) {
 		// XFilesEngine::openDialogBox does: the topics activate now, not
 		// at the first ask
 		VCCharView charView;
-		if (!isHolding() && _data.getCharView(id, charView) && (charView.conversations || hasEnabledIdea(id)))
+		if (_clickOpensBox && _data.getCharView(id, charView) && (charView.conversations || hasEnabledIdea(id)))
 			openBox(id);
 	} else if (kind == "press")
 		press(id);

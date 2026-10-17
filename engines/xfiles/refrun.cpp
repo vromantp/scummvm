@@ -81,8 +81,8 @@ void XFilesEngine::runSteps() {
 	if (_steps.empty() || (_shotDue && queue.empty()) || _waitTimer >= 0)
 		return;
 	if (_nextStep >= _steps.size()) {
-		// Done: quit once the videos have played
-		if (queue.empty())
+		// Done: quit once the videos have played (and a tool's delayed clip has started)
+		if (queue.empty() && _delayedPlays.empty())
 			quitGame();
 		return;
 	}
@@ -159,7 +159,7 @@ void XFilesEngine::runSteps() {
 		VCCharView cv;
 		if (step.hasPrefix("click:") && _data->getCharView(atoi(step.c_str() + 6), cv)) {
 			_script->click(cv.id);
-			if (!isHolding())
+			if (_script->opensBoxOnClick())
 				openDialogBox(cv);
 		} else if (step.hasPrefix("ask:")) {
 			askTopic(atoi(step.c_str() + 4));

@@ -744,6 +744,17 @@ void XFilesEngine::updateTimers() {
 		}
 	}
 
+	for (uint i = 0; i < _delayedPlays.size(); ) {
+		if ((int32)(now - _delayedPlays[i].due) >= 0) {
+			uint32 asset = _delayedPlays[i].asset;
+			_delayedPlays.remove_at(i);
+			debugC(1, kDebugScript, "-- delayed play of #%u", asset);
+			_script->playReaction(asset);
+		} else {
+			i++;
+		}
+	}
+
 	for (uint i = 0; i < expired.size(); i++) {
 		debugC(1, kDebugScript, "-- timer %u expired", expired[i]);
 		_timerStates.erase(expired[i]);
@@ -834,6 +845,13 @@ void XFilesEngine::heldItemChanged(uint32 id) {
 		_script->closeBox();
 	}
 	_interface->setHeld(id);
+}
+
+bool XFilesEngine::delayPlay(uint32 asset, uint ms) {
+	DelayedPlay play = { asset, gameMillis() + ms };
+	debugC(1, kDebugScript, "-- play of #%u in %u ms", asset, ms);
+	_delayedPlays.push_back(play);
+	return true;
 }
 
 void XFilesEngine::clickInventory(uint32 inventory) {
@@ -945,10 +963,11 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 	case ViewHit::kCharView: {
 		debugC(1, kDebugScript, "-- click:%u (character view)", viewHit.id);
 		// The view's triggers handle inventory items held over the
-		// character; with nothing in hand the exe opens the dialog box
+		// character; the exe opens the dialog box unless a reaction clip
+		// plays for the item in hand
 		_script->click(viewHit.id);
 		VCCharView cv;
-		if (!isHolding() && _data->getCharView(viewHit.id, cv))
+		if (_script->opensBoxOnClick() && _data->getCharView(viewHit.id, cv))
 			openDialogBox(cv);
 		break;
 	}
