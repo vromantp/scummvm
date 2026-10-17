@@ -1075,9 +1075,10 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, 
 }
 
 void Script::activateView() {
+	// The mark of the view's own activation: the exe logs it after the Activations of its node, location and viewpoint
+	log("  == view activated " + getObjectLabel(_data, _view));
 	if (_viewHeld) {
 		_viewHeld = false;
-		log("  == view activated " + getObjectLabel(_data, _view));
 		// The actions after the set_view ran while it was held: the asset
 		// it activates may not be the one shown when it was entered
 		// (newgame-to-comityinn, view 925: the click on 30659 enables 25745
