@@ -648,6 +648,16 @@ void XFilesEngine::playAsset(uint32 id, byte mode, bool positional, int16 x, int
 	_sound.play(id, mode, positional, x, y, getPreference(kPref3DSound));
 }
 
+void XFilesEngine::stopViewAsset(uint32 id) {
+	// 0x504c90: play once, then go to the segment end (else the movie end); the layer holds that frame
+	for (uint i = 0; i < _layers.size(); i++) {
+		if (_layers[i]->getAssetId() == id) {
+			_layers[i]->stop();
+			_layers[i]->showStillAtEnd();
+		}
+	}
+}
+
 void XFilesEngine::restoreSound(uint32 id, bool loop, uint32 startMs) {
 	_sound.restore(id, loop, startMs);
 }

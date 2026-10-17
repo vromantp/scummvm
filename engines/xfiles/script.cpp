@@ -223,8 +223,22 @@ void Script::fire(uint32 id, int event, const EventFields &fields) {
 	_fireDepth--;
 	// XFiles.exe carries out a pending travel (0x493090) once the event queue
 	// is empty: after the action list and the triggers it set off
-	while (_fireDepth == 0 && _travelPending)
-		travel();
+	// The Object Deactivation of a sound a Stop action stopped comes on a later pass (0x4336e0, B-112)
+	while (_fireDepth == 0 && (_travelPending || !_pendingStops.empty())) {
+		if (_travelPending)
+			travel();
+		else
+			flushStops();
+	}
+}
+
+void Script::flushStops() {
+	Common::Array<uint32> ids;
+	ids.swap(_pendingStops);
+	for (uint i = 0; i < ids.size(); i++) {
+		endSound(ids[i], "stopped");
+		endClip(ids[i], "stopped");
+	}
 }
 
 void Script::fireTriggers(uint32 id, int event, const EventFields &fields) {
@@ -802,6 +816,12 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 	// until a stop or the next main-loop pass after its end removes it. Only where sound ends are known
 	if (_soundEnds && (mode == kModePlayOnce || mode == kModePlayLoop) && isPlaying(id))
 		return;
+	// Without known sound ends nothing drops the play, so the stopped sound ends before it restarts
+	if (!_soundEnds && (mode == kModePlayOnce || mode == kModePlayLoop) && Common::find(_pendingStops.begin(), _pendingStops.end(), id) != _pendingStops.end()) {
+		_pendingStops.erase(Common::find(_pendingStops.begin(), _pendingStops.end(), id));
+		endSound(id, "stopped");
+		endClip(id, "stopped");
+	}
 	bool video = false;
 	for (uint i = 0; i < a.files.size(); i++)
 		video |= a.files[i].file.hasPrefix("XV:") || a.files[i].file.hasPrefix("XN:");
@@ -840,10 +860,16 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 			if (_heldSounds[i].id == id)
 				_heldSounds.remove_at(i);
 		}
-		if (_hooks)
+		// A sound object stays (isPlaying) until a later pass; its deactivation follows the event (flushStops).
+		// Without one, the stop runs a shown view asset to its end, with no deactivation (0x504c90)
+		bool hasObject = isPlaying(id);
+		if (_hooks) {
 			_hooks->playAsset(id, mode, false, 0, 0);
-		endSound(id, "stopped");
-		endClip(id, "stopped");
+			if (!hasObject)
+				_hooks->stopViewAsset(id);
+		}
+		if ((_sounds.contains(id) || _clips.contains(id)) && Common::find(_pendingStops.begin(), _pendingStops.end(), id) == _pendingStops.end())
+			_pendingStops.push_back(id);
 		// A video stopped while it plays ends; one still waiting never starts
 		for (uint i = _videoQueue.size(); i-- > 0; ) {
 			if (_videoQueue[i] != id) {
@@ -1045,6 +1071,9 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, 
 	for (int i = 3; i >= first; i--) {
 		// A view still held (below) was never activated: entering another
 		// one drops it, as Action_DoSetView (0x46a950) cancels its activation
+		// The shown asset's deactivation runs before the view's own triggers (0x458e10, B-112)
+		if (i == 3)
+			deactivateViewAsset();
 		if (oldPath[i] && !(i == 3 && _viewHeld))
 			fire(oldPath[i], kEventObjectDeactivation);
 		if (i == 3)
@@ -1127,16 +1156,27 @@ void Script::activateViewObjects() {
 	}
 }
 
+void Script::deactivateViewAsset() {
+	// Leaving a view queues the shown asset's Object Deactivation (0x458e10, from the view's removal event) after
+	// the view's own Deactivation trigger is queued but before its actions run: the asset's comes first (reference
+	// run manual1, 2026-10-13: view 1214's background 38994 disables the explorables its activation enabled)
+	Common::Array<uint32> ids = _viewObjects;
+	for (uint j = 0; j < ids.size(); j++) {
+		if (_data.getClassOf(ids[j]) != kClassAssetRef)
+			continue;
+		Common::Array<uint32>::iterator it = Common::find(_viewObjects.begin(), _viewObjects.end(), ids[j]);
+		if (it != _viewObjects.end())
+			_viewObjects.erase(it);
+		fire(ids[j], kEventObjectDeactivation);
+	}
+}
+
 void Script::deactivateViewObjects() {
-	// After its own triggers, the view stops the asset it showed, which fires
-	// that asset's Object Deactivation (reference run manual1, 2026-10-13:
-	// view 1214's background 38994 disables the explorables its activation
-	// enabled), then deactivates its navs, character views and explorables
-	// (0x438770)
+	// Then the view deactivates its navs, character views and explorables (0x438770)
 	Common::Array<uint32> ids = _viewObjects;
 	_viewObjects.clear();
-	const uint32 kinds[4] = { kClassAssetRef, kClassNav, kClassCharView, kClassExplorable };
-	for (int i = 0; i < 4; i++) {
+	const uint32 kinds[3] = { kClassNav, kClassCharView, kClassExplorable };
+	for (int i = 0; i < 3; i++) {
 		for (uint j = 0; j < ids.size(); j++) {
 			if (_data.getClassOf(ids[j]) == kinds[i])
 				fire(ids[j], kEventObjectDeactivation);

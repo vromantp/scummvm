@@ -99,6 +99,7 @@ public:
 	void playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) override;
 	void restoreSound(uint32 id, bool loop, uint32 startMs) override;
 	void playClip(uint32 id, int16 x, int16 y) override;
+	void stopViewAsset(uint32 id) override;
 	bool readAssetFile(uint32 id, Common::Array<byte> &data) override;
 	int measureText(const Common::U32String &text, int size, bool bold, bool sans) const override;
 	bool queryInventoryIcon(uint32 id, bool &hasIcon) const override;

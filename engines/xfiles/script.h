@@ -103,6 +103,8 @@ public:
 	virtual void playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) {}
 	/** PlayAssetAt: draw the graphic clip once with its top-left at (x, y) over the screen; Script::finishSound ends it. */
 	virtual void playClip(uint32 id, int16 x, int16 y) {}
+	/** A Stop action on an asset without a sound object (0x504c90): a shown view asset runs to its end and holds. */
+	virtual void stopViewAsset(uint32 id) {}
 	/**
 	 * A sound playing in a restored save: it plays (and a loop loops) from
 	 * startMs in its file (the sound's in point, 0x4a88d0).
@@ -510,6 +512,8 @@ private:
 	/** DoActionList(trigger, actionList): another trigger's actions. */
 	void runActionList(uint32 actionList, int event, const EventFields &fields);
 	void endSound(uint32 id, const char *how);
+	/** The Object Deactivation of the sounds and clips a Stop action stopped, once the event is over (B-112). */
+	void flushStops();
 	/** The asset has a sound object: a sound, a clip, or a video playing or queued (0x491380). */
 	bool isPlaying(uint32 id) const;
 	/** A placed clip (PlayAssetAt) ends: its Object Deactivation fires as at a sound's end. */
@@ -539,6 +543,7 @@ private:
 	/** Activate what the current view shows: its first asset, character views, navs, explorables. */
 	void activateView();
 	void activateViewObjects();
+	void deactivateViewAsset();
 	void deactivateViewObjects();
 	/** An enabled character view, nav or explorable of the current view gets activated. */
 	void activateViewObject(uint32 id);
@@ -633,6 +638,7 @@ private:
 	bool _inEvent;                             ///< An event spans several fire() calls: they share a _fireSerial
 	uint _viewSerial;                          ///< _fireSerial of the event that held the view: the videos it waits for
 	uint _fireDepth;                           ///< Nesting of fire(): a pending travel runs when it returns to 0
+	Common::Array<uint32> _pendingStops;       ///< Stopped sounds and clips whose Object Deactivation waits for the event's end
 	bool _travelPending;                       ///< SwapDisc was called in this event (0x6b19a8)
 	uint32 _travelTo[4];                       ///< Node, location, viewpoint and view of the pending travel
 	bool _viewHeld;                            ///< The view is entered but not activated until the video ends
