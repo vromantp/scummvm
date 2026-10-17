@@ -431,6 +431,8 @@ private:
 	/** Fill _hookTable: the Script's own hooks, then those of each area file. */
 	void addHooks();
 	void addCoreHooks();
+	/** SetStartView of a restore: enter the saved position and rebuild the objects (Game_BuildObjects). */
+	void restoreView();
 	void addEvidence(uint32 id);
 	void removeEvidence(uint32 id);
 	void callFunction(const VCAction &action, int event, const EventFields &fields, const LocalVariables &locals);
@@ -566,6 +568,7 @@ private:
 	byte _tintColor[3];                        ///< The tint in the order the save stores it (blue, green, red)
 	VCSave _restoredSave;                      ///< The save restore() continued from
 	bool _restored;
+	bool _restorePending;                              ///< restore() set the save aside for SetStartView, which has not run yet
 	Common::HashMap<uint32, Common::String> _strings;  ///< VCString values that changed
 	Common::HashMap<uint32, ItemText> _itemTexts;
 	uint32 _focus;

@@ -100,7 +100,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	_jumpCut.first = _jumpCut.later = false;
 	memset(_flashlight, 0, sizeof(_flashlight));
@@ -438,7 +438,7 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 	if (a.function == "SetStartView" && args.size() >= 4) {
 		// Game_BuildObjects (0x477940) makes an object for every enabled
 		// VCInventory in class order; a restore uses the save's list
-		if (!_restored) {
+		if (!_restorePending) {
 			Common::Array<NeoEntry> icons;
 			_inventory.clear();
 			_data.getHdb().getObjects(kClassInventory, icons);
@@ -447,7 +447,10 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 					_inventory.push_back(icons[i].key);
 			}
 		}
-		enter(args[0], args[1], args[2], args[3]);
+		if (_restorePending)
+			restoreView();
+		else
+			enter(args[0], args[1], args[2], args[3]);
 		// The exe also builds the game objects there (0x486a10 calls
 		// Game_BuildObjects 0x477940)
 		if (_hooks)
@@ -1155,7 +1158,15 @@ void Script::activateViewObject(uint32 id) {
 		VCAsset a;
 		if (!isEnabled(assets[i]) || !_data.getAsset(assets[i], a) || a.files.empty())
 			continue;
-		playAsset(assets[i], kModePlayOnce, nullptr);
+		// While a restore activates its list the exe logs no start for the
+		// asset (inn-start-save, comityinn-to-warehouse, menu-reopen-hover:
+		// 20031 is enabled in the save), and a later visit plays 20063, so the
+		// asset is consumed: its Deactivation runs. Inferred from the logs,
+		// not read in Ghidra (B-106)
+		if (_restoreMode >= 0)
+			fire(assets[i], kEventObjectDeactivation);
+		else
+			playAsset(assets[i], kModePlayOnce, nullptr);
 		break;
 	}
 }
@@ -1319,24 +1330,17 @@ void Script::start() {
 }
 
 void Script::restore(const VCSave &save) {
-	// SetStartView (0x486a10) takes the save's position and Game_BuildObjects
-	// (0x477940) rebuilds the objects from VCGameState, in the order below
-	// (docs/formats/saves.md, "How the game restores a save"). The position
-	// mode decides which Object Activation fires while the list is activated.
-	_restoreMode = save.positionMode;
+	// A load is Game_Start (0x48cd70) like a new game: VCGameState is read on
+	// the load screen, so the saved state is in memory before the title
+	// activates; the title's Reg* calls then run and SetStartView takes the
+	// save's position instead of its arguments (restoreView, below)
+	// (docs/formats/saves.md, "How the game restores a save")
 	_restored = true;
+	_restorePending = true;
 	_restoredSave = save;
-	log("== restore");
 	// The travel gets the save's disc (+42) the way SwapDisc's does
 	if (save.disc >= 1)
 		_disc = save.disc;
-	log(Common::String::format("  disc %d", _disc));
-	// Game_Start (0x48cd70) also writes the preferences over a save's values
-	loadPreferences();
-	enter(save.position[0], save.position[1], save.position[2], save.position[3]);
-	if (save.clip)
-		log(Common::String::format("  clip #%u at time %d in the view (the view plays from there)", save.clip, save.clipTime));
-
 	_history = save.history;
 	_asked.clear();
 	for (uint i = 0; i < save.history.size(); i++)
@@ -1351,6 +1355,23 @@ void Script::restore(const VCSave &save) {
 	memcpy(_flashlight, save.flashlight, sizeof(_flashlight));
 	_tint = save.tint;
 	memcpy(_tintColor, save.tintColor, sizeof(_tintColor));
+	log("== restore");
+	log(Common::String::format("  disc %d", _disc));
+	start();
+	_restorePending = false;
+}
+
+void Script::restoreView() {
+	// SetStartView (0x486a10) takes the save's position and Game_BuildObjects
+	// (0x477940) rebuilds the objects from VCGameState, in the order below.
+	// The position mode decides which Object Activation fires while the list
+	// is activated.
+	const VCSave &save = _restoredSave;
+	_restorePending = false;
+	_restoreMode = save.positionMode;
+	enter(save.position[0], save.position[1], save.position[2], save.position[3]);
+	if (save.clip)
+		log(Common::String::format("  clip #%u at time %d in the view (the view plays from there)", save.clip, save.clipTime));
 
 	// 1. The full-screen layout (Layout_SetAsView)
 	if (save.layout)
