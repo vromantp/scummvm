@@ -610,8 +610,10 @@ private:
 		uint32 limit;   ///< ms to play, 0 for all
 		bool loop;      ///< Plays until stopped
 		uint serial;    ///< _fireSerial of the event that queued it
+		bool viewWait;  ///< Queued before a held view was entered but not started: the view waits for it
 	};
 	Common::Array<VideoPlay> _videoPlays;      ///< Per queued video
+	bool _videoNextPending;                    ///< The queue's first video has not started yet (a video just ended)
 	/** A sound's play held back by a video (see playAsset()). */
 	struct HeldSound {
 		uint32 id;

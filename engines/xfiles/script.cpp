@@ -103,7 +103,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	_jumpCut.first = _jumpCut.later = false;
 	memset(_flashlight, 0, sizeof(_flashlight));
@@ -224,7 +224,8 @@ void Script::fire(uint32 id, int event, const EventFields &fields) {
 	// XFiles.exe carries out a pending travel (0x493090) once the event queue
 	// is empty: after the action list and the triggers it set off
 	// The Object Deactivation of a sound a Stop action stopped comes on a later pass (0x4336e0, B-112)
-	while (_fireDepth == 0 && (_travelPending || !_pendingStops.empty())) {
+	// Not between a click's playlist and its triggers (one event, see _inEvent): ask() flushes after them
+	while (_fireDepth == 0 && (_travelPending || (!_inEvent && !_pendingStops.empty()))) {
 		if (_travelPending)
 			travel();
 		else
@@ -1000,7 +1001,7 @@ void Script::loadPreferences() {
 }
 
 void Script::queueVideo(uint32 id, uint32 limit, bool loop) {
-	VideoPlay play = { limit, loop, _fireSerial };
+	VideoPlay play = {limit, loop, _fireSerial, false};
 	_videoQueue.push_back(id);
 	_videoPlays.push_back(play);
 	if (_videoQueue.size() == 1)
@@ -1024,20 +1025,25 @@ void Script::endVideo(const char *how) {
 		return;
 	}
 	uint32 id = _videoQueue.remove_at(0);
-	bool viewVideo = _videoPlays[0].serial == _viewSerial;
+	bool viewVideo = _videoPlays[0].serial == _viewSerial || _videoPlays[0].viewWait;
 	_videoPlays.remove_at(0);
 	log(Common::String::format("  << video #%u %s", id, how));
 	bool next = !_videoQueue.empty();
-	bool nextVideo = next && _videoPlays[0].serial == _viewSerial;
+	bool nextVideo = next && (_videoPlays[0].serial == _viewSerial || _videoPlays[0].viewWait);
+	bool nextWait = next && _videoPlays[0].viewWait;
 	// A held view comes at the stop of the last video it waits for, before
 	// that video's Object Deactivation (its asset object is deactivated
 	// after the view's activation); a video the view queues starts at once
-	// if the queue was empty, otherwise after the one already queued
-	if (_viewHeld && (!nextVideo || !viewVideo))
+	// if the queue was empty, otherwise after the one already queued. A video queued before the view was entered
+	// that has not started yet comes first (its show event is older than the view's activation; box-click-kinds:
+	// 33401 and 20361 of a topic, then a view entered when the clip before them ended)
+	if (_viewHeld && !nextWait && (!nextVideo || !viewVideo))
 		activateView();
 	else if (_viewAssetHeld)
 		activateViewAsset();
+	_videoNextPending = next;
 	fire(id, kEventObjectDeactivation);
+	_videoNextPending = false;
 	if (next)
 		startVideo();
 	else if (_videoQueue.empty()) {
@@ -1108,6 +1114,8 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, 
 			// and 19806 behind 19796) nor those queued before it that
 			// already play
 			_viewSerial = _fireSerial;
+			for (uint i = 0; i < _videoPlays.size(); i++)
+				_videoPlays[i].viewWait = (i > 0 || _videoNextPending) && _videoPlays[i].serial != _viewSerial;
 			log("      view held until the video ends");
 		}
 	}
@@ -1461,7 +1469,7 @@ void Script::restoreView() {
 	for (uint i = 0; i + 3 <= save.timers.size(); i += 3) {
 		Timer timer = { save.timers[i + 1], ++_timerSerial, save.timers[i + 2] != 0 };
 		_timers[save.timers[i]] = timer;
-		log(Common::String::format("      timer %u started (%u ms%s)", save.timers[i], timer.ms, timer.periodic ? ", periodic" : ""));
+		log(Common::String::format("      timer %u restored (%u ms%s)", save.timers[i], timer.ms, timer.periodic ? ", periodic" : ""));
 	}
 
 	// 7. Evidence: EvIcons_SetRowShown(0), then each icon outside the kit; a
@@ -1586,10 +1594,11 @@ void Script::applySaved(const SavedValues &values) {
 }
 
 void Script::click(uint32 id) {
-	// A click outside the box closes it; one on an interface item leaves
-	// it open (newgame-to-comityinn: the box's topics are not activated
-	// again after a click on a layout's item)
-	if (_data.getClassOf(id) != kClassInterfaceItem)
+	// A click on an inventory item or the evidence kit closes the box before the item's triggers (dbox.close, dbox.show on=0
+	// in box-click-kinds and newgame-to-comityinn); one on an interface item, an emotion icon or an action icon leaves it open
+	// (the next topic click is still a box click, the box's topics are not activated again)
+	uint32 clickClass = _data.getClassOf(id);
+	if (clickClass != kClassInterfaceItem && clickClass != kClassEmotionIcon && clickClass != kClassActionIcon)
 		_box = 0;
 	if (!isEnabled(id)) {
 		log("  " + getObjectLabel(_data, id) + " is disabled");
@@ -1925,6 +1934,7 @@ void Script::ask(uint32 conversationId) {
 	playTopic(conversationId, true);
 	fire(conversationId, kEventMouseClick);
 	_inEvent = false;
+	flushStops();
 }
 
 bool Script::findIdeaTopic(uint32 charViewId, uint32 iconId, uint32 &conversation) const {
