@@ -685,6 +685,8 @@ void XFilesEngine::playQueuedVideo(const Input &input) {
 			_script->finishVideo();
 			return;
 		}
+		if (uint32 end = _script->getVideoEnd())
+			_video->setEnd(end);
 		_video->play(_script->isVideoLooped());
 		_videoStarted = gameMillis();
 	}

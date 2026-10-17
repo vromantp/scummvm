@@ -63,6 +63,8 @@ public:
 	 * at startMs (a restored sound, 0x4a88d0), the end time stays.
 	 */
 	void setStart(uint32 startMs) { _startMs = startMs; }
+	/** Move the out point before play() (a merged topic clip, Script::mergeTopicClips). */
+	void setEnd(uint32 endMs) { _endMs = endMs; }
 	/** Decode the single frame at the start time. */
 	bool showStill();
 	/** Decode the single frame at ms (from the start of the file). */

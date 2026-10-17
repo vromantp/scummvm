@@ -316,6 +316,8 @@ public:
 	const Common::Array<uint32> &getVideoQueue() const { return _videoQueue; }
 	/** How long the first video plays, in ms; 0 for all of it. */
 	uint32 getVideoLimit() const { return _videoPlays.empty() ? 0 : _videoPlays[0].limit; }
+	/** The out point of the first video when a topic merged the next range of its file into it (ms), 0 for its own. */
+	uint32 getVideoEnd() const { return _videoPlays.empty() ? 0 : _videoPlays[0].end; }
 	/** Whether the first video loops: it ends only when a Stop action stops it. */
 	bool isVideoLooped() const { return !_videoPlays.empty() && _videoPlays[0].loop; }
 	bool isEnabled(uint32 id) const;
@@ -467,7 +469,10 @@ private:
 
 	void playAsset(uint32 id, byte mode, const VCAction *sound3D);
 	void playList(uint32 listId);
+	void playTopicClips(uint32 conversationId, bool inBox);
+	void mergeTopicClips();
 	void playStock(uint32 assetId);
+	void playClip(uint32 assetId);
 	void playTopic(uint32 conversationId, bool inBox);
 	void activateTopic(uint32 conversationId);
 	void beforeLead();
@@ -634,6 +639,7 @@ private:
 	Common::Array<uint32> _videoQueue;
 	struct VideoPlay {
 		uint32 limit;   ///< ms to play, 0 for all
+		uint32 end;     ///< Out point override in ms, 0 for none
 		bool loop;      ///< Plays until stopped
 		uint serial;    ///< _fireSerial of the event that queued it
 		bool viewWait;  ///< Queued before a held view was entered but not started: the view waits for it
@@ -659,6 +665,14 @@ private:
 	};
 	Common::HashMap<uint32, JumpCut> _jumpCuts;
 	JumpCut _jumpCut;                          ///< Of the topic being played
+	struct TopicClip {
+		uint32 id;
+		uint32 limit;   ///< 750 for a piece of the view loop, 0 for an asset
+		uint32 end;     ///< Out point override after a merge
+	};
+	bool _planning;                            ///< playTopic collects its clips in _topicClips
+	Common::Array<TopicClip> _topicClips;
+	uint32 _nextVideoEnd;                      ///< For queueVideo() while a merged clip is played
 	bool _clipQueued;                          ///< A clip after the question is queued (topic +0x150)
 	uint32 _node, _location, _viewPoint, _view;
 	Common::Array<uint32> _viewObjects;        ///< Activated with the view, in activation order

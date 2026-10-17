@@ -103,7 +103,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	_jumpCut.first = _jumpCut.later = false;
 	memset(_flashlight, 0, sizeof(_flashlight));
@@ -1049,7 +1049,7 @@ void Script::loadPreferences() {
 }
 
 void Script::queueVideo(uint32 id, uint32 limit, bool loop) {
-	VideoPlay play = {limit, loop, _fireSerial, false};
+	VideoPlay play = {limit, _nextVideoEnd, loop, _fireSerial, false};
 	_videoQueue.push_back(id);
 	_videoPlays.push_back(play);
 	if (_videoQueue.size() == 1)
@@ -2040,6 +2040,40 @@ void Script::idea(uint32 iconId) {
 }
 
 void Script::playTopic(uint32 conversationId, bool inBox) {
+	// The topic's playlist merges adjacent ranges of one file before any of
+	// its sounds is activated (Playlist_MergeRanges 0x4f1930): collect the
+	// clips, merge, then play
+	_planning = true;
+	_topicClips.clear();
+	playTopicClips(conversationId, inBox);
+	_planning = false;
+	mergeTopicClips();
+}
+
+void Script::mergeTopicClips() {
+	Common::Array<TopicClip> clips;
+	clips.swap(_topicClips);
+	for (uint i = 0; i < clips.size(); i++) {
+		TopicClip &s = clips[i];
+		VCAsset a;
+		if (!s.limit && i + 1 < clips.size() && !clips[i + 1].limit && _data.getAsset(s.id, a) && a.hasRange && !a.files.empty()) {
+			VCAsset b;
+			if (_data.getAsset(clips[i + 1].id, b) && b.hasRange && !b.files.empty() && a.files[0].file == b.files[0].file &&
+				b.rangeIn > a.rangeOut && b.rangeIn - a.rangeOut < 5) {
+				s.end = b.files[0].end;
+				i++; // The merged sound is dropped and stepped over
+			}
+		}
+		_nextVideoEnd = s.end;
+		if (s.limit)
+			queueVideo(s.id, s.limit, false);
+		else
+			playAsset(s.id, kModePlayOnce, nullptr);
+		_nextVideoEnd = 0;
+	}
+}
+
+void Script::playTopicClips(uint32 conversationId, bool inBox) {
 	// 0x4e9080, 0x4e9440: Willmore asks the question, the character
 	// answers. Asked again, a character with stock replies may give the
 	// topic's atom, a stock reply before the answer, or (after four times)
@@ -2157,6 +2191,11 @@ void Script::queueViewLoop() {
 	uint32 id = getViewLoop();
 	if (!id)
 		return;
+	if (_planning) {
+		TopicClip clip = { id, 750, 0 };
+		_topicClips.push_back(clip);
+		return;
+	}
 	queueVideo(id, 750, false);
 }
 
@@ -2191,12 +2230,21 @@ void Script::playList(uint32 listId) {
 	// A topic's question, answer and atom lists each play one asset
 	// (Topic_Play 0x4e9080 through 0x41fe60)
 	if (uint32 asset = firstEnabled(listId))
-		playAsset(asset, kModePlayOnce, nullptr);
+		playClip(asset);
+}
+
+void Script::playClip(uint32 assetId) {
+	if (_planning) {
+		TopicClip clip = { assetId, 0, 0 };
+		_topicClips.push_back(clip);
+		return;
+	}
+	playAsset(assetId, kModePlayOnce, nullptr);
 }
 
 void Script::playStock(uint32 assetId) {
 	if (assetId && isEnabled(assetId))
-		playAsset(assetId, kModePlayOnce, nullptr);
+		playClip(assetId);
 }
 
 void Script::setFixedSeeds(uint32 base) {
