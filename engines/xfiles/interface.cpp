@@ -315,10 +315,10 @@ void Interface::setEvidenceRowShown(bool shown) {
 }
 
 void Interface::syncIcons(const Script &script, uint32 classId, Common::Array<Icon> &icons) {
-	// Disabled and spent icons go; newly enabled ones join at the end, as
+	// Disabled icons go; newly enabled ones join at the end, as
 	// the exe creates their objects when they are enabled (0x4201a0)
 	for (uint i = 0; i < icons.size();) {
-		if (!script.isEnabled(icons[i].id) || script.isSpent(icons[i].id)) {
+		if (!script.isEnabled(icons[i].id)) {
 			delete icons[i].graphic;
 			delete icons[i].rollover;
 			icons.remove_at(i);
@@ -343,7 +343,7 @@ void Interface::syncIcons(const Script &script, uint32 classId, Common::Array<Ic
 	const Common::Array<uint32> &order = classId == kClassInventory ? script.getInventory() : _classOrder[classId == kClassActionIcon ? 0 : 2];
 	for (uint i = 0; i < order.size(); i++) {
 		uint32 id = order[i];
-		if (!script.isEnabled(id) || script.isSpent(id))
+		if (!script.isEnabled(id))
 			continue;
 		bool found = false;
 		for (uint j = 0; j < icons.size() && !found; j++)

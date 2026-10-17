@@ -306,11 +306,6 @@ public:
 	 * this of iCurrInventory: the object takes the item in hand).
 	 */
 	bool isTestedOnClick(uint32 id, uint32 variable) const;
-	/**
-	 * An emotion or action icon is spent when an icon of its class is
-	 * clicked, and comes back once it is disabled and enabled again.
-	 */
-	bool isSpent(uint32 id) const { return _spent.contains(id); }
 	/** How often a conversation topic was asked. */
 	uint getAskCount(uint32 id) const { return _asked.getValOrDefault(id, 0); }
 	int32 getVariable(uint32 id) const;
@@ -549,7 +544,6 @@ private:
 	Common::WinResources *_texts;
 	Common::HashMap<uint32, int32> _variables;
 	Common::HashMap<uint32, bool> _enabled;    ///< Objects without a VCEnabled are always enabled
-	Common::HashMap<uint32, bool> _spent;      ///< Spent emotion and action icons
 	Common::HashMap<uint, Timer> _timers;      ///< Running timers
 	uint32 _timerSerial;
 	Common::HashMap<uint32, uint> _asked;      ///< How often each conversation was asked

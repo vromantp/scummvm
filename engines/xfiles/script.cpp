@@ -1501,7 +1501,8 @@ void Script::click(uint32 id) {
 		return;
 	}
 	fire(id, kEventMouseClick);
-	// A click on an emotion or action icon removes all of them (0x49bfe0, 0x4c0660)
+	// A click on an emotion or action icon removes all of them (0x49bfe0, 0x4c0660); each one's deactivation
+	// (0x485020, 0x4c0610) also clears its enable flag (0x40f050)
 	uint32 classId = _data.getClassOf(id);
 	if (classId == kClassEmotionIcon || classId == kClassActionIcon)
 		spendIcons(classId);
@@ -1518,11 +1519,13 @@ void Script::release() {
 }
 
 void Script::spendIcons(uint32 classId) {
+	// Removing an icon deactivates it, and the deactivation of an emotion or action icon sets its enable
+	// flag to 0 (0x485020, 0x4c0610 -> 0x40f050); the saves of newgame-to-comityinn have them at 0
 	Common::Array<NeoEntry> entries;
 	_data.getHdb().getObjects(classId, entries);
 	for (uint i = 0; i < entries.size(); i++) {
 		if (isEnabled(entries[i].key))
-			_spent[entries[i].key] = true;
+			_enabled[entries[i].key] = false;
 	}
 }
 
@@ -1588,7 +1591,7 @@ void Script::expireTimer(uint n, bool stale) {
 				Common::Array<NeoEntry> entries;
 				_data.getHdb().getObjects(icons[j], entries);
 				for (uint k = 0; k < entries.size(); k++) {
-					if (isEnabled(entries[k].key) && !isSpent(entries[k].key))
+					if (isEnabled(entries[k].key))
 						ids.push_back(entries[k].key);
 				}
 			}
@@ -1733,8 +1736,6 @@ void Script::enableTarget(uint32 target, bool value) {
 	// An Enable action (kActionEnable), or code that does the same (0x4083d0)
 	bool was = isEnabled(target);
 	_enabled[target] = value;
-	if (!value)
-		_spent.erase(target);
 	// The held item disabled goes back (0x436c20)
 	if (!value && _heldCursorItem && _heldCursorItem == target)
 		putBack();
