@@ -495,6 +495,13 @@ void Script::addCoreHooks() {
 		s._travelPending = true;
 		return true;
 	});
+	t.add("NukeAllIcons", [](Script &s, const HookCall &) {
+		// 0x49f3c0: deactivates the icons of kinds 14, 12, 15 (and others the engine does not model); the
+		// emotion and action ones lose their enable flags
+		s.spendIcons(kClassEmotionIcon);
+		s.spendIcons(kClassActionIcon);
+		return true;
+	});
 	t.add("EnableKitIcon", [](Script &s, const HookCall &c) {
 		if (!c.has(1))
 			return false;
@@ -991,11 +998,13 @@ void Script::endVideo(const char *how) {
 // -- Navigation ---------------------------------------------------------------
 
 void Script::travel() {
-	// 0x5068b0, 0x493090: all four old objects are deactivated, whatever the
-	// new path shares, then the new four are activated. The exe also hides the
-	// inventory, AI, emotion, idea and action icons and clears the letterbox
-	// tint; the engine does not model those yet
+	// 0x5068b0, 0x493090: the emotion and action icons are deactivated first (0x44d850; clears their enable
+	// flags, idea icons keep theirs), then all four old objects, whatever the new path shares, then the new
+	// four are activated. The exe also hides the inventory and AI icons and clears the letterbox tint; the
+	// engine does not model those yet
 	_travelPending = false;
+	spendIcons(kClassEmotionIcon);
+	spendIcons(kClassActionIcon);
 	// A SwapDisc in the triggers of the travel waits for it to finish
 	_fireDepth++;
 	enter(_travelTo[0], _travelTo[1], _travelTo[2], _travelTo[3], true);
