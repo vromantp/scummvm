@@ -1019,6 +1019,12 @@ void Script::regPreferences(const VCAction &a) {
 	}
 }
 
+int32 Script::getPreferenceValue(uint index) const {
+	if (_preferences.contains(index))
+		return _preferences[index];
+	return _prefVariables[index] ? getVariable(_prefVariables[index]) : 0;
+}
+
 void Script::loadPreferences() {
 	// 0x4310f0: walk the title's triggers and run the first C++ Function
 	// action named RegPreferences, whatever its event or condition. The

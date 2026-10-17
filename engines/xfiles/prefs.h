@@ -29,8 +29,8 @@ namespace XFiles {
 class Script;
 
 /**
- * The Game Preferences screens' hooks (PrefInit, AudioInit, the four volume sliders, the cycles and the
- * toggles), XFiles.exe 0x481d90, 0x4c6e50 to 0x4cdc90. Owned by Script on the pattern of PhoneHooks (the
+ * The Game Preferences screens' hooks (PrefInit, AudioInit, the four volume sliders, the cycles, the toggles
+ * and PrefDefaults), XFiles.exe 0x481d90, 0x4c6e50 to 0x4cdc90. Owned by Script on the pattern of PhoneHooks (the
  * research repo's docs/subsystems/interpreter.md, "Script areas"). The behaviour is in docs/exe/hooks/system.md
  * ("Game Preferences screen hooks").
  */
@@ -49,6 +49,8 @@ private:
 	void slider(int row, uint32 variable, int32 n);
 	void cycle(uint index, uint32 variable, const char *table);
 	void toggle(uint index, uint32 variable);
+	/** PrefDefaults(c), 0x4cd4e0: 'P' the Performance values, 'Q' the Quality ones. */
+	void defaults(int32 set);
 	/** The preference's value: what a hook stored, else the variable's (RegPreferences wrote it). */
 	int32 getValue(uint index, uint32 variable) const;
 	void setValue(uint index, uint32 variable, int32 value);

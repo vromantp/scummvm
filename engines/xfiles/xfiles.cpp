@@ -19,6 +19,7 @@
  *
  */
 
+#include "audio/mixer.h"
 #include "common/config-manager.h"
 #include "common/debug-channels.h"
 #include "common/events.h"
@@ -508,6 +509,7 @@ void XFilesEngine::addHooks() {
 	});
 	// The layouts' buttons unshow the layout, then these create the menu object again (MainMenu_ctor)
 	t.add("ReturnMainMenu", [](XFilesEngine &e, const HookCall &c) {
+		e.savePreferences();
 		e._menuReopen = e._menuLayout;
 		return e._menuLayout;
 	});
@@ -524,9 +526,7 @@ void XFilesEngine::addHooks() {
 		return true;
 	});
 	t.add("SetStartView", [](XFilesEngine &e, const HookCall &c) {
-		if (!e.getPreference(kPrefSubliminalMessages))
-			return false;
-		e._subliminal.start(e.gameMillis()); // Game_BuildObjects 0x477940 calls Prefs_Apply 0x452b20
+		e.applyPreferences(); // Game_BuildObjects 0x477940 calls Prefs_Apply 0x452b20
 		return true;
 	});
 	t.add("RegUberVars", [](XFilesEngine &e, const HookCall &c) {
@@ -584,15 +584,90 @@ void XFilesEngine::registerPreferences(const VCAction &action) {
 		_prefVariables[i] = action.args[i].kind == kOperandVariable ? action.args[i].value : 0;
 }
 
+// The ScummVM setting that keeps each preference (the exe's registry value), by Preference: the toggles and
+// three volumes use ScummVM's own settings, the rest the engine's
+static const char *const kPrefSettings[kPrefCount] = {
+	"xfiles_3d_sound", "xfiles_artificial_intuition", "xfiles_auto_rewind", "subtitles", "xfiles_rollover_text",
+	"xfiles_save_on_exit", "xfiles_skip_clips", "xfiles_skip_intro", "xfiles_smooth_text", "subliminal_messages",
+	"xfiles_transitions", "xfiles_translucency", "xfiles_action_difficulty", "xfiles_auto_depth",
+	"xfiles_flashlight_beam", "xfiles_flashlight_brightness", "xfiles_inventory", "speech_volume", "sfx_volume",
+	"xfiles_game_volume", "music_volume", "xfiles_auto_resolution", "xfiles_high_quality_video",
+	"xfiles_live_environments"
+};
+
+/** The preferences kept as a mixer volume (0 to 256) instead of the game's 0 to 100. */
+static bool isMixerVolume(uint index) {
+	return index == kPrefVolumeDialog || index == kPrefVolumeEffect || index == kPrefVolumeMusic;
+}
+
+/** Rounded both ways, so a game volume comes back unchanged. */
+static int32 toMixerVolume(int32 volume) {
+	return (CLIP<int32>(volume, 0, 100) * Audio::Mixer::kMaxMixerVolume + 50) / 100;
+}
+
+static int32 fromMixerVolume(int32 volume) {
+	return CLIP<int32>((volume * 100 + Audio::Mixer::kMaxMixerVolume / 2) / Audio::Mixer::kMaxMixerVolume, 0, 100);
+}
+
 bool XFilesEngine::queryPreference(uint index, int32 &value) const {
-	// The others have no ScummVM setting and keep their .gam values
-	if (index == kPrefClosedCaptioning)
-		value = ConfMan.getBool("subtitles");
-	else if (index == kPrefSubliminalMessages)
-		value = ConfMan.getBool("subliminal_messages");
-	else
+	// A preference without a setting keeps its .gam value, as on the exe's first start
+	const char *setting = kPrefSettings[index];
+	if (index == kPrefClosedCaptioning || index == kPrefSubliminalMessages)
+		value = ConfMan.getBool(setting);
+	else if (!ConfMan.hasKey(setting))
 		return false;
+	else if (isMixerVolume(index))
+		value = fromMixerVolume(ConfMan.getInt(setting));
+	else
+		value = ConfMan.getInt(setting);
 	return true;
+}
+
+void XFilesEngine::savePreferences() {
+	// A scripted run (xfiles_steps) leaves the player's settings alone
+	if (!_script || !_steps.empty())
+		return;
+	for (uint index = 0; index < kPrefCount; index++) {
+		if (!_prefVariables[index])
+			continue;
+		int32 value = _script->getPreferenceValue(index);
+		const char *setting = kPrefSettings[index];
+		if (index == kPrefClosedCaptioning || index == kPrefSubliminalMessages)
+			ConfMan.setBool(setting, value != 0);
+		else if (isMixerVolume(index))
+			ConfMan.setInt(setting, toMixerVolume(value));
+		else
+			ConfMan.setInt(setting, value);
+	}
+	ConfMan.flushToDisk();
+}
+
+void XFilesEngine::applyPreferences() {
+	// Prefs_Apply also sets the AI icon (B-116), the captions, the inventory bar and the translucency; this port
+	// reads those from the preference variables where they are used
+	syncSoundSettings();
+	bool subliminals = getPreference(kPrefSubliminalMessages);
+	if (subliminals && !_subliminal.isRunning())
+		_subliminal.start(gameMillis());
+	else if (!subliminals && _subliminal.isRunning())
+		_subliminal.stop();
+}
+
+void XFilesEngine::syncSoundSettings() {
+	Engine::syncSoundSettings();
+	// 0x469f50 sets every wave-out device to the game volume (0 to 100)
+	int32 game = 100;
+	if (_script && _prefVariables[kPrefVolumeGame])
+		game = _script->getPreferenceValue(kPrefVolumeGame);
+	else if (ConfMan.hasKey(kPrefSettings[kPrefVolumeGame]))
+		game = ConfMan.getInt(kPrefSettings[kPrefVolumeGame]);
+	game = CLIP<int32>(game, 0, 100);
+	static const Audio::Mixer::SoundType types[] = {
+		Audio::Mixer::kPlainSoundType, Audio::Mixer::kMusicSoundType, Audio::Mixer::kSFXSoundType,
+		Audio::Mixer::kSpeechSoundType
+	};
+	for (uint i = 0; i < ARRAYSIZE(types); i++)
+		_mixer->setVolumeForSoundType(types[i], _mixer->getVolumeForSoundType(types[i]) * game / 100);
 }
 
 void XFilesEngine::registerUberVariables(const VCAction &action) {

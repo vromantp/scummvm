@@ -34,7 +34,10 @@ namespace XFiles {
 Audio::Mixer::SoundType Movie::getSoundType(const Common::String &file) {
 	// XFiles.exe gives each file type a sound type (table at 0x65c380) and
 	// sets the volume from the matching preference (0x469fb0): .amv sound
-	// effects, .mus and .mmv music, everything else (.dmv, the videos) dialogue.
+	// effects, .mus and .mmv music, .nmv none, everything else (.dmv, the
+	// videos) dialogue.
+	if (file.hasSuffixIgnoreCase(".nmv"))
+		return Audio::Mixer::kPlainSoundType;
 	if (file.hasSuffixIgnoreCase(".amv"))
 		return Audio::Mixer::kSFXSoundType;
 	if (file.hasSuffixIgnoreCase(".mus") || file.hasSuffixIgnoreCase(".mmv"))

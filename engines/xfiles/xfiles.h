@@ -107,6 +107,8 @@ public:
 	bool delayPlay(uint32 asset, uint ms) override;
 	bool queryPreference(uint index, int32 &value) const override;
 	void stopAllSounds() override;
+	/** ScummVM's volumes, scaled by the game volume preference (the exe's wave-out master volume). */
+	void syncSoundSettings() override;
 
 protected:
 	Common::Error run() override;
@@ -240,6 +242,10 @@ private:
 	void drawCaptions(const Movie &movie, const Common::Point &pos);
 	void startVideoText(const VCAction &action, const Common::Array<int32> &args);
 	void registerPreferences(const VCAction &action);
+	/** ReturnMainMenu (0x490450) saves the preferences in the registry: here the ScummVM settings. */
+	void savePreferences();
+	/** Prefs_Apply (0x452b20): the volumes and the subliminal messages to the running game. */
+	void applyPreferences();
 	/** A preference's value, 0 before RegPreferences. */
 	bool getPreference(uint index) const;
 	void registerUberVariables(const VCAction &action);

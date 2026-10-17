@@ -227,6 +227,11 @@ public:
 	 * .gam value. Set it before start() or restore().
 	 */
 	void setPreference(uint index, int32 value) { _preferences[index] = value; }
+	/**
+	 * A preference's value as the exe's prefs object holds it: what a Preferences screen hook or
+	 * setPreference() stored, else its variable's value (RegPreferences wrote it), 0 before RegPreferences.
+	 */
+	int32 getPreferenceValue(uint index) const;
 
 	/**
 	 * Run one vc_sim.py step: wait, click:ID, timer:N, nav:ID, goto:ID or
