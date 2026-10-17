@@ -67,7 +67,8 @@ public:
 		kHitEmotion,     ///< VCEmotionIcon
 		kHitAction,      ///< VCActionIcon
 		kHitEvidence,    ///< VCEvidenceIcon in the open evidence kit
-		kHitItem         ///< VCInterfaceItem of a shown layout
+		kHitItem,        ///< VCInterfaceItem of a shown layout
+		kHitAIIcon       ///< The AI icon (its click is not ported, B-118)
 	};
 
 	struct Hit {
@@ -111,6 +112,11 @@ public:
 	bool isMouseInKit() const;
 	/** DispEvIcons: while the evidence row is shown, the kit shows no icons. */
 	void setEvidenceRowShown(bool shown);
+	/**
+	 * The AI icon (AIIconObj, kind 34): Prefs_ApplyAIIcon (0x452780) makes it with Artificial Intuition on and
+	 * removes it with Artificial Intuition off.
+	 */
+	void showAIIcon(bool shown);
 	/** Close the bar until the mouse leaves it (EvKitIconClick in hidden-bar mode). */
 	void closeBar() { _barClosed = true; }
 
@@ -149,6 +155,7 @@ private:
 		kPaneAction,
 		kPaneInventory,
 		kPaneEmotion,
+		kPaneAIIcon,
 		kPaneCount
 	};
 
@@ -197,6 +204,7 @@ private:
 	Common::Array<uint32> _classOrder[3];         ///< Every icon of a class, in database order
 	Common::Array<Icon> _inventory, _emotions, _actions;
 	Common::Array<Icon> _kit;                     ///< Evidence icons in the kit
+	Common::Array<Icon> _aiIcon;                  ///< The AI icon while it is shown, else empty
 	bool _kitOpen;
 	Common::Rect _kitFrom;                        ///< The inventory icon the kit opened from
 	bool _evidenceRowShown;

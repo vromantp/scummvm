@@ -247,8 +247,11 @@ private:
 	void registerPreferences(const VCAction &action);
 	/** ReturnMainMenu (0x490450) saves the preferences in the registry: here the ScummVM settings. */
 	void savePreferences();
-	/** Prefs_Apply (0x452b20): the volumes and the subliminal messages to the running game. */
-	void applyPreferences();
+	/**
+	 * Prefs_Apply (0x452b20): the AI icon, the volumes and the subliminal messages to the running game; resume:
+	 * the menu's Previous (else SetStartView, before the icons are made).
+	 */
+	void applyPreferences(bool resume);
 	/** A preference's value, 0 before RegPreferences. */
 	bool getPreference(uint index) const;
 	void registerUberVariables(const VCAction &action);

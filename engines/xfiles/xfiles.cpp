@@ -527,7 +527,7 @@ void XFilesEngine::addHooks() {
 		return true;
 	});
 	t.add("SetStartView", [](XFilesEngine &e, const HookCall &c) {
-		e.applyPreferences(); // Game_BuildObjects 0x477940 calls Prefs_Apply 0x452b20
+		e.applyPreferences(false); // Game_BuildObjects 0x477940 calls Prefs_Apply 0x452b20
 		return true;
 	});
 	t.add("RegUberVars", [](XFilesEngine &e, const HookCall &c) {
@@ -643,9 +643,17 @@ void XFilesEngine::savePreferences() {
 	ConfMan.flushToDisk();
 }
 
-void XFilesEngine::applyPreferences() {
-	// Prefs_Apply also sets the AI icon (B-116), the captions, the inventory bar and the translucency; this port
-	// reads those from the preference variables where they are used
+void XFilesEngine::applyPreferences(bool resume) {
+	// Prefs_Apply also sets the captions, the inventory bar and the translucency; this port reads those from the
+	// preference variables where they are used.
+	// Prefs_ApplyAIIcon (0x452780): Artificial Intuition on makes the AI icon if there is none; off removes it
+	// and every action icon there is (their deactivation clears their enable flags, 0x4c0610). At SetStartView
+	// no action icon exists yet: Game_BuildObjects (0x477940) makes them after Prefs_Apply, whatever the
+	// preference
+	bool intuition = _script->getPreferenceValue(kPrefArtificialIntuition) != 0;
+	_interface->showAIIcon(intuition);
+	if (!intuition && resume)
+		_script->removeActionIcons();
 	syncSoundSettings();
 	bool subliminals = getPreference(kPrefSubliminalMessages);
 	if (subliminals && !_subliminal.isRunning())
@@ -1055,6 +1063,8 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 		debugC(1, kDebugScript, "-- click:%u (evidence kit)", hit.id);
 		_script->click(hit.id);
 		return;
+	case Interface::kHitAIIcon:
+		return; // AIIconObj's click (0x5091d0, the hint list) is not ported (B-118)
 	default:
 		break;
 	}

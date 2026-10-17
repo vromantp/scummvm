@@ -68,8 +68,12 @@ static const struct {
 } kPanes[] = {
 	{ 520, 340, 351, 20, -1 },  // Action icons
 	{ 10, 420, 425, 5, 1 },     // Inventory
-	{ 180, 340, 351, 20, 1 }    // Emotion icons
+	{ 180, 340, 351, 20, 1 },   // Emotion icons
+	{ 530, 48, 48, 5, 1 }       // AI icon
 };
+
+// The AI icon's VCEvidenceIcon: RegAIIcon(0xdb79) at start (0x41b060)
+static const uint32 kAIIcon = 56185;
 
 // Layouts that leave the view and the icons working (the IFL-except list,
 // registered by XFiles.exe at start, 0x41b060): e-mail popups, the Game
@@ -152,6 +156,7 @@ Interface::~Interface() {
 	freeIcons(_emotions);
 	freeIcons(_actions);
 	freeIcons(_kit);
+	freeIcons(_aiIcon);
 	freeItems();
 	delete _font;
 	for (Common::HashMap<uint, Graphics::Font *>::iterator it = _itemFonts.begin(); it != _itemFonts.end(); ++it)
@@ -197,6 +202,7 @@ void Interface::update(const Script &script, const Common::Point &mouse, bool ca
 	placeIcons(_actions, kPaneAction, captions);
 	placeIcons(_emotions, kPaneEmotion, captions);
 	placeIcons(_inventory, kPaneInventory, captions);
+	placeIcons(_aiIcon, kPaneAIIcon, captions);
 	placeKit();
 
 	// The kit closes when the mouse leaves it and the icon it opened from
@@ -236,6 +242,14 @@ Interface::Icon Interface::makeIcon(uint32 id) const {
 		icon.text = Common::U32String(text, Common::kWindows1252);
 	}
 	return icon;
+}
+
+void Interface::showAIIcon(bool shown) {
+	// The icon has no rollover graphic and no rollover text; its glow (AI_SetGlow 0x480670) is not ported (B-118)
+	if (shown && _aiIcon.empty())
+		_aiIcon.push_back(makeIcon(kAIIcon));
+	else if (!shown)
+		freeIcons(_aiIcon);
 }
 
 void Interface::syncKit(const Script &script) {
@@ -518,6 +532,10 @@ Interface::Hit Interface::hitTest(const Common::Point &pos) const {
 			return hit;
 		}
 	}
+	if (!_aiIcon.empty() && _aiIcon[0].rect.contains(pos)) {
+		hit.kind = kHitAIIcon;
+		hit.id = _aiIcon[0].id;
+	}
 	return hit;
 }
 
@@ -548,6 +566,7 @@ void Interface::drawIcons(Graphics::Surface &dst, const Common::Array<Icon> &ico
 void Interface::draw(Graphics::Surface &dst) const {
 	drawIcons(dst, _actions);
 	drawIcons(dst, _emotions);
+	drawIcons(dst, _aiIcon);
 	if (_barOpen)
 		drawIcons(dst, _inventory);
 	bool kitShown = _kitOpen && !_evidenceRowShown;

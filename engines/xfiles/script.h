@@ -238,6 +238,8 @@ public:
 	 * setPreference() stored, else its variable's value (RegPreferences wrote it), 0 before RegPreferences.
 	 */
 	int32 getPreferenceValue(uint index) const;
+	/** Prefs_ApplyAIIcon (0x452780) with Artificial Intuition off: every action icon is deactivated. */
+	void removeActionIcons() { spendIcons(kClassActionIcon); }
 
 	/**
 	 * Run one vc_sim.py step: wait, click:ID, timer:N, nav:ID, goto:ID or

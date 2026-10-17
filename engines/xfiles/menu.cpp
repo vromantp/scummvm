@@ -243,7 +243,7 @@ void XFilesEngine::menuChoice(MenuEntry entry) {
 		_menuOpen = false;
 		pauseGame(false);
 		// 0x4978a0: the preferences changed on the Game Preferences screens take effect now
-		applyPreferences();
+		applyPreferences(true);
 		break;
 	case kMenuQuit:
 		if (saveOnExit())
