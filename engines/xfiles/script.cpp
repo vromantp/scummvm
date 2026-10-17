@@ -103,7 +103,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	_jumpCut.first = _jumpCut.later = false;
 	memset(_flashlight, 0, sizeof(_flashlight));
@@ -795,6 +795,10 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 		warning("Script: #%u is not an asset", id);
 		return;
 	}
+	// Action_DoAsset 0x47a4e0 drops a play (once or loop) of an asset that still has a sound object (0x491380),
+	// until a stop or the next main-loop pass after its end removes it. Only where sound ends are known
+	if (_soundEnds && (mode == kModePlayOnce || mode == kModePlayLoop) && isPlaying(id))
+		return;
 	bool video = false;
 	for (uint i = 0; i < a.files.size(); i++)
 		video |= a.files[i].file.hasPrefix("XV:") || a.files[i].file.hasPrefix("XN:");
@@ -868,9 +872,13 @@ void Script::endSound(uint32 id, const char *how) {
 	fire(id, kEventObjectDeactivation);
 }
 
+bool Script::isPlaying(uint32 id) const {
+	return _sounds.contains(id) || _clips.contains(id) || Common::find(_videoQueue.begin(), _videoQueue.end(), id) != _videoQueue.end();
+}
+
 void Script::playAssetAt(uint32 asset, int x, int y) {
 	// 0x491de0: starts the asset as a Do Asset action would, unless it is already playing (0x491380).
-	if (_sounds.contains(asset) || _clips.contains(asset) || Common::find(_videoQueue.begin(), _videoQueue.end(), asset) != _videoQueue.end())
+	if (isPlaying(asset))
 		return;
 	// An XG clip is drawn once with its top-left at (x, y) over the screen, without a hold; its end fires
 	// the asset's Object Deactivation (ing-search run, B-071). Other assets play as a Do Asset action does
@@ -2246,6 +2254,8 @@ void Script::step(const Common::String &s) {
 		showLayout(id); // shown from exe code, not by a Show Layout action
 	else if (kind == "end")
 		finishSound(id);
+	else if (kind == "media")
+		_soundEnds = true; // the step list has the sound ends (steps.py `end:`): later plays of a playing asset are dropped
 }
 
 } // End of namespace XFiles

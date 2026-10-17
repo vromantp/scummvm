@@ -170,7 +170,11 @@ public:
 	virtual ~Script() {}
 
 	/** Where C++ functions and non-blocking media go; nullptr (the default) only logs them. */
-	void setHooks(ScriptHooks *hooks) { _hooks = hooks; }
+	/** The engine ends sounds at their clip end (SoundPlayer), so a play of an asset that still has a sound object is dropped. */
+	void setHooks(ScriptHooks *hooks) {
+		_hooks = hooks;
+		_soundEnds = hooks != nullptr;
+	}
 	/** The string table of XFilesT.dll, for phone book entries that name a string (may be nullptr). */
 	void setTexts(Common::WinResources *texts) { _texts = texts; }
 
@@ -506,6 +510,8 @@ private:
 	/** DoActionList(trigger, actionList): another trigger's actions. */
 	void runActionList(uint32 actionList, int event, const EventFields &fields);
 	void endSound(uint32 id, const char *how);
+	/** The asset has a sound object: a sound, a clip, or a video playing or queued (0x491380). */
+	bool isPlaying(uint32 id) const;
 	/** A placed clip (PlayAssetAt) ends: its Object Deactivation fires as at a sound's end. */
 	void endClip(uint32 id, const char *how);
 	/** PlayAssetAt of an XG clip: it plays once with its top-left at (x, y); no hold. */
@@ -559,6 +565,7 @@ private:
 	uint32 _timerSerial;
 	Common::HashMap<uint32, uint> _asked;      ///< How often each conversation was asked
 	uint32 _random;                            ///< State of the random numbers
+	bool _soundEnds;                           ///< Sound ends are known (`media` step, or an engine): see playAsset()
 	bool _fixedSeeds;                          ///< See setFixedSeeds()
 	uint32 _seedBase;
 	Common::HashMap<uint32, uint32> _diceBuilt; ///< Generators built per call site, with _fixedSeeds
