@@ -267,8 +267,8 @@ uint32 XFilesEngine::gameMillis() const {
 }
 
 void XFilesEngine::pauseGame(bool pause) {
-	// Scene_SuspendAll: the media pause (Media_PauseAll) and the game's
-	// timed objects stop, so everything goes on where it was. The menu and
+	// Scene_SuspendAll: the timers (Timers_Pause), the scene's objects and
+	// the game's timed objects stop, so everything goes on where it was. The menu and
 	// the GMM (pauseEngineIntern) can both ask: the game runs again when
 	// the last one resumes
 	if (pause) {
