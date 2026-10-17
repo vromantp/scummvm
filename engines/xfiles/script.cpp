@@ -2579,7 +2579,14 @@ void Script::step(const Common::String &s) {
 		followNav(id);
 	else if (kind == "seed")
 		setFixedSeeds(id);
-	else if (kind == "key")
+	else if (kind == "enable" || kind == "disable")
+		enableTarget(id, kind == "enable"); // an Enable or Disable action on the object, as if a trigger ran it
+	else if (kind == "do") {
+		// one action by ID, run alone as a trigger's action list would (the condition applies)
+		Common::Array<uint32> actions;
+		actions.push_back(id);
+		runActions(actions, kEventMouseClick, EventFields());
+	} else if (kind == "key")
 		keyPress(id);
 	else if (kind == "layout")
 		showLayout(id); // shown from exe code, not by a Show Layout action
