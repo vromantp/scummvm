@@ -416,7 +416,10 @@ void Script::execute(const VCAction &a, int event, const EventFields &fields, Lo
 		}
 		break;
 	case kActionSetView:
-		enter(a.path[1], a.path[2], a.path[3], a.path[0]);
+		// The exe activates and draws nothing for the view already shown
+		// (newgame-to-comityinn, action 61115); a held view counts as shown
+		if (a.path[1] != _node || a.path[2] != _location || a.path[3] != _viewPoint || a.path[0] != _view)
+			enter(a.path[1], a.path[2], a.path[3], a.path[0]);
 		break;
 	case kActionInterface:
 		log(Common::String(a.mode ? "      hide" : "      show") + " interface " + getObjectLabel(_data, a.layout));
