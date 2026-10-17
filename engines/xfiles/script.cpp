@@ -1157,7 +1157,10 @@ void Script::activateViewObject(uint32 id) {
 	// enabled after it). Those clips' Deactivation disables them, so each
 	// plays once (B-092)
 	VCCharView cv;
-	if (!_data.getCharView(id, cv))
+	// While a restore activates its list the character view's activation
+	// (0x436f80) makes no player: GameState_Restoring is set, so the asset
+	// stays enabled and unplayed
+	if (_restoreMode >= 0 || !_data.getCharView(id, cv))
 		return;
 	Common::Array<uint32> assets;
 	_data.getMembers(cv.assets, assets);
@@ -1165,15 +1168,7 @@ void Script::activateViewObject(uint32 id) {
 		VCAsset a;
 		if (!isEnabled(assets[i]) || !_data.getAsset(assets[i], a) || a.files.empty())
 			continue;
-		// While a restore activates its list the exe logs no start for the
-		// asset (inn-start-save, comityinn-to-warehouse, menu-reopen-hover:
-		// 20031 is enabled in the save), and a later visit plays 20063, so the
-		// asset is consumed: its Deactivation runs. Inferred from the logs,
-		// not read in Ghidra (B-106)
-		if (_restoreMode >= 0)
-			fire(assets[i], kEventObjectDeactivation);
-		else
-			playAsset(assets[i], kModePlayOnce, nullptr);
+		playAsset(assets[i], kModePlayOnce, nullptr);
 		break;
 	}
 }
@@ -1385,17 +1380,18 @@ void Script::restoreView() {
 		showLayout(save.layout);
 
 	// 2. Sounds playing are kind 27 sound objects: no Object Activation. The
-	// time (3rd value, ms in the file) is the sound's in point: it starts
-	// there and a loop goes back to it (0x4a88d0, 0x48825f)
+	// 2nd value is the object's loop flag (+0x30, set by a Play loop asset
+	// action); the time (3rd value, ms in the file) is the sound's in point:
+	// it starts there and a loop goes back to it (0x4a88d0, 0x48825f)
 	for (uint i = 0; i + 3 <= save.sounds.size(); i += 3) {
 		uint32 id = save.sounds[i];
 		VCAsset a;
 		if (!_data.getAsset(id, a))
 			continue;
 		_sounds[id] = true;
-		log(Common::String::format("  restored sound #%u at %u", id, save.sounds[i + 2]));
+		log(Common::String::format("  restored sound #%u at %u%s", id, save.sounds[i + 2], save.sounds[i + 1] ? ", looped" : ""));
 		if (_hooks)
-			_hooks->restoreSound(id, (a.flags & kAssetLoop) != 0, save.sounds[i + 2]);
+			_hooks->restoreSound(id, save.sounds[i + 1] != 0, save.sounds[i + 2]);
 	}
 
 	// 3. Every timer is a Timer action Start (0x4a1250) with the saved number,

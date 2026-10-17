@@ -71,6 +71,7 @@ private:
 	struct Sound {
 		Movie *movie;
 		bool positional; ///< Played by a 3D Sound action
+		bool loop;       ///< The sound object's +0x30, saved as the triple's 2nd value
 		int16 x, y;      ///< On the viewpoint grid
 	};
 

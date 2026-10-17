@@ -66,6 +66,7 @@ void SoundPlayer::startSound(uint32 id, bool loop, bool positional, int16 x, int
 	Sound sound;
 	sound.movie = new Movie();
 	sound.positional = positional;
+	sound.loop = loop;
 	sound.x = x;
 	sound.y = y;
 	if (!sound.movie->open(_files, asset)) {
@@ -324,7 +325,7 @@ void SoundPlayer::pause(bool pause) {
 void SoundPlayer::getSaved(Common::Array<uint32> &triples) const {
 	for (uint i = 0; i < _soundOrder.size(); i++) {
 		triples.push_back(_soundOrder[i]);
-		triples.push_back(1);
+		triples.push_back(_sounds.getVal(_soundOrder[i]).loop ? 1 : 0);
 		triples.push_back(_sounds.getVal(_soundOrder[i]).movie->getTime());
 	}
 }
