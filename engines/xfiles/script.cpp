@@ -57,6 +57,9 @@ static const char *const kModeNames[] = { "preload", "play_once", "play_loop", "
 static const uint32 kPDAEscapeOnActions = 75533;
 static const uint32 kPDAEscapeOffActions = 75530;
 
+/** PageTurnSound runs trigger 92463's list (XFiles.exe 0x4b3930): one of six random page sounds. */
+static const uint32 kPageTurnSoundActions = 92468;
+
 /** Offset of the VCTriggerList field in each class that owns triggers (VCAssetRef: see VCAsset::triggers). */
 static uint32 getTriggerOffset(uint32 classId) {
 	switch (classId) {
@@ -634,6 +637,10 @@ void Script::addCoreHooks() {
 		if (!c.has(1))
 			return false;
 		s.runActionList(c.args[0] == 1 ? kPDAEscapeOnActions : kPDAEscapeOffActions, c.event, c.fields);
+		return true;
+	});
+	t.add("PageTurnSound", [](Script &s, const HookCall &c) {
+		s.runActionList(kPageTurnSoundActions, c.event, c.fields);
 		return true;
 	});
 
