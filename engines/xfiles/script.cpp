@@ -873,7 +873,7 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 	}
 	bool video = false;
 	for (uint i = 0; i < a.files.size(); i++)
-		video |= a.files[i].file.hasPrefix("XV:") || a.files[i].file.hasPrefix("XN:");
+		video |= a.files[i].file.hasPrefix("XV:") || a.files[i].file.hasPrefix("XN:") || a.files[i].file.hasSuffixIgnoreCase(".nmv");
 	Common::String file = a.files.empty() ? Common::String() : formatFile(a.files[0]);
 
 	// XFiles.exe makes a sound object for every asset it plays (Action_DoAsset
@@ -882,8 +882,8 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 	// 0x488240, which raises the hold on views and on other sound objects'
 	// play events (0x44f860), so these clips play one after another, and its
 	// end or stop deactivates the sound and its asset object (0x43a970).
-	// Only the .xmv clips (XV, XN) are queued here: the ranged .nmv clips
-	// (frames of a view's navigation movie) are not played as videos yet
+	// The .nmv clips (ranges of a view's navigation movie) are queued like
+	// the .xmv ones: the media layer plays the file entry's time range
 	if (video && (mode == kModePlayOnce || mode == kModePlayLoop)) {
 		queueVideo(id, 0, mode == kModePlayLoop);
 	} else if (mode == kModePlayOnce || mode == kModePlayLoop) {
