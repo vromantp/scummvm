@@ -138,6 +138,12 @@ public:
 	 */
 	virtual bool queryPreference(uint index, int32 &value) const { return false; }
 	/**
+	 * The PDA opens (OnIntInvClick 0x467fb0 → 0x48e640): the running timers
+	 * stop until no layout is shown (0x4a4fa0). A one-shot timer goes on with
+	 * the time it had left, a periodic one with its full period.
+	 */
+	virtual void pauseTimers() {}
+	/**
 	 * StopEnvSounds (0x4cc9c0) ends the sounds: stop every player of a sound
 	 * asset. Script ends the sounds' objects itself afterwards.
 	 */

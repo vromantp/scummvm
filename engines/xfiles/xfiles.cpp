@@ -62,7 +62,7 @@ static const uint32 kXCursor = 25541;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
 	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuOpen(false), _menuLayout(false), _menuReopen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
-	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _sound(_discFiles) {
+	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _timersPaused(false), _sound(_discFiles) {
 	g_engine = this;
 	addHooks();
 	_loadedSave = false;
@@ -444,6 +444,7 @@ bool XFilesEngine::teardownGame() {
 	_menuLayout = false;
 	_menuReopen = false;
 	_timerStates.clear();
+	_timersPaused = false;
 	_pressedItems.clear();
 	_sound.clear();
 	_video->close();
@@ -745,6 +746,24 @@ void XFilesEngine::stopAllSounds() {
 	_sound.stopAll();
 }
 
+void XFilesEngine::pauseTimers() {
+	// 0x48e640(1) on the timer list: each running timer is killed, and a
+	// one-shot one keeps what was left of its delay (0x52f030; none left:
+	// the delay stays). The PDA's own timers start after this and run
+	uint32 now = gameMillis();
+	const Common::HashMap<uint, Script::Timer> &timers = _script->getTimers();
+	for (Common::HashMap<uint, Script::Timer>::const_iterator it = timers.begin(); it != timers.end(); ++it) {
+		if (!_timerStates.contains(it->_key) || _timerStates[it->_key].serial != it->_value.serial)
+			continue;
+		TimerState &state = _timerStates[it->_key];
+		uint32 elapsed = now - state.started;
+		if (!state.paused && !it->_value.periodic && elapsed < state.ms)
+			state.ms -= elapsed;
+		state.paused = true;
+	}
+	_timersPaused = true;
+}
+
 void XFilesEngine::drawCaptions(const Movie &movie, const Common::Point &pos) {
 	if (!getPreference(kPrefClosedCaptioning))
 		return;
@@ -787,13 +806,24 @@ void XFilesEngine::playQueuedVideo(const Input &input) {
 void XFilesEngine::updateTimers() {
 	// Timers run in real time; Script only knows they were started
 	uint32 now = gameMillis();
+	// 0x4a4fa0, after each pass of the event loop: once no layout is shown,
+	// the timers the PDA paused start again (0x48e640(0))
+	if (_timersPaused && _script->getLayouts().empty()) {
+		for (Common::HashMap<uint, TimerState>::iterator it = _timerStates.begin(); it != _timerStates.end(); ++it) {
+			if (it->_value.paused) {
+				it->_value.started = now;
+				it->_value.paused = false;
+			}
+		}
+		_timersPaused = false;
+	}
 	const Common::HashMap<uint, Script::Timer> &timers = _script->getTimers();
 	Common::Array<uint> expired, stopped;
 	for (Common::HashMap<uint, Script::Timer>::const_iterator it = timers.begin(); it != timers.end(); ++it) {
 		if (!_timerStates.contains(it->_key) || _timerStates[it->_key].serial != it->_value.serial) {
-			TimerState state = { it->_value.serial, now };
+			TimerState state = { it->_value.serial, now, it->_value.ms, false };
 			_timerStates[it->_key] = state;
-		} else if (now - _timerStates[it->_key].started >= it->_value.ms) {
+		} else if (!_timerStates[it->_key].paused && now - _timerStates[it->_key].started >= _timerStates[it->_key].ms) {
 			expired.push_back(it->_key);
 		}
 	}

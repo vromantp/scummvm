@@ -176,8 +176,10 @@ void XFilesEngine::fillSnapshot(VCSave &save) {
 		const Script::Timer &timer = timers.getVal(numbers[i]);
 		uint32 time = timer.ms;
 		if (!timer.periodic && _timerStates.contains(numbers[i]) && _timerStates[numbers[i]].serial == timer.serial) {
-			uint32 elapsed = now - _timerStates[numbers[i]].started;
-			time = elapsed < timer.ms ? timer.ms - elapsed : 0;
+			// A timer the PDA paused keeps what it had left
+			const TimerState &state = _timerStates[numbers[i]];
+			uint32 elapsed = state.paused ? 0 : now - state.started;
+			time = elapsed < state.ms ? state.ms - elapsed : 0;
 		}
 		save.timers.push_back(numbers[i]);
 		save.timers.push_back(time);

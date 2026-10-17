@@ -57,6 +57,11 @@ static const char *const kModeNames[] = { "preload", "play_once", "play_loop", "
 static const uint32 kPDAEscapeOnActions = 75533;
 static const uint32 kPDAEscapeOffActions = 75530;
 
+/** OnIntInvClick (XFiles.exe 0x467fb0): the PDA's Inventory_iPDA value, bDisablePDA and PDAalert.amv. */
+static const int32 kInventoryPDA = 14;
+static const uint32 kDisablePDAVariable = 5277;
+static const uint32 kPDAAlertSound = 75688;
+
 /** PageTurnSound runs trigger 92463's list (XFiles.exe 0x4b3930): one of six random page sounds. */
 static const uint32 kPageTurnSoundActions = 92468;
 
@@ -635,8 +640,21 @@ void Script::addCoreHooks() {
 		return true;
 	});
 	t.add("OnIntInvClick", [](Script &s, const HookCall &c) {
-		// 0x467fb0: the PDA and phone icons never set iCurrInventory;
-		// this only clears the held cursor (Inv_SetHeldCursor(0))
+		// 0x467fb0: the PDA and phone icons never set iCurrInventory; this
+		// clears the held cursor (Inv_SetHeldCursor(0)). For the PDA, while a
+		// sound object plays an asset with a picture (a video, a clip), it sets
+		// bDisablePDA, which the icon's trigger tests before it shows the PDA,
+		// and plays the alert; else the timers pause until no layout is shown
+		if (c.has(1) && c.args[0] == kInventoryPDA) {
+			if (!s._videoQueue.empty() || !s._clips.empty()) {
+				s._variables[kDisablePDAVariable] = 1;
+				s.log(Common::String::format("      PDA refused: bDisablePDA = 1, alert #%u", kPDAAlertSound));
+				if (s._hooks)
+					s._hooks->playAsset(kPDAAlertSound, kModePlayOnce, false, 0, 0);
+			} else if (s._hooks) {
+				s._hooks->pauseTimers();
+			}
+		}
 		s._heldCursorItem = 0;
 		if (s._hooks)
 			s._hooks->heldItemChanged(0);

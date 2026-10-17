@@ -107,6 +107,7 @@ public:
 	bool delayPlay(uint32 asset, uint ms) override;
 	bool queryPreference(uint index, int32 &value) const override;
 	void stopAllSounds() override;
+	void pauseTimers() override;
 	/** ScummVM's volumes, scaled by the game volume preference (the exe's wave-out master volume). */
 	void syncSoundSettings() override;
 
@@ -140,6 +141,8 @@ private:
 	struct TimerState {
 		uint32 serial;
 		uint32 started;
+		uint32 ms;   ///< Delay of this run: the timer's, or what was left when the PDA paused it
+		bool paused; ///< Stopped by pauseTimers() until no layout is shown
 	};
 
 	/** Load XFiles.hdb and the game state; fromSave: xfiles_save takes the place of XFiles.gam. */
@@ -300,6 +303,7 @@ private:
 	Interface::Hit _lastClickHit;
 	Interface::Hit _hover;               ///< What the mouse is over, for Roll Into and Roll Out Of
 	Common::HashMap<uint, TimerState> _timerStates;
+	bool _timersPaused;                  ///< The PDA paused the timers (0x6b1680)
 	struct PressedItem {
 		uint32 id;
 		uint32 since;
