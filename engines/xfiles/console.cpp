@@ -149,7 +149,7 @@ bool Console::Cmd_discs(int argc, const char **argv) {
 bool Console::Cmd_step(int argc, const char **argv) {
 	Script *script = g_engine->getScript();
 	if (argc < 2 || !script) {
-		debugPrintf("Usage: %s <step>... (wait, click:ID, press:ID, release, dclick:ID, rollin:ID, rollout:ID, timer:N, nav:ID, goto:ID, ask:ID, seed:N; in a game)\n", argv[0]);
+		debugPrintf("Usage: %s <step>... (wait, click:ID, press:ID, release, putback, dclick:ID, rollin:ID, rollout:ID, timer:N, nav:ID, goto:ID, ask:ID, seed:N; in a game)\n", argv[0]);
 		debugPrintf("The log goes to the Script debug channel.\n");
 		return true;
 	}

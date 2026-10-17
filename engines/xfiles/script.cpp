@@ -2170,6 +2170,8 @@ void Script::step(const Common::String &s) {
 		press(id);
 	else if (kind == "release")
 		release();
+	else if (kind == "putback")
+		putBack(); // the mouse moved into the bar while holding (InvBar_OnRoll 0x468330)
 	else if (kind == "dclick")
 		doubleClick(id);
 	else if (kind == "rollin" || kind == "rollout")
