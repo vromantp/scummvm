@@ -270,7 +270,8 @@ struct VCConversation {
 	uint32 triggers;
 	uint32 question;
 	uint32 atom;
-	byte flag;
+	/** Asked in the box, it moves to History and counts (+0x40, 0x46d0d0); 0 for topics that stay on Talk */
+	bool recorded;
 };
 
 struct VCExplorable {

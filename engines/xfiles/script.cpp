@@ -1520,10 +1520,12 @@ void Script::restore(const VCSave &save) {
 	// The travel gets the save's disc (+42) the way SwapDisc's does
 	if (save.disc >= 1)
 		_disc = save.disc;
-	_history = save.history;
+	// A save's history is a set (an older engine save may repeat a topic:
+	// each repeat still counts)
+	_history.clear();
 	_asked.clear();
 	for (uint i = 0; i < save.history.size(); i++)
-		_asked[save.history[i]]++;
+		recordTopic(save.history[i]);
 	_pda.restore(save);
 	_inventory = save.inventory;
 	_evidence = save.evidence;
@@ -2054,7 +2056,11 @@ void Script::ask(uint32 conversationId) {
 			}
 		}
 	}
-	_history.push_back(conversationId);
+	// Only a topic with +0x40 set is recorded; one without stays on the Talk
+	// tab and plays as a first ask every time
+	VCConversation c;
+	if (_data.getConversation(conversationId, c) && c.recorded)
+		recordTopic(conversationId);
 	// The playlist and the triggers are one event (see _viewSerial)
 	_fireSerial++;
 	_inEvent = true;
@@ -2093,9 +2099,21 @@ void Script::idea(uint32 iconId) {
 	uint32 conversation;
 	if (!_box || !findIdeaTopic(_box, iconId, conversation) || !conversation)
 		return;
-	_history.push_back(conversation);
+	// Recorded whatever +0x40 holds (PlayItemTopic does not test it)
+	recordTopic(conversation);
 	activateTopic(conversation);
 	playTopic(conversation, false);
+}
+
+void Script::recordTopic(uint32 conversationId) {
+	// Not asked yet: into the game state's history (0x41aa80), a set the
+	// save writes sorted by ID; else its count + 1 (0x4667a0)
+	if (_asked[conversationId]++)
+		return;
+	uint i = 0;
+	while (i < _history.size() && _history[i] < conversationId)
+		i++;
+	_history.insert_at(i, conversationId);
 }
 
 void Script::playTopic(uint32 conversationId, bool inBox) {
@@ -2151,7 +2169,8 @@ void Script::playTopicClips(uint32 conversationId, bool inBox) {
 	}
 	_jumpCut = _jumpCuts.getValOrDefault(conversationId, JumpCut());
 	_clipQueued = false;
-	uint count = ++_asked[conversationId];
+	// Counted by recordTopic(); 0 for a topic that is never recorded
+	uint count = _asked.getValOrDefault(conversationId, 0);
 	playList(c.question);
 	if (count < 2) {
 		beforeAnswer();

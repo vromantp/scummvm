@@ -676,7 +676,7 @@ bool VCData::getConversation(uint32 id, VCConversation &conversation) const {
 	conversation.triggers = _hdb.readUint32(m + 18);
 	conversation.question = _hdb.readUint32(m + 22);
 	conversation.atom = _hdb.readUint32(m + 26);
-	conversation.flag = _hdb.readByte(m + 30);
+	conversation.recorded = _hdb.readByte(m + 30) != 0;
 	return true;
 }
 

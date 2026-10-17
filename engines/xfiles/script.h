@@ -397,7 +397,7 @@ public:
 	const Common::Array<uint32> &getInventory() const { return _inventory; }
 	/** Evidence icons outside the kit: (VCEvidenceIcon, shown) pairs as restored from a save, and the icons enabled since (shown 0). */
 	const Common::Array<uint32> &getEvidence() const { return _evidence; }
-	/** Conversations asked, with repeats, as restored from a save and asked since. */
+	/** Conversations recorded as asked (see recordTopic()), sorted, as restored from a save and asked since. */
 	const Common::Array<uint32> &getHistory() const { return _history; }
 	/** Evidence icons in the evidence kit (EnableKitIcon), in order. */
 	const Common::Array<uint32> &getKitIcons() const { return _kit; }
@@ -487,6 +487,7 @@ private:
 	void playStock(uint32 assetId);
 	void playClip(uint32 assetId);
 	void playTopic(uint32 conversationId, bool inBox);
+	void recordTopic(uint32 conversationId);
 	void activateTopic(uint32 conversationId);
 	void beforeLead();
 	void beforeAnswer();
