@@ -217,7 +217,7 @@ public:
 
 	/**
 	 * Run one vc_sim.py step: wait, click:ID, timer:N, nav:ID, goto:ID or
-	 * ask:ID.
+	 * ask:ID or idea:ICON.
 	 */
 	void step(const Common::String &step);
 	/** Display a layout from exe code, as the main menu's Options and Help do (the `layout:` step). */
@@ -264,6 +264,14 @@ public:
 	 * atom or a stock reply instead.
 	 */
 	void ask(uint32 conversationId);
+	/**
+	 * A click on an idea icon while a character's box is open: the topic of
+	 * the icon's VCIdeaMap plays as a dropped item's topic does (0x4c5500).
+	 * Does nothing if the box's character has no enabled map for the icon.
+	 */
+	void idea(uint32 iconId);
+	/** Whether the character view has an enabled idea icon in its map (0x49bce0). */
+	bool hasEnabledIdea(uint32 charViewId) const;
 	/** Seed the random numbers of ask(); the same seed gives the same replies. */
 	void setRandomSeed(uint32 seed) { _random = seed; }
 	/**
@@ -451,6 +459,7 @@ private:
 	/** The topics of a character view, in box order. */
 	void getBoxTopics(uint32 charViewId, Common::Array<uint32> &topics) const;
 	bool isBoxTopic(uint32 charViewId, uint32 conversationId) const;
+	bool findIdeaTopic(uint32 charViewId, uint32 iconId, uint32 &conversation) const;
 	void showLayout(uint32 layoutId);
 	void hideLayout(uint32 layoutId);
 	void insertLayoutItem(Common::Array<uint32> &items, uint32 itemId);

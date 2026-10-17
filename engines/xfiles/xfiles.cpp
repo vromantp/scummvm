@@ -1048,8 +1048,8 @@ void XFilesEngine::handleDoubleClick(const Interface::Hit &hit) {
 // -- Dialog box ---------------------------------------------------------------
 
 void XFilesEngine::openDialogBox(const VCCharView &charView) {
-	// DisplayDBox / XFiles.exe 0x481660: only for a character with topics
-	if (!charView.conversations)
+	// DisplayDBox / XFiles.exe 0x481660: only for a character with topics or an enabled idea (0x436080)
+	if (!charView.conversations && !_script->hasEnabledIdea(charView.id))
 		return;
 	_headCredits.hide(); // DBox_OnActivate 0x4767a0
 	_dialogBox.open(charView.id, Common::Rect(charView.rect.left, charView.rect.top, charView.rect.right, charView.rect.bottom));

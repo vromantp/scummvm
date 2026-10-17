@@ -1861,6 +1861,40 @@ void Script::ask(uint32 conversationId) {
 	fire(conversationId, kEventMouseClick);
 }
 
+bool Script::findIdeaTopic(uint32 charViewId, uint32 iconId, uint32 &conversation) const {
+	// CharView_HasIdea 0x49bce0 / CharView_FindIdeaTopic 0x4c5870: the maps of the view's VCIdeaMapList whose icon
+	// is enabled; iconId 0 takes any
+	VCCharView charView;
+	Common::Array<uint32> maps;
+	if (!_data.getCharView(charViewId, charView) || !charView.ideaMaps || !_data.getMembers(charView.ideaMaps, maps))
+		return false;
+	for (uint i = 0; i < maps.size(); i++) {
+		VCIdeaMap map;
+		if (!_data.getIdeaMap(maps[i], map) || (iconId && map.icon != iconId) || !isEnabled(map.icon))
+			continue;
+		conversation = map.conversation;
+		return true;
+	}
+	return false;
+}
+
+bool Script::hasEnabledIdea(uint32 charViewId) const {
+	uint32 conversation;
+	return findIdeaTopic(charViewId, 0, conversation);
+}
+
+void Script::idea(uint32 iconId) {
+	// IdeaIcon_DragEnd 0x4d15f0 -> PlayItemTopic 0x4c5500: asked (History) or count + 1, the topic's Object
+	// Activation and its playlist with +0x144 clear; no Mouse Click and no Drop triggers. The box comes back
+	// after the clips, so it stays open here.
+	uint32 conversation;
+	if (!_box || !findIdeaTopic(_box, iconId, conversation) || !conversation)
+		return;
+	_history.push_back(conversation);
+	activateTopic(conversation);
+	playTopic(conversation, false);
+}
+
 void Script::playTopic(uint32 conversationId, bool inBox) {
 	// 0x4e9080, 0x4e9440: Willmore asks the question, the character
 	// answers. Asked again, a character with stock replies may give the
@@ -2167,7 +2201,7 @@ void Script::step(const Common::String &s) {
 		// XFilesEngine::openDialogBox does: the topics activate now, not
 		// at the first ask
 		VCCharView charView;
-		if (!isHolding() && _data.getCharView(id, charView) && charView.conversations)
+		if (!isHolding() && _data.getCharView(id, charView) && (charView.conversations || hasEnabledIdea(id)))
 			openBox(id);
 	} else if (kind == "press")
 		press(id);
@@ -2183,6 +2217,8 @@ void Script::step(const Common::String &s) {
 		expireTimer(id, true); // pda-usage-run1: expiries queued before a stop still run
 	else if (kind == "ask")
 		ask(id);
+	else if (kind == "idea")
+		idea(id);
 	else if (kind == "goto")
 		goTo(id);
 	else if (kind == "nav")
