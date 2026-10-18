@@ -102,6 +102,7 @@ private:
 	bool _scrollBold, _scrollSans;
 	Common::Array<uint32> _addressList;        ///< Enabled assets of item 45307 (0x6b8390)
 	uint _addressIndex;                        ///< 0x6b16b0
+	void addNote(uint32 id);
 	Common::Array<uint32> _notes;              ///< VCPDANotes
 	uint _noteDay, _noteDays;                  ///< 0x6b1a4c, 0x6b1a54
 };

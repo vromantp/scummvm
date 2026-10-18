@@ -478,9 +478,18 @@ bool PdaHooks::dayHasNote(uint day, uint32 note) const {
 	return listHas(members, note);
 }
 
+void PdaHooks::addNote(uint32 id) {
+	// The notes are a set the save writes sorted by ID (as the conversation history, Script::recordTopic())
+	uint i = 0;
+	while (i < _notes.size() && _notes[i] < id)
+		i++;
+	if (i == _notes.size() || _notes[i] != id)
+		_notes.insert_at(i, id);
+}
+
 void PdaHooks::enablePDANote(uint32 id) {
 	// 0x4e6660: a note of the next day opens that day
-	_notes.push_back(id);
+	addNote(id);
 	if (_noteDays < kNoteDayCount && dayHasNote(_noteDays, id))
 		_noteDays++;
 }
@@ -493,7 +502,7 @@ void PdaHooks::enableAllNotes() {
 		if (_data.getInterfaceItem(kNoteDayItems[day], item))
 			_data.getMembers(item.assets, members);
 		for (uint i = 0; i < members.size(); i++)
-			_notes.push_back(members[i]);
+			addNote(members[i]);
 	}
 	_noteDays = kNoteDayCount;
 }
