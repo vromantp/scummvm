@@ -108,7 +108,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	_jumpCut.first = _jumpCut.later = false;
 	memset(_flashlight, 0, sizeof(_flashlight));
@@ -1289,7 +1289,19 @@ void Script::endVideo(const char *how) {
 	else if (_videoQueue.empty()) {
 		releaseHeldSounds();
 		showView(); // Back to the view, with whatever the video's triggers changed
+		endIdeaTopic();
 	}
+}
+
+void Script::endIdeaTopic() {
+	// The clips of an idea's topic (PlayItemTopic) have ended and the box is shown again (0x436230): the topic's
+	// object is deactivated, firing its Object Deactivation triggers (evidence1-to-skinnergone: 41642, which counts
+	// iAllQuestionsAskedSkinner up). The idea icons' own objects (B-130) are not modelled.
+	if (!_ideaTopic || !_videoQueue.empty() || !_clips.empty())
+		return;
+	uint32 topic = _ideaTopic;
+	_ideaTopic = 0;
+	fire(topic, kEventObjectDeactivation);
 }
 
 // -- Navigation ---------------------------------------------------------------
@@ -1329,6 +1341,7 @@ void Script::stopAllForTravel() {
 	Common::Array<uint32> videos;
 	videos.swap(_videoQueue);
 	_videoPlays.clear();
+	_ideaTopic = 0;
 	_heldSounds.clear();
 	_pendingStops.clear();
 	for (uint i = 0; i < sounds.size(); i++)
@@ -2283,6 +2296,9 @@ void Script::idea(uint32 iconId) {
 	recordTopic(conversation);
 	activateTopic(conversation);
 	playTopic(conversation, false);
+	// The box comes back when the clips end
+	_ideaTopic = conversation;
+	endIdeaTopic();
 }
 
 void Script::recordTopic(uint32 conversationId) {
