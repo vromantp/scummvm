@@ -35,6 +35,10 @@
 #include "graphics/managed_surface.h"
 #include "graphics/surface.h"
 
+namespace Graphics {
+class Font;
+}
+
 #include "xfiles/captions.h"
 #include "xfiles/cursors.h"
 #include "xfiles/detection.h"
@@ -286,6 +290,8 @@ private:
 	Movie *_menuLoopSound;                ///< 94320, the loop's sound
 	Movie *_menuTop;                      ///< 49589, the top strip (a still)
 	PictureAsset *_viewfinder;            ///< 34749 moveableviewfinder.pic, loaded when the camera first shows
+	const Graphics::Font *_counterFont;   ///< the camera counter: Liberation Sans Bold 13, else the GUI font
+	bool _counterFontOwned;               ///< _counterFont is ours to delete
 	PictureAsset *_menuReturn;            ///< 72895 return.pic over Previous, only from the game
 	bool _menuIntroDone;                  ///< g_menuIntroDone (0x6b1980): the fade-in has played this run, never cleared
 	bool _menuFading;                     ///< The X is still fading in, alone
