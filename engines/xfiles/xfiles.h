@@ -221,6 +221,10 @@ private:
 	void drawView();
 	/** The camera in hand: the viewfinder over the band at the mouse, with the photos left (Camera, 0x4f2b30). */
 	void drawViewfinder();
+	/** The photo viewer's thumbnails and enlarged picture, over the layout (0x4afb80 pictures). */
+	void drawPhotos();
+	/** The picture of a photo scaled to w x h (a frame of its asset at its time, cropped), cached; null without a frame. */
+	const Graphics::Surface *getPhotoPicture(const VCPhoto &photo, int w, int h);
 	void handleClick(const Common::Point &pos);
 
 	/** A view object under the mouse, found in the order clicks take them. */
@@ -291,6 +295,11 @@ private:
 	Movie *_menuTop;                      ///< 49589, the top strip (a still)
 	PictureAsset *_viewfinder;            ///< 34749 moveableviewfinder.pic, loaded when the camera first shows
 	const Graphics::Font *_counterFont;   ///< the camera counter: Liberation Sans Bold 13, else the GUI font
+	struct PhotoPicture {
+		Common::String key;
+		Graphics::Surface *surface;
+	};
+	Common::Array<PhotoPicture> _photoPictures; ///< drawPhotos' cache
 	bool _counterFontOwned;               ///< _counterFont is ours to delete
 	PictureAsset *_menuReturn;            ///< 72895 return.pic over Previous, only from the game
 	bool _menuIntroDone;                  ///< g_menuIntroDone (0x6b1980): the fade-in has played this run, never cleared

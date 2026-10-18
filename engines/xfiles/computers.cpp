@@ -241,7 +241,7 @@ static const uint32 kSbaseItems[31] = {
 };
 // clang-format on
 
-ComputerHooks::ComputerHooks(Script &script) : _script(script), _loginState(0), _connectedBefore(false), _wrongTries(0), _pwbkTries(0), _record(0), _recordShown(false), _sbaseCount(0), _photosDownloaded(0), _photoOffset(0), _photoEnlarged(-1) {
+ComputerHooks::ComputerHooks(Script &script) : _script(script), _loginState(0), _connectedBefore(false), _wrongTries(0), _pwbkTries(0), _record(0), _recordShown(false), _sbaseCount(0), _photosDownloaded(0), _photoOffset(0), _photoEnlarged(-1), _photoOpen(false) {
 }
 
 void ComputerHooks::addHooks(HookTable<Script> &t) {
@@ -581,6 +581,7 @@ void ComputerHooks::photoRebuild() {
 void ComputerHooks::photoInit() {
 	// 0x4e2870: the photos downloaded are counted, the others (n) decide which of Download and its grey twin shows.
 	// The photos are the Script's list: a restored save's, and those the camera made (B-140)
+	_photoOpen = true;
 	_photoOffset = 0;
 	_photoEnlarged = -1;
 	_photosDownloaded = 0;
@@ -665,6 +666,14 @@ void ComputerHooks::photoScroll(bool down) {
 void ComputerHooks::photoClose() {
 	// 0x4e2a70: the pictures go; the counters stay until the next PhotoInit
 	_photoThumbs.clear();
+	_photoEnlarged = -1;
+	_photoOpen = false;
+}
+
+uint32 ComputerHooks::getPhotoSlotItem(uint slot) {
+	static const uint32 kSlots[kPhotoThumbs] = {51376, 51378, 51379, 51377, 51380, 51381, 51384, 51385, 51386, 51387,
+												51382, 51388, 51389, 51390, 51391, 51383, 51392, 51393, 51394, 51395};
+	return slot < kPhotoThumbs ? kSlots[slot] : 0;
 }
 
 bool ComputerHooks::sameText(const Common::String &buffer, uint32 textAsset) {

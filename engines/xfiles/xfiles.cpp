@@ -86,6 +86,12 @@ XFilesEngine::~XFilesEngine() {
 	delete _cursors;
 	delete _video;
 	delete _viewfinder;
+	for (uint i = 0; i < _photoPictures.size(); i++) {
+		if (_photoPictures[i].surface) {
+			_photoPictures[i].surface->free();
+			delete _photoPictures[i].surface;
+		}
+	}
 	if (_counterFontOwned)
 		delete _counterFont;
 	delete _texts;
@@ -1068,6 +1074,53 @@ void XFilesEngine::drawView() {
 		drawCaptions(*_layers[i], getBandPosition(*_layers[i]));
 	drawViewfinder();
 	_interface->draw(_screen);
+	drawPhotos();
+}
+
+const Graphics::Surface *XFilesEngine::getPhotoPicture(const VCPhoto &photo, int w, int h) {
+	Common::String key = Common::String::format("%u/%u/%d,%d,%d,%d/%dx%d", photo.asset, photo.clipTime, photo.crop[0], photo.crop[1], photo.crop[2], photo.crop[3], w, h);
+	for (uint i = 0; i < _photoPictures.size(); i++) {
+		if (_photoPictures[i].key == key)
+			return _photoPictures[i].surface;
+	}
+	PhotoPicture pic;
+	pic.key = key;
+	pic.surface = nullptr;
+	Movie movie;
+	if (openMovie(movie, photo.asset) && movie.showStillAt(photo.clipTime)) {
+		const Graphics::Surface &frame = movie.getFrame();
+		Common::Rect crop(photo.crop[0], photo.crop[1], photo.crop[2], photo.crop[3]);
+		crop.clip(Common::Rect(frame.w, frame.h));
+		if (crop.isEmpty())
+			crop = Common::Rect(frame.w, frame.h);
+		Graphics::Surface part = frame.getSubArea(crop);
+		pic.surface = part.scale(w, h, true);
+	}
+	_photoPictures.push_back(pic);
+	return pic.surface;
+}
+
+void XFilesEngine::drawPhotos() {
+	const ComputerHooks &computer = _script->getComputerHooks();
+	if (!computer.isPhotoViewerOpen())
+		return;
+	const Common::Array<VCPhoto> &photos = _script->getPhotos();
+	const Common::Array<uint> &thumbs = computer.getPhotoThumbs();
+	for (uint k = 0; k < thumbs.size(); k++) {
+		VCInterfaceItem item;
+		if (thumbs[k] >= photos.size() || !_data->getInterfaceItem(ComputerHooks::getPhotoSlotItem(k), item))
+			continue;
+		const Graphics::Surface *pic = getPhotoPicture(photos[thumbs[k]], 80, 60);
+		if (pic)
+			blit(*pic, item.rect.left, item.rect.top);
+	}
+	int enlarged = computer.getPhotoEnlarged();
+	VCInterfaceItem item;
+	if (enlarged >= 0 && (uint)enlarged < photos.size() && _data->getInterfaceItem(ComputerHooks::getPhotoEnlargedItem(), item)) {
+		const Graphics::Surface *pic = getPhotoPicture(photos[enlarged], 160, 120);
+		if (pic)
+			blit(*pic, item.rect.left, item.rect.top);
+	}
 }
 
 void XFilesEngine::drawViewfinder() {
@@ -1292,6 +1345,10 @@ uint32 XFilesEngine::getCursorAt(const Common::Point &pos) const {
 		return kXCursor; // The X corner object (slot +0x68 looks up the VCCursor "X")
 	if (_interface->isModal())
 		return held;
+	// With the camera in hand the viewfinder is the pointer: no object's hand over the band (seen in a window)
+	if (_script->isCameraEnabled() && pos.x >= kBandLeft && pos.x < kBandLeft + kBandWidth && pos.y >= kBandTop &&
+		pos.y < kBandTop + kBandHeight)
+		return 0;
 	ViewHit viewHit = hitView(pos);
 	switch (viewHit.kind) {
 	case ViewHit::kExplorable:

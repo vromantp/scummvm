@@ -214,6 +214,7 @@ public:
 	/** The photos in database order, and how many are on the camera (VCGameState +46). */
 	const Common::Array<VCPhoto> &getPhotos() const { return _photos; }
 	int32 getPhotosOnCamera() const { return _photosOnCamera; }
+	const ComputerHooks &getComputerHooks() const { return _computer; }
 	/**
 	 * The camera is in hand and was taken outside a special view (Camera +0x1c0): a click in the band is its
 	 * cameraClick and the viewfinder shows.

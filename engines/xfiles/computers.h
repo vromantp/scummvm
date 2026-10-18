@@ -45,6 +45,14 @@ public:
 	/** Add the computer hooks to the Script's table. */
 	void addHooks(HookTable<Script> &table);
 
+	/** The photo viewer is up (PhotoInit to PhotoClose): the engine draws the pictures over the layout. */
+	bool isPhotoViewerOpen() const { return _photoOpen; }
+	const Common::Array<uint> &getPhotoThumbs() const { return _photoThumbs; }
+	int getPhotoEnlarged() const { return _photoEnlarged; }
+	/** The layout item (0x6581e0) of thumbnail slot k, and of the enlarged picture. */
+	static uint32 getPhotoSlotItem(uint slot);
+	static uint32 getPhotoEnlargedItem() { return 51396; }
+
 private:
 	void loginInit(char mode);
 	void loginKeyPress(int field, uint key, int event, const Common::Array<int32> &fields);
@@ -115,6 +123,7 @@ private:
 	uint _photosDownloaded;           ///< 0x6b1a48
 	uint _photoOffset;                ///< 0x6bbb0c: the first downloaded photo shown, steps of 5
 	int _photoEnlarged;               ///< 0x6bbaf4: the photo enlarged, -1 for none
+	bool _photoOpen;                  ///< PhotoInit ran and PhotoClose has not
 };
 
 } // End of namespace XFiles
