@@ -536,6 +536,63 @@ bool Script::regShanksNode(int node, uint count, const HookCall &c) {
 	return true;
 }
 
+bool Script::regNodeVars(int slot, uint count, const HookCall &c) {
+	// 0x467350, 0x432440, 0x452360, 0x4556d0, 0x467450, 0x457790, 0x47b720: each argument variable is kept in its own
+	// global, in argument order, only when every argument is a variable (docs/exe/hooks/nodes.md)
+	if (c.action.args.size() < count)
+		return false;
+	Common::Array<uint32> vars;
+	for (uint i = 0; i < count; i++) {
+		if (!c.isVariable(i))
+			return false;
+		vars.push_back(c.action.args[i].value);
+	}
+	_nodeVars[slot] = vars;
+	return true;
+}
+
+bool Script::setNodeDone(int slot) {
+	// 0x4ad400..0x4ad760 (docs/exe/hooks/nodes.md): the "complete" flag, the slot's last variable, is written on every
+	// call, 1 when the rule holds, else 0; nothing is written without a registered node or slot
+	const Common::Array<uint32> &v = _nodeVars[slot];
+	if (!_currNodeVariable || v.empty())
+		return true;
+	int32 node = getCurrentNode();
+	int32 value = 0;
+	switch (slot) {
+	case 0: // 0x4ad400: v = 4335, 1991, 2045
+		value = node == 2 && getVariable(v[0]) == 1 && getVariable(v[1]) > 2;
+		break;
+	case 1: { // 0x4ad480: v = 2047, 2046, 1956, 2048; 5122 bN3DidFieldOfficeCookThing is found by ID
+		const uint32 kDidFieldOfficeCookThing = 5122;
+		if (!_variables.contains(kDidFieldOfficeCookThing))
+			return true;
+		int32 translated = getVariable(v[2]);
+		int32 processed = getVariable(v[1]);
+		value = node == 3 && getVariable(kDidFieldOfficeCookThing) == 1 && getVariable(v[0]) == 1 &&
+				((translated == 1 && processed > 2) || (translated == 0 && processed > 1));
+		break;
+	}
+	case 2: // 0x4ad5c0: v = 2049, 2051
+		value = node == 4 && getVariable(v[0]) == 1;
+		break;
+	case 3: // 0x4ad620: v = 1992, 2050, 2052
+		value = node == 5 && getVariable(v[1]) == 1 && getVariable(v[0]) == 1;
+		break;
+	case 4: // 0x4ad6a0: v = 1994, 2053
+		value = node == 6 && getVariable(v[0]) == 1;
+		break;
+	case 5: // 0x4ad700: v = 2575, 2055
+		value = node == 12 && getVariable(v[0]) == 1;
+		break;
+	case 6: // 0x4ad760: v = 2574, 2056
+		value = node == 13 && getVariable(v[0]) == 1;
+		break;
+	}
+	setVariable(v.back(), value);
+	return true;
+}
+
 void Script::setShanksVar(uint32 var) {
 	// SetShanksVar 0x4c4710 (docs/exe/hooks/shanks.md): the argument is a "tell will" flag; it is set to 1 when its
 	// rule holds, else 0, and the call ends with the warehouse e-mail check
@@ -725,6 +782,51 @@ void Script::addCoreHooks() {
 			return false;
 		s._currNodeVariable = c.action.args[0].value; // 0x4926a0
 		return true;
+	});
+	t.add("RegNode2Vars", [](Script &s, const HookCall &c) {
+		return s.regNodeVars(0, 3, c);
+	});
+	t.add("RegNode3Vars", [](Script &s, const HookCall &c) {
+		return s.regNodeVars(1, 4, c);
+	});
+	t.add("RegNode4Vars", [](Script &s, const HookCall &c) {
+		return s.regNodeVars(2, 2, c);
+	});
+	t.add("RegNode5Vars", [](Script &s, const HookCall &c) {
+		return s.regNodeVars(3, 3, c);
+	});
+	t.add("RegNode6Vars", [](Script &s, const HookCall &c) {
+		return s.regNodeVars(4, 2, c);
+	});
+	t.add("RegLink2Vars", [](Script &s, const HookCall &c) {
+		return s.regNodeVars(5, 2, c);
+	});
+	t.add("RegLink3Vars", [](Script &s, const HookCall &c) {
+		return s.regNodeVars(6, 2, c);
+	});
+	t.add("SetIsNode2Done", [](Script &s, const HookCall &) {
+		return s.setNodeDone(0);
+	});
+	t.add("SetIsNode3Done", [](Script &s, const HookCall &) {
+		return s.setNodeDone(1);
+	});
+	t.add("SetIsNode4Done", [](Script &s, const HookCall &) {
+		return s.setNodeDone(2);
+	});
+	t.add("SetIsNode5Done", [](Script &s, const HookCall &) {
+		return s.setNodeDone(3);
+	});
+	t.add("SetIsNode6Done", [](Script &s, const HookCall &) {
+		return s.setNodeDone(4);
+	});
+	t.add("SetIsLink2Done", [](Script &s, const HookCall &) {
+		return s.setNodeDone(5);
+	});
+	t.add("SetIsLink3Done", [](Script &s, const HookCall &) {
+		return s.setNodeDone(6);
+	});
+	t.add("WillmoreSleeps", [](Script &, const HookCall &) {
+		return true; // 0x4df9f0 is empty
 	});
 	t.add("RegShanksNode2", [](Script &s, const HookCall &c) {
 		return s.regShanksNode(0, 20, c);

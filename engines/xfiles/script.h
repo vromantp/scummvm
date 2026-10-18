@@ -567,6 +567,10 @@ private:
 	bool regShanksNode(int slot, uint count, const HookCall &call);
 	/** SetShanksVar (0x4c4710): compute the "tell will" flag, then the warehouse e-mail check. */
 	void setShanksVar(uint32 variableId);
+	/** RegNode2..6Vars, RegLink2/3Vars: keep the argument variables of slot 0..4 (nodes 2..6) or 5, 6 (links 2, 3). */
+	bool regNodeVars(int slot, uint count, const HookCall &call);
+	/** SetIsNode2..6Done, SetIsLink2/3Done (0x4ad400..0x4ad760): write the slot's "complete" flag from the current node. */
+	bool setNodeDone(int slot);
 	/** The box comes back after an idea's topic: fire the topic's Object Deactivation once its clips have ended. */
 	void endIdeaTopic();
 	/** The VCIdeaMaps of the open box's character; false if there are none. */
@@ -703,6 +707,7 @@ private:
 	bool _boxShown;                            ///< The open box is shown (hidden while one of its topics plays)
 	uint32 _ideaTopic;                         ///< The topic PlayItemTopic queued, deactivated when its clips end (0 for none)
 	Common::Array<uint32> _shanksVars[3];      ///< RegShanksNode2, 3 and 6: their variables, in argument order
+	Common::Array<uint32> _nodeVars[7];        ///< RegNode2..6Vars, RegLink2/3Vars: their variables, in argument order
 	uint32 _viewSpecialVariable;               ///< RegViewSpecial: iCurrViewSpecial
 	bool _clickOpensBox;                       ///< See opensBoxOnClick()
 	uint32 _heldVariable;                      ///< RegCurrInvVar: iCurrInventory
