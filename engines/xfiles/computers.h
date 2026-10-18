@@ -61,6 +61,14 @@ private:
 	void commandKeyPress(uint key, int event, const Common::Array<int32> &fields);
 	void sbaseInit();
 	void sbaseKeyPress(uint key);
+	void photoInit();
+	void photoDownload();
+	void photoEnlarge(int slot);
+	void photoDelete();
+	void photoScroll(bool down);
+	void photoClose();
+	/** 0x4e39f0: the thumbnails for the photos from the scroll offset on. */
+	void photoRebuild();
 	/** The name search (0x465810, 'N'): true if found. */
 	bool searchName(const Common::String &query, char database, uint32 &notFoundText);
 	bool searchPlate(const Common::String &query, char database);
@@ -103,6 +111,10 @@ private:
 	uint32 _record;             ///< 0x6b9b94: the asset of the record shown, 0 if none (MediaInit clears it)
 	bool _recordShown;          ///< 0x6b1f1c: an ING record is shown
 	uint _sbaseCount;           ///< 0x6b19cc: SBase items shown
+	Common::Array<uint> _photoThumbs; ///< 0x6bbaf8: the photo of each thumbnail, slot 0 up
+	uint _photosDownloaded;           ///< 0x6b1a48
+	uint _photoOffset;                ///< 0x6bbb0c: the first downloaded photo shown, steps of 5
+	int _photoEnlarged;               ///< 0x6bbaf4: the photo enlarged, -1 for none
 };
 
 } // End of namespace XFiles

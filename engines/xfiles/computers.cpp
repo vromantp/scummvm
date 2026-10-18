@@ -59,6 +59,16 @@ static const uint32 kMessageWrongUser = 67487;
 static const uint32 kMessageLocked = 67500;
 static const int kWrongTriesMax = 3;
 
+/** The photo viewer: Download and its greyed twin, Delete and its greyed twin, the popup message, limits (0x4e2870). */
+static const uint32 kPhotoDownloadItem = 51397;
+static const uint32 kPhotoDownloadGrey = 70853;
+static const uint32 kPhotoDeleteItem = 51398;
+static const uint32 kPhotoDeleteGrey = 70855;
+static const uint32 kPhotoFullMessage = 67505;
+static const uint kPhotoMax = 60;
+static const uint kPhotoThumbs = 20;
+static const uint kPhotoRow = 5;
+
 /** The ING query: its text item, the caret item, the Search button's actions on Return (trigger 40395). */
 static const uint32 kIngText = 50742;
 static const uint32 kIngCaret = 64481;
@@ -231,7 +241,7 @@ static const uint32 kSbaseItems[31] = {
 };
 // clang-format on
 
-ComputerHooks::ComputerHooks(Script &script) : _script(script), _loginState(0), _connectedBefore(false), _wrongTries(0), _pwbkTries(0), _record(0), _recordShown(false), _sbaseCount(0) {
+ComputerHooks::ComputerHooks(Script &script) : _script(script), _loginState(0), _connectedBefore(false), _wrongTries(0), _pwbkTries(0), _record(0), _recordShown(false), _sbaseCount(0), _photosDownloaded(0), _photoOffset(0), _photoEnlarged(-1) {
 }
 
 void ComputerHooks::addHooks(HookTable<Script> &t) {
@@ -315,6 +325,36 @@ void ComputerHooks::addHooks(HookTable<Script> &t) {
 		s._computer.sbaseKeyPress(c.args[0]);
 		return true;
 	});
+	t.add("PhotoInit", [](Script &s, const HookCall &c) {
+		s._computer.photoInit();
+		return true;
+	});
+	t.add("PhotoDownload", [](Script &s, const HookCall &c) {
+		s._computer.photoDownload();
+		return true;
+	});
+	t.add("PhotoEnlarge", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		s._computer.photoEnlarge(c.args[0]);
+		return true;
+	});
+	t.add("PhotoDelete", [](Script &s, const HookCall &c) {
+		s._computer.photoDelete();
+		return true;
+	});
+	t.add("PhotoScroll", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		s._computer.photoScroll(c.args[0] != 0);
+		return true;
+	});
+	t.add("PhotoClose", [](Script &s, const HookCall &c) {
+		s._computer.photoClose();
+		return true;
+	});
+	// PhotoForward returns at once (0x4dfa10)
+	t.add("PhotoForward", [](Script &s, const HookCall &c) { return true; });
 	// They release the screen's font only, or do nothing
 	static const char *const kNothingToDo[] = {"INGDestroy", "MediaDestroy", "PswdInit", "PwbkInit"};
 	for (uint i = 0; i < ARRAYSIZE(kNothingToDo); i++)
@@ -519,6 +559,112 @@ void ComputerHooks::pwbkOK(uint32 variableId) {
 	_script.showLayout(kPopupLayout);
 	_script.setItemEnabled(message, true);
 	loginInit('P');
+}
+
+void ComputerHooks::photoRebuild() {
+	// 0x4e39f0: a thumbnail for each downloaded photo from the scroll offset on, at most 20. Pictures are not drawn,
+	// so only the photos they stand for are kept
+	_photoThumbs.clear();
+	uint skip = _photoOffset;
+	const Common::Array<VCPhoto> &photos = _script._photos;
+	for (uint i = 0; i < photos.size() && _photoThumbs.size() < kPhotoThumbs; i++) {
+		if (!photos[i].downloaded)
+			continue;
+		if (skip) {
+			skip--;
+			continue;
+		}
+		_photoThumbs.push_back(i);
+	}
+}
+
+void ComputerHooks::photoInit() {
+	// 0x4e2870: the photos downloaded are counted, the others (n) decide which of Download and its grey twin shows.
+	// The photos are the Script's list: a restored save's, and those the camera made (B-140)
+	_photoOffset = 0;
+	_photoEnlarged = -1;
+	_photosDownloaded = 0;
+	uint notDownloaded = 0;
+	for (uint i = 0; i < _script._photos.size(); i++) {
+		if (_script._photos[i].downloaded)
+			_photosDownloaded++;
+		else
+			notDownloaded++;
+	}
+	_script.setItemEnabled(kPhotoDownloadGrey, notDownloaded == 0);
+	_script.setItemEnabled(kPhotoDownloadItem, notDownloaded != 0);
+	_script.setItemEnabled(kPhotoDeleteGrey, true);
+	_script.setItemEnabled(kPhotoDeleteItem, false);
+	photoRebuild();
+}
+
+void ComputerHooks::photoDownload() {
+	// 0x4e3130: nothing unless a photo is not downloaded; at 60 downloaded the popup and stop
+	Common::Array<VCPhoto> &photos = _script._photos;
+	uint notDownloaded = 0;
+	for (uint i = 0; i < photos.size(); i++) {
+		if (!photos[i].downloaded)
+			notDownloaded++;
+	}
+	if (!notDownloaded)
+		return;
+	for (uint i = 0; i < photos.size(); i++) {
+		if (photos[i].downloaded)
+			continue;
+		if (_photosDownloaded >= kPhotoMax) {
+			_script.showLayout(kPopupLayout);
+			_script.setItemEnabled(kPhotoFullMessage, true);
+			break;
+		}
+		photos[i].downloaded = true;
+		_photosDownloaded++;
+		notDownloaded--;
+	}
+	if (!notDownloaded) {
+		_script.setItemEnabled(kPhotoDownloadGrey, true);
+		_script.setItemEnabled(kPhotoDownloadItem, false);
+	}
+	// GameState_SetPhotosOnCamera(n): the photos left (those not downloaded)
+	_script._photosOnCamera = notDownloaded;
+	_photoOffset = 0;
+	photoRebuild();
+}
+
+void ComputerHooks::photoEnlarge(int slot) {
+	// 0x4e33e0: only for a thumbnail that exists; the picture itself is not drawn
+	if (slot < 0 || slot >= (int)_photoThumbs.size() || (uint)slot >= _photosDownloaded - _photoOffset)
+		return;
+	_photoEnlarged = _photoThumbs[slot];
+	_script.setItemEnabled(kPhotoDeleteGrey, false);
+	_script.setItemEnabled(kPhotoDeleteItem, true);
+}
+
+void ComputerHooks::photoDelete() {
+	// 0x4e3630: only with an enlarged picture; its photo leaves the database, the later thumbnails move back
+	if (_photoEnlarged < 0)
+		return;
+	_script._photos.remove_at(_photoEnlarged);
+	_photoEnlarged = -1;
+	_photosDownloaded--;
+	photoRebuild();
+	_script.setItemEnabled(kPhotoDeleteGrey, true);
+	_script.setItemEnabled(kPhotoDeleteItem, false);
+}
+
+void ComputerHooks::photoScroll(bool down) {
+	// 0x4e2be0 (up) and 0x4e2e80 (down, only with 20 thumbnails): five photos, a row; no item changes
+	if (!down && _photoOffset > 0)
+		_photoOffset -= kPhotoRow;
+	else if (down && _photoThumbs.size() == kPhotoThumbs)
+		_photoOffset += kPhotoRow;
+	else
+		return;
+	photoRebuild();
+}
+
+void ComputerHooks::photoClose() {
+	// 0x4e2a70: the pictures go; the counters stay until the next PhotoInit
+	_photoThumbs.clear();
 }
 
 bool ComputerHooks::sameText(const Common::String &buffer, uint32 textAsset) {
