@@ -1490,8 +1490,11 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, 
 		// A view still held (below) was never activated: entering another
 		// one drops it, as Action_DoSetView (0x46a950) cancels its activation
 		// The shown asset's deactivation runs before the view's own triggers (0x458e10, B-112)
-		if (i == 3)
+		if (i == 3) {
 			deactivateViewAsset();
+			// The view is being left: an asset enabled by the deactivations below is not started (0x46f210)
+			_viewActive = false;
+		}
 		if (oldPath[i] && !(i == 3 && _viewHeld))
 			fire(oldPath[i], kEventObjectDeactivation);
 		if (i == 3)
@@ -1539,36 +1542,27 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, 
 void Script::activateView() {
 	// The mark of the view's own activation: the exe logs it after the Activations of its node, location and viewpoint
 	log("  == view activated " + getObjectLabel(_data, _view));
-	if (_viewHeld) {
-		_viewHeld = false;
-		// The actions after the set_view ran while it was held: the asset
-		// it activates may not be the one shown when it was entered
-		// (newgame-to-comityinn, view 925: the click on 30659 enables 25745
-		// after its set_view)
-		logViewAssets();
-	}
+	_viewHeld = false;
 	_viewActive = true;
+	// The exe activates the view's asset before the view's own actions run (B-151)
+	activateViewAsset();
+	activateViewObjects(true);
 	fire(_view, kEventObjectActivation);
-	activateViewObjects();
+	activateViewObjects(false);
 }
 
-void Script::activateViewObjects() {
-	// XFiles.exe activates, after the view, the asset it shows and its
-	// enabled character views, then (after the transition) its enabled navs
-	// and explorables (reference run, 2026-10-12); the view's activation
-	// creates them (0x4402e0)
+void Script::activateViewObjects(bool before) {
+	// XFiles.exe activates the asset it shows (activateViewAsset) and its
+	// enabled character views (before = true) ahead of the view's own
+	// Activation actions, then (after the transition) its enabled navs and
+	// explorables (reference run, 2026-10-12); the view's activation
+	// creates them (0x4402e0). B-151
 	VCView v;
 	if (!_data.getView(_view, v))
 		return;
 	Common::Array<uint32> ids;
-	uint32 background;
-	getViewAssets(ids, background);
-	if (!ids.empty()) {
-		_viewObjects.push_back(ids[0]);
-		fire(ids[0], kEventObjectActivation);
-	}
 	const uint32 lists[3] = { v.characters, v.navs, v.explorables };
-	for (int i = 0; i < 3; i++) {
+	for (int i = before ? 0 : 1; i < (before ? 1 : 3); i++) {
 		ids.clear();
 		_data.getMembers(lists[i], ids);
 		for (uint j = 0; j < ids.size(); j++) {
@@ -1706,6 +1700,7 @@ void Script::activateViewAsset() {
 	if (ids.empty() || Common::find(_viewObjects.begin(), _viewObjects.end(), ids[0]) != _viewObjects.end())
 		return;
 	_viewObjects.push_back(ids[0]);
+	logViewAsset(ids[0], background);
 	fire(ids[0], kEventObjectActivation);
 }
 
@@ -1736,12 +1731,15 @@ void Script::logViewAssets() {
 	Common::Array<uint32> ids;
 	uint32 background;
 	getViewAssets(ids, background);
-	for (uint i = 0; i < ids.size(); i++) {
-		VCAsset asset;
-		_data.getAsset(ids[i], asset);
-		log(Common::String::format("      %s #%u ", ids[i] == background ? "background" : "overlay", ids[i]) +
-			formatFile(asset.files[0]) + "  \"" + nameOrNone(_data, asset.name) + "\"");
-	}
+	for (uint i = 0; i < ids.size(); i++)
+		logViewAsset(ids[i], background);
+}
+
+void Script::logViewAsset(uint32 id, uint32 background) {
+	VCAsset asset;
+	_data.getAsset(id, asset);
+	log(Common::String::format("      %s #%u ", id == background ? "background" : "overlay", id) +
+		formatFile(asset.files[0]) + "  \"" + nameOrNone(_data, asset.name) + "\"");
 }
 
 void Script::showView() {

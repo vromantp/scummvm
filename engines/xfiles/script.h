@@ -647,9 +647,10 @@ private:
 	void showView();
 	/** Logs the asset the current view shows. */
 	void logViewAssets();
+	void logViewAsset(uint32 id, uint32 background);
 	/** Activate what the current view shows: its first asset, character views, navs, explorables. */
 	void activateView();
-	void activateViewObjects();
+	void activateViewObjects(bool before);
 	void deactivateViewAsset();
 	void deactivateViewObjects();
 	/** An enabled character view, nav or explorable of the current view gets activated. */
