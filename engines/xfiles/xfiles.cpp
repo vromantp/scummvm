@@ -745,6 +745,10 @@ void XFilesEngine::stopViewAsset(uint32 id) {
 	}
 }
 
+void XFilesEngine::playPhoneTone(uint32 id) {
+	_sound.playTone(id);
+}
+
 void XFilesEngine::restoreSound(uint32 id, bool loop, uint32 startMs) {
 	_sound.restore(id, loop, startMs);
 }

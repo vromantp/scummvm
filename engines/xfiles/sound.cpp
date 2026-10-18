@@ -31,7 +31,7 @@
 
 namespace XFiles {
 
-SoundPlayer::SoundPlayer(const DiscFiles &files) : _files(files), _data(nullptr), _script(nullptr), _soundView(0) {
+SoundPlayer::SoundPlayer(const DiscFiles &files) : _files(files), _data(nullptr), _script(nullptr), _tone(nullptr), _soundView(0) {
 }
 
 SoundPlayer::~SoundPlayer() {
@@ -50,6 +50,26 @@ void SoundPlayer::play(uint32 id, byte mode, bool positional, int16 x, int16 y, 
 		return;
 	}
 	startSound(id, mode == kModePlayLoop, positional, x, y, 0, sound3D);
+}
+
+void SoundPlayer::playTone(uint32 id) {
+	stopTone();
+	VCAsset asset;
+	if (!id || !_data->getAsset(id, asset))
+		return;
+	Movie *tone = new Movie();
+	if (!tone->open(_files, asset)) {
+		delete tone;
+		return;
+	}
+	debugC(1, kDebugScript, "-- tone #%u %s", id, asset.files.empty() ? "" : asset.files[0].file.c_str());
+	tone->play(false);
+	_tone = tone;
+}
+
+void SoundPlayer::stopTone() {
+	delete _tone;
+	_tone = nullptr;
 }
 
 void SoundPlayer::restore(uint32 id, bool loop, uint32 startMs) {
@@ -172,6 +192,11 @@ void SoundPlayer::stopAll() {
 void SoundPlayer::update(bool sound3D) {
 	updateSounds(sound3D);
 	updateClips();
+	if (_tone) {
+		_tone->update();
+		if (_tone->hasEnded())
+			stopTone();
+	}
 }
 
 void SoundPlayer::updateSounds(bool sound3D) {
@@ -311,6 +336,7 @@ void SoundPlayer::placeSound(Sound &sound, bool sound3D) {
 
 void SoundPlayer::clear() {
 	stopAll();
+	stopTone();
 	clearClips();
 	_soundView = 0;
 }
@@ -320,6 +346,8 @@ void SoundPlayer::pause(bool pause) {
 		it->_value.movie->pause(pause);
 	for (Common::HashMap<uint32, Clip>::iterator it = _clips.begin(); it != _clips.end(); ++it)
 		it->_value.movie->pause(pause);
+	if (_tone)
+		_tone->pause(pause);
 }
 
 void SoundPlayer::getSaved(Common::Array<uint32> &triples) const {

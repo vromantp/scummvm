@@ -180,10 +180,8 @@ void PhoneHooks::button(char key, uint32 numberVar, uint32 pressedItem) {
 			_script.setString(numberVar, number);
 			setDisplay(Common::U32String(number));
 			_script.log("      phone: " + number);
-			if (_tone)
-				_script.playAsset(_tone, kModeStop, nullptr);
 			_tone = kPhoneTones[key - '0'];
-			_script.playAsset(_tone, kModePlayOnce, nullptr);
+			_script.playPhoneTone(_tone);
 		}
 	}
 	// The button's pressed picture, enabled by the click, goes 100 ms later
@@ -312,7 +310,7 @@ void PhoneHooks::closed() {
 	// 0x4c87c0 empties the phone book, 0x4c8150 stops the key tone
 	_book.clear();
 	if (_tone)
-		_script.playAsset(_tone, kModeStop, nullptr);
+		_script.playPhoneTone(0);
 	_tone = 0;
 }
 

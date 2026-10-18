@@ -101,6 +101,11 @@ public:
 	 * positional: a 3D Sound action, at (x, y) on the viewpoint grid.
 	 */
 	virtual void playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) {}
+	/**
+	 * A phone key tone (PhoneButton, 0x4c8870): the exe plays them as movies of their own, not sound objects. Stops
+	 * the previous tone and restarts the digit's from its beginning; 0 only stops. Nothing is finished at its end.
+	 */
+	virtual void playPhoneTone(uint32 id) {}
 	/** PlayAssetAt: draw the graphic clip once with its top-left at (x, y) over the screen; Script::finishSound ends it. */
 	virtual void playClip(uint32 id, int16 x, int16 y) {}
 	/** A Stop action on an asset without a sound object (0x504c90): a shown view asset runs to its end and holds. */
@@ -571,6 +576,8 @@ private:
 	bool isArtificialIntuitionOn() const { return _prefArtificialIntuition && getVariable(_prefArtificialIntuition); }
 	/** PlayAssetAt (0x491de0): start the asset unless it already plays; an XG clip is drawn at (x, y). */
 	void playAssetAt(uint32 asset, int x, int y);
+	/** A phone key tone (0 = stop): logged, and played by the engine's hooks. */
+	void playPhoneTone(uint32 id);
 	/** DoActionList(trigger, actionList): another trigger's actions. */
 	void runActionList(uint32 actionList, int event, const EventFields &fields);
 	void endSound(uint32 id, const char *how);

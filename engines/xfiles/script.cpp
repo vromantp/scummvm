@@ -135,6 +135,13 @@ void Script::log(const Common::String &line) {
 	debugC(1, kDebugScript, "%s", line.c_str());
 }
 
+void Script::playPhoneTone(uint32 id) {
+	if (id)
+		log(Common::String::format("      phone: tone #%u", id));
+	if (_hooks)
+		_hooks->playPhoneTone(id);
+}
+
 bool Script::isEnabled(uint32 id) const {
 	return !_enabled.contains(id) || _enabled[id];
 }
