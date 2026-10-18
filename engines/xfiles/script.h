@@ -126,6 +126,12 @@ public:
 	 * delay: the script then plays it at once.
 	 */
 	virtual bool delayPlay(uint32 asset, uint ms) { return false; }
+	/**
+	 * An inventory item was enabled while it has no icon (0x4201a0 → 0x4a1fb0). Returns true when the engine adds
+	 * the icon later through Script::addInventoryIcon (the hidden bar's reveal: the icon joins 500 ms later); false
+	 * appends it at once, as the exe does with the bar shown.
+	 */
+	virtual bool deferInventoryIcon(uint32 id) { return false; }
 	/** The bytes of the file of a file asset (an e-mail's text), false if there is none. */
 	virtual bool readAssetFile(uint32 id, Common::Array<byte> &data) { return false; }
 	/** The width in pixels of a text in an item's font (Courier New, or Arial when sans), -1 if unknown. */
@@ -242,8 +248,8 @@ public:
 	void removeActionIcons() { spendIcons(kClassActionIcon); }
 
 	/**
-	 * Run one vc_sim.py step: wait, click:ID, timer:N, nav:ID, goto:ID or
-	 * ask:ID or idea:ICON.
+	 * Run one vc_sim.py step: wait, click:ID, timer:N, nav:ID, goto:ID,
+	 * ask:ID, idea:ICON, icon:ID... (tools/ref/steps.py lists them).
 	 */
 	void step(const Common::String &step);
 	/** Display a layout from exe code, as the main menu's Options and Help do (the `layout:` step). */
@@ -349,6 +355,11 @@ public:
 	bool opensBoxOnClick() const { return _clickOpensBox; }
 	/** A tool's delayed reaction clip is due (the engine's timer for ScriptHooks::delayPlay). */
 	void playReaction(uint32 asset) { playStock(asset); }
+	/**
+	 * The icon of an enabled item joins the bar now, at the end (its object activates): the reveal's timer of
+	 * ScriptHooks::deferInventoryIcon, or the `icon:` step. Nothing when the item is no longer enabled.
+	 */
+	void addInventoryIcon(uint32 id);
 	/** How often a conversation topic was asked. */
 	uint getAskCount(uint32 id) const { return _asked.getValOrDefault(id, 0); }
 	int32 getVariable(uint32 id) const;

@@ -115,6 +115,8 @@ static bool syncSave(Common::Serializer &s, Script::SavedValues &values, VCSave 
 Common::Error XFilesEngine::saveGameStream(Common::WriteStream *stream, bool isAutosave) {
 	if (!_script)
 		return Common::kWritingFailed;
+	// An icon still waiting for the reveal's timer is saved in the bar
+	flushPendingIcons(false);
 	VCSave save;
 	fillSnapshot(save);
 	Script::SavedValues values;

@@ -105,6 +105,7 @@ public:
 	bool queryInventoryIcon(uint32 id, bool &hasIcon) const override;
 	void heldItemChanged(uint32 id) override;
 	bool delayPlay(uint32 asset, uint ms) override;
+	bool deferInventoryIcon(uint32 id) override;
 	bool queryPreference(uint index, int32 &value) const override;
 	void stopAllSounds() override;
 	void pauseTimers() override;
@@ -317,6 +318,15 @@ private:
 		uint32 due; ///< gameMillis()
 	};
 	Common::Array<DelayedPlay> _delayedPlays;     ///< A tool's reaction clip, 2 s after the click (Script::toolReaction)
+	// The hidden bar's reveal for a new item (0x4a1fb0): its icon joins
+	// after 500 ms, the bar hides again 1000 ms after that
+	static const uint32 kIconJoinDelay = 500;
+	static const uint32 kRevealHideDelay = 1000;
+	Common::Array<DelayedPlay> _pendingIcons;     ///< Items whose icon joins the bar at `due` (asset: the VCInventory)
+	bool _barRevealed;                            ///< The reveal shows the hidden bar until _barRevealEnd
+	uint32 _barRevealEnd;                         ///< gameMillis()
+	/** The pending icons join the bar now (before a save), or are dropped (clear: a new game, a load). */
+	void flushPendingIcons(bool clear);
 	Common::Array<PressedItem> _pressedItems;     ///< Phone buttons shown pressed (Script::takePressedItems)
 	SoundPlayer _sound;                           ///< The sounds and placed clips (sound.cpp)
 
@@ -346,7 +356,7 @@ private:
 		VCSave save;
 	};
 	PendingLoad _pendingLoad;
-	Common::StringArray _fastForward;     ///< xfiles_fastforward: steps run headless before the game starts
+	Common::StringArray _fastForward;     ///< xfiles_fastforward: steps run headless before the game starts (cleared after)
 	uint _nextStep;
 	uint32 _waitVideo;                    ///< A wait step waits for this video to end
 	int _waitTimer;                       ///< A timer step waits for this timer to expire; -1: none

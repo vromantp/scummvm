@@ -62,7 +62,7 @@ static const uint32 kXCursor = 25541;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
 	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuOpen(false), _menuLayout(false), _menuReopen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
-	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _timersPaused(false), _sound(_discFiles) {
+	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _timersPaused(false), _barRevealed(false), _barRevealEnd(0), _sound(_discFiles) {
 	g_engine = this;
 	addHooks();
 	_loadedSave = false;
@@ -315,10 +315,12 @@ void XFilesEngine::startNewGame() {
 	// A new game starts from XFiles.gam, which allows the head credits
 	// (XFiles.exe Game_Start 0x48cd70)
 	_headCredits.setEnabled(true);
+	flushPendingIcons(true);
 	_script->start();
 }
 
 void XFilesEngine::restoreGame(const VCSave &save) {
+	flushPendingIcons(true);
 	_script->restore(save);
 	// The view's clip plays from the saved time (0x51d200), the head
 	// credits roll again if they were rolling, from the last credit
@@ -352,6 +354,7 @@ void XFilesEngine::runGame() {
 	// game goes on from where they end
 	for (uint i = 0; i < _fastForward.size(); i++)
 		_script->step(_fastForward[i]);
+	_fastForward.clear();
 	while (!shouldQuit()) {
 		// A load queued by loadGameStream (from the global main menu, from the
 		// steps) runs here, between two frames
@@ -870,6 +873,24 @@ void XFilesEngine::updateTimers() {
 		}
 	}
 
+	// The reveal's timers (deferInventoryIcon): the icon joins, the bar hides
+	for (uint i = 0; i < _pendingIcons.size();) {
+		if ((int32)(now - _pendingIcons[i].due) >= 0) {
+			uint32 id = _pendingIcons[i].asset;
+			_pendingIcons.remove_at(i);
+			// (an `icon:` step may have added it already)
+			const Common::Array<uint32> &bar = _script->getInventory();
+			if (Common::find(bar.begin(), bar.end(), id) == bar.end()) {
+				debugC(1, kDebugScript, "-- icon #%u joins the bar", id);
+				_script->addInventoryIcon(id);
+			}
+		} else {
+			i++;
+		}
+	}
+	if (_barRevealed && (int32)(now - _barRevealEnd) >= 0)
+		_barRevealed = false;
+
 	for (uint i = 0; i < expired.size(); i++) {
 		debugC(1, kDebugScript, "-- timer %u expired", expired[i]);
 		_timerStates.erase(expired[i]);
@@ -922,7 +943,8 @@ void XFilesEngine::closeView() {
 }
 
 void XFilesEngine::updateInterface() {
-	bool hiddenBar = _prefVariables[kPrefInventory] && _script->getVariable(_prefVariables[kPrefInventory]) == 'H';
+	// A new item's reveal shows the hidden bar (deferInventoryIcon)
+	bool hiddenBar = _prefVariables[kPrefInventory] && _script->getVariable(_prefVariables[kPrefInventory]) == 'H' && !_barRevealed;
 	_interface->update(*_script, _mouse, getPreference(kPrefClosedCaptioning), hiddenBar, getPreference(kPrefRolloverText));
 	// Roll Into and Roll Out Of for the icons and layout items under the
 	// mouse (the evidence kit icon opens the kit from these)
@@ -967,6 +989,38 @@ bool XFilesEngine::delayPlay(uint32 asset, uint ms) {
 	debugC(1, kDebugScript, "-- play of #%u in %u ms", asset, ms);
 	_delayedPlays.push_back(play);
 	return true;
+}
+
+bool XFilesEngine::deferInventoryIcon(uint32 id) {
+	// 0x4a1fb0: with the bar shown (the "visible" preference, the mouse
+	// over it, an earlier item's reveal) the icon is appended at once;
+	// else the bar is shown now, the icon is added by a 500 ms timer and
+	// a second one hides the bar 1000 ms later. The save keeps the order
+	// the icons joined in. A fast-forward has no time: the sim's way
+	// (append, steps.py's `icon:` steps reorder)
+	if (!_fastForward.empty())
+		return false;
+	bool hiddenBar = _prefVariables[kPrefInventory] && _script->getVariable(_prefVariables[kPrefInventory]) == 'H';
+	if (!hiddenBar || _interface->isBarOpen())
+		return false;
+	uint32 now = gameMillis();
+	DelayedPlay icon = { id, now + kIconJoinDelay };
+	_pendingIcons.push_back(icon);
+	_barRevealed = true;
+	_barRevealEnd = now + kIconJoinDelay + kRevealHideDelay;
+	debugC(1, kDebugScript, "-- icon #%u joins the bar in %u ms", id, kIconJoinDelay);
+	return true;
+}
+
+void XFilesEngine::flushPendingIcons(bool clear) {
+	const Common::Array<uint32> &bar = _script->getInventory();
+	for (uint i = 0; i < _pendingIcons.size() && !clear; i++) {
+		if (Common::find(bar.begin(), bar.end(), _pendingIcons[i].asset) == bar.end())
+			_script->addInventoryIcon(_pendingIcons[i].asset);
+	}
+	_pendingIcons.clear();
+	if (clear)
+		_barRevealed = false;
 }
 
 void XFilesEngine::clickInventory(uint32 inventory) {

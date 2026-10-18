@@ -99,6 +99,8 @@ public:
 	bool isModal() const;
 	/** The mouse moved into the inventory bar during the last update(). */
 	bool hasEnteredBar() const { return _enteredBar; }
+	/** The bar was shown at the last update() (Obj_IsShown of the bar). */
+	bool isBarOpen() const { return _barOpen; }
 	/** Whether an icon of a VCInventory is in the bar. */
 	bool hasInventoryIcon(uint32 id) const { return getInventoryRect(id, nullptr); }
 	/** Where the icon of a VCInventory is; false if it has none. */

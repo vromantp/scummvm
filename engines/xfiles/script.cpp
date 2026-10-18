@@ -1988,10 +1988,11 @@ void Script::enableTarget(uint32 target, bool value) {
 			removeEvidence(target);
 	}
 	// An inventory icon's object joins the bar at the end, or goes
-	// (0x4201a0); the bar's order is what a save keeps
+	// (0x4201a0); the bar's order is what a save keeps. With the bar
+	// hidden it joins later (0x4a1fb0), when the engine says
 	if (_data.getClassOf(target) == kClassInventory) {
 		Common::Array<uint32>::iterator it = Common::find(_inventory.begin(), _inventory.end(), target);
-		if (value && it == _inventory.end())
+		if (value && it == _inventory.end() && !(_hooks && _hooks->deferInventoryIcon(target)))
 			_inventory.push_back(target);
 		else if (!value && it != _inventory.end())
 			_inventory.erase(it);
@@ -2008,6 +2009,17 @@ void Script::enableTarget(uint32 target, bool value) {
 	if ((value) != was && _data.getClassOf(target) == kClassAssetRef)
 		updateViewAsset(target);
 	updateLayoutItem(target, value);
+}
+
+void Script::addInventoryIcon(uint32 id) {
+	// The icon object activates and is appended to the bar's list
+	// (List_Append_459070): the save's order is the order of these
+	if (!isEnabled(id) || _data.getClassOf(id) != kClassInventory)
+		return;
+	Common::Array<uint32>::iterator it = Common::find(_inventory.begin(), _inventory.end(), id);
+	if (it != _inventory.end())
+		_inventory.erase(it);
+	_inventory.push_back(id);
 }
 
 void Script::addUberParanoia(int32 n) {
@@ -2611,6 +2623,8 @@ void Script::step(const Common::String &s) {
 		showLayout(id); // shown from exe code, not by a Show Layout action
 	else if (kind == "end")
 		finishSound(id);
+	else if (kind == "icon")
+		addInventoryIcon(id); // the exe log's late activation of the icon (the hidden bar's 500 ms, 0x4a1fb0)
 	else if (kind == "media")
 		_soundEnds = true; // the step list has the sound ends (steps.py `end:`): later plays of a playing asset are dropped
 }
