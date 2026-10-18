@@ -462,6 +462,13 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 	for (uint i = 0; i < a.args.size(); i++)
 		args.push_back(getValue(a.args[i], fields, locals));
 	HookCall call(a, args, event, fields);
+	// The values of its variable arguments follow the call, as a reference run logs them
+	Common::String values;
+	for (uint i = 0; i < a.args.size(); i++) {
+		if (a.args[i].kind == kOperandVariable)
+			values += Common::String::format("%s%d", values.empty() ? "" : ", ", args[i]);
+	}
+	Common::String callLine = "      call " + describeAction(_data, a.id, event, false) + (values.empty() ? "" : " [" + values + "]");
 
 	if (a.function == "SetStartView" && args.size() >= 4) {
 		// Game_BuildObjects (0x477940) makes an object for every enabled
@@ -487,18 +494,11 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 	} else if ((a.function == "DoActionList" || a.function == "DoActionListID") && args.size() >= 2) {
 		// DoActionListID takes the two IDs from variables (0x50a200)
 		if (a.function == "DoActionListID")
-			log(Common::String::format("      call %s(%d, %d)", a.function.c_str(), args[0], args[1]));
+			log(callLine);
 		runActionList(args[1], event, fields);
 		logHook(a.function, kHookHandled);
 	} else {
-		// The values of its variable arguments follow, as a reference run
-		// logs them
-		Common::String values;
-		for (uint i = 0; i < a.args.size(); i++) {
-			if (a.args[i].kind == kOperandVariable)
-				values += Common::String::format("%s%d", values.empty() ? "" : ", ", args[i]);
-		}
-		log("      call " + describeAction(_data, a.id, event, false) + (values.empty() ? "" : " [" + values + "]"));
+		log(callLine);
 		// The Script's own hooks first (this file and the area files), then the engine's
 		HookStatus status = _hookTable.run(*this, call);
 		if (_hooks && _hooks->callFunction(call))
