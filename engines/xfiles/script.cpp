@@ -108,7 +108,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	_jumpCut.first = _jumpCut.later = false;
 	memset(_flashlight, 0, sizeof(_flashlight));
@@ -1296,6 +1296,11 @@ void Script::endVideo(const char *how) {
 	else if (_videoQueue.empty()) {
 		releaseHeldSounds();
 		showView(); // Back to the view, with whatever the video's triggers changed
+		// The box comes back: its idea icons get their objects again, before an idea topic's deactivation
+		if (_box && !_boxShown) {
+			_boxShown = true;
+			activateIdeaIcons();
+		}
 		endIdeaTopic();
 	}
 }
@@ -1303,7 +1308,7 @@ void Script::endVideo(const char *how) {
 void Script::endIdeaTopic() {
 	// The clips of an idea's topic (PlayItemTopic) have ended and the box is shown again (0x436230): the topic's
 	// object is deactivated, firing its Object Deactivation triggers (evidence1-to-skinnergone: 41642, which counts
-	// iAllQuestionsAskedSkinner up). The idea icons' own objects (B-130) are not modelled.
+	// iAllQuestionsAskedSkinner up).
 	if (!_ideaTopic || !_videoQueue.empty() || !_clips.empty())
 		return;
 	uint32 topic = _ideaTopic;
@@ -2052,12 +2057,42 @@ void Script::openBox(uint32 charViewId) {
 	// in the box, whose activation (0x47d010) fires its Object Activation
 	// triggers and plays nothing.
 	_box = charViewId;
+	_boxShown = true;
 	Common::Array<uint32> topics;
 	getBoxTopics(charViewId, topics);
 	for (uint i = 0; i < topics.size(); i++) {
 		if (isEnabled(topics[i]))
 			activateTopic(topics[i]);
 	}
+	activateIdeaIcons();
+}
+
+void Script::activateIdeaIcons() {
+	// 0x435d90 -> 0x460360: at each show of the box, a new object for every enabled idea icon of the character
+	// view in map order, whose Object Activation fires (21975's 90677 sets bN2WongIdeaIconActive). The hide only
+	// deactivates them, and no idea icon has an Object Deactivation trigger
+	VCCharView charView;
+	Common::Array<uint32> maps;
+	if (!_box || !_data.getCharView(_box, charView) || !charView.ideaMaps || !_data.getMembers(charView.ideaMaps, maps))
+		return;
+	for (uint i = 0; i < maps.size(); i++) {
+		VCIdeaMap map;
+		if (_data.getIdeaMap(maps[i], map) && isEnabled(map.icon))
+			fire(map.icon, kEventObjectActivation);
+	}
+}
+
+bool Script::isIdeaIconOfBox(uint32 iconId) const {
+	VCCharView charView;
+	Common::Array<uint32> maps;
+	if (!_box || !_data.getCharView(_box, charView) || !charView.ideaMaps || !_data.getMembers(charView.ideaMaps, maps))
+		return false;
+	for (uint i = 0; i < maps.size(); i++) {
+		VCIdeaMap map;
+		if (_data.getIdeaMap(maps[i], map) && map.icon == iconId)
+			return true;
+	}
+	return false;
 }
 
 void Script::activateTopic(uint32 conversationId) {
@@ -2185,6 +2220,9 @@ void Script::enableTarget(uint32 target, bool value) {
 		else if (!value && it != _inventory.end())
 			_inventory.erase(it);
 	}
+	// An idea icon enabled while the box is shown, with the icon in its character's map, gets an object (0x4a1420)
+	if (value && !was && _boxShown && _data.getClassOf(target) == kClassIdeaIcon && isIdeaIconOfBox(target))
+		fire(target, kEventObjectActivation);
 	// A topic enabled while its box is open joins the box (0x476340)
 	if (value && _box && isBoxTopic(_box, target))
 		activateTopic(target);
@@ -2279,6 +2317,7 @@ void Script::ask(uint32 conversationId) {
 	if (_data.getConversation(conversationId, c) && c.recorded)
 		recordTopic(conversationId);
 	// The playlist and the triggers are one event (see _viewSerial)
+	_boxShown = false; // the box is hidden while the topic plays
 	_fireSerial++;
 	_inEvent = true;
 	playTopic(conversationId, true);
@@ -2319,9 +2358,14 @@ void Script::idea(uint32 iconId) {
 	// Recorded whatever +0x40 holds (PlayItemTopic does not test it)
 	recordTopic(conversation);
 	activateTopic(conversation);
+	_boxShown = false; // 0x49c06f hid the box
 	playTopic(conversation, false);
 	// The box comes back when the clips end
 	_ideaTopic = conversation;
+	if (_videoQueue.empty() && _clips.empty()) {
+		_boxShown = true;
+		activateIdeaIcons();
+	}
 	endIdeaTopic();
 }
 
