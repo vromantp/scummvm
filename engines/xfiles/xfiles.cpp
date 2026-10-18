@@ -28,11 +28,14 @@
 #include "common/system.h"
 #include "common/tokenizer.h"
 #include "engines/util.h"
+#include "graphics/font.h"
+#include "graphics/fontman.h"
 #include "graphics/pixelformat.h"
 
 #include "xfiles/xfiles.h"
 #include "xfiles/console.h"
 #include "xfiles/movie.h"
+#include "xfiles/pictures.h"
 #include "xfiles/script.h"
 #include "xfiles/vcdata.h"
 
@@ -61,7 +64,7 @@ static const int kMenuCornerLeft = 501, kMenuCornerBottom = 34;
 static const uint32 kXCursor = 25541;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
-	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuOpen(false), _menuLayout(false), _menuReopen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
+	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _viewfinder(nullptr), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuOpen(false), _menuLayout(false), _menuReopen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
 	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _timersPaused(false), _barRevealed(false), _barRevealEnd(0), _sound(_discFiles) {
 	g_engine = this;
 	addHooks();
@@ -81,6 +84,7 @@ XFilesEngine::~XFilesEngine() {
 	delete _interface;
 	delete _cursors;
 	delete _video;
+	delete _viewfinder;
 	delete _texts;
 	delete _textsDll;
 	delete _script;
@@ -749,6 +753,17 @@ void XFilesEngine::playPhoneTone(uint32 id) {
 	_sound.playTone(id);
 }
 
+void XFilesEngine::playShutter(uint32 id) {
+	// A bare movie of the camera's asset, stopped by the next shutter (no sound object)
+	_sound.playTone(id);
+}
+
+uint32 XFilesEngine::getPhotoTime() const {
+	if (_video && _video->isOpen())
+		return _video->getTime();
+	return !_layers.empty() ? _layers[0]->getTime() : 0;
+}
+
 void XFilesEngine::restoreSound(uint32 id, bool loop, uint32 startMs) {
 	_sound.restore(id, loop, startMs);
 }
@@ -1043,7 +1058,29 @@ void XFilesEngine::drawView() {
 	}
 	for (uint i = 0; i < _layers.size(); i++)
 		drawCaptions(*_layers[i], getBandPosition(*_layers[i]));
+	drawViewfinder();
 	_interface->draw(_screen);
+}
+
+void XFilesEngine::drawViewfinder() {
+	static const uint32 kViewfinderAsset = 34749;
+	static const int kCounterX = 3, kCounterY = 5; // inside the picture (0x4f2e50)
+	if (!_script || !_script->isCameraEnabled())
+		return;
+	if (!_viewfinder)
+		_viewfinder = loadPicture(*_data, _discFiles, kViewfinderAsset, _screen.format);
+	if (!_viewfinder)
+		return;
+	// Centred on the mouse, confined to the band (0x507e80; the exact offset is not read)
+	int x = CLIP<int>(_mouse.x - _viewfinder->getWidth() / 2, kBandLeft, kBandLeft + kBandWidth - _viewfinder->getWidth());
+	int y = kBandTop;
+	_viewfinder->draw(_screen, x, y);
+	// The photos left, red, in the picture's corner
+	const Graphics::Font *font = FontMan.getFontByUsage(Graphics::FontManager::kBigGUIFont);
+	if (font) {
+		Common::String left = Common::String::format("%d", 24 - _script->getPhotosOnCamera());
+		font->drawString(&_screen, left, x + kCounterX, y + kCounterY, 16, _screen.format.RGBToColor(255, 0, 0));
+	}
 }
 
 static bool inMenuCorner(const Common::Point &pos) {
@@ -1077,6 +1114,15 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 	// Over Options and Help the scene stays suspended: only the layout's items take clicks
 	if (_menuLayout)
 		return;
+
+	// The camera in hand takes a click in the band (kind 24 comes after the interface items, before the X corner and
+	// the dialog box)
+	if (hit.kind == Interface::kHitNone && !_interface->isModal() && _script->isCameraEnabled() && pos.x >= kBandLeft &&
+		pos.x < kBandLeft + kBandWidth && pos.y >= kBandTop && pos.y < kBandTop + kBandHeight) {
+		debugC(1, kDebugScript, "-- photo:%d,%d", pos.x, pos.y);
+		_script->cameraClick(pos);
+		return;
+	}
 
 	// The X corner (kind 26) comes after the interface items, before the
 	// dialog box and the modal layouts

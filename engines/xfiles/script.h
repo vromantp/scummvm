@@ -106,6 +106,13 @@ public:
 	 * the previous tone and restarts the digit's from its beginning; 0 only stops. Nothing is finished at its end.
 	 */
 	virtual void playPhoneTone(uint32 id) {}
+	/**
+	 * The camera's shutter (Camera_OnMouseClick, 0x4f3090): the asset (34747, or 57104 when the camera is full) plays
+	 * as a movie of its own, not a sound object, from its beginning.
+	 */
+	virtual void playShutter(uint32 id) {}
+	/** The player's current time in the clip shown in the band (0x41cdd0), for the photo the camera takes. */
+	virtual uint32 getPhotoTime() const { return 0; }
 	/** PlayAssetAt: draw the graphic clip once with its top-left at (x, y) over the screen; Script::finishSound ends it. */
 	virtual void playClip(uint32 id, int16 x, int16 y) {}
 	/** A Stop action on an asset without a sound object (0x504c90): a shown view asset runs to its end and holds. */
@@ -203,6 +210,20 @@ public:
 	}
 	/** The string table of XFilesT.dll, for phone book entries that name a string (may be nullptr). */
 	void setTexts(Common::WinResources *texts) { _texts = texts; }
+
+	/** The photos in database order, and how many are on the camera (VCGameState +46). */
+	const Common::Array<VCPhoto> &getPhotos() const { return _photos; }
+	int32 getPhotosOnCamera() const { return _photosOnCamera; }
+	/**
+	 * The camera is in hand and was taken outside a special view (Camera +0x1c0): a click in the band is its
+	 * cameraClick and the viewfinder shows.
+	 */
+	bool isCameraEnabled() const { return _cameraEnabled && isHolding() && getVariable(_heldVariable) == 3; }
+	/**
+	 * Camera_OnMouseClick (0x4f26a0) at a click in the band, for the camera in hand: the shutter, the photo and the
+	 * count, the camera actions of the objects under the viewfinder, the second reaction of a character.
+	 */
+	void cameraClick(const Common::Point &pos);
 
 	/** Fire the title's Object Activation (the game's start). */
 	void start();
@@ -517,6 +538,8 @@ private:
 	bool getReactionSlots(uint32 charViewId, uint32 (&slots)[kReactionSlots]) const;
 	/** The reaction clip of the item in hand on a character view (0x490d50), 0 for none. Rolls for the cattle prod. */
 	uint32 getHeldReaction(uint32 charViewId);
+	/** The conditional actions of an object's Mouse Click triggers that test iCurrInventory and hold, each run alone (0x4d22b0); whether any ran. */
+	bool runCameraActions(uint32 id);
 	/** Tool_CharReaction 0x4e2160: the first enabled character view of the view with the item's slot plays it 2 s later. */
 	void toolReaction(int32 item);
 	/** Tool_SpecialView 0x51bc70 for the binoculars: one of the views with a view change of its own. */

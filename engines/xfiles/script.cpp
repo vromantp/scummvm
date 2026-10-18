@@ -59,6 +59,15 @@ static const uint32 kPDAEscapeOffActions = 75530;
 
 /** OnIntInvClick (XFiles.exe 0x467fb0): the PDA's Inventory_iPDA value, bDisablePDA and PDAalert.amv. */
 static const int32 kInventoryPDA = 14;
+/** The camera (docs/subsystems/camera.md): photos it holds, its shutter assets (RegCameraAss), viewfinder width, the view band. */
+static const int32 kCameraPhotos = 24;
+static const uint32 kCameraShutter = 34747;
+static const uint32 kCameraShutterFull = 57104;
+static const int kCameraWidth = 320;
+static const int kBandLeft = 20;
+static const int kBandTop = 90;
+static const int kBandWidth = 600;
+static const int kBandHeight = 240;
 static const uint32 kDisablePDAVariable = 5277;
 static const uint32 kPDAAlertSound = 75688;
 
@@ -775,9 +784,12 @@ void Script::addCoreHooks() {
 	t.add("OnCameraClick", [](Script &s, const HookCall &c) {
 		if (!c.has(1))
 			return false;
-		// 0x4e1c50: no character reaction for the camera (it passes 3 to Tool_CharReaction)
-		if (s._heldVariable && s.getVariable(s._heldVariable) != c.args[0])
+		// 0x4e1c50: no character reaction for the camera (it passes 3 to Tool_CharReaction). The camera object is
+		// enabled unless the view is a special one (iCurrViewSpecial 1)
+		if (s._heldVariable && s.getVariable(s._heldVariable) != c.args[0]) {
 			s._variables[s._heldVariable] = c.args[0];
+			s._cameraEnabled = !s._viewSpecialVariable || s.getVariable(s._viewSpecialVariable) != 1;
+		}
 		return true;
 	});
 	t.add("RegCurrInvVar", [](Script &s, const HookCall &c) {
@@ -2756,6 +2768,122 @@ void Script::toolReaction(int32 item) {
 	}
 }
 
+bool Script::runCameraActions(uint32 id) {
+	bool ran = false;
+	Common::Array<uint32> triggers;
+	_data.getMembers(getTriggers(id), triggers);
+	for (uint i = 0; i < triggers.size(); i++) {
+		VCTrigger t;
+		if (!_data.getTrigger(triggers[i], t) || t.event != kEventMouseClick)
+			continue;
+		for (uint j = 0; j < t.actions.size(); j++) {
+			VCAction a;
+			if (!_data.getAction(t.actions[j], a) || !a.conditional)
+				continue;
+			const VCExpression &c = a.condition;
+			bool tested = c.lhs.kind == kOperandVariable && c.lhs.value == _heldVariable;
+			tested = tested || (c.rhs.kind == kOperandVariable && c.rhs.value == _heldVariable);
+			LocalVariables locals;
+			if (tested && test(c, EventFields(), locals)) {
+				execute(a, kEventMouseClick, EventFields(), locals);
+				ran = true;
+			}
+		}
+	}
+	return ran;
+}
+
+void Script::cameraClick(const Common::Point &pos) {
+	if (!isCameraEnabled())
+		return;
+	// 0x4f3090: the shutter, as a movie of its own (no sound object, no play line)
+	bool full = _photosOnCamera >= kCameraPhotos;
+	uint32 shutter = full ? kCameraShutterFull : kCameraShutter;
+	log(Common::String::format("      camera: shutter #%u", shutter));
+	if (_hooks)
+		_hooks->playShutter(shutter);
+
+	// Camera_TakePhoto (0x4f31e0): the video playing in the band, else the view's asset; the count goes up
+	// whether or not a photo was made
+	if (!full) {
+		uint32 asset = 0;
+		if (!_videoQueue.empty()) {
+			asset = _videoQueue[0];
+		} else {
+			Common::Array<uint32> assets;
+			uint32 background;
+			getViewAssets(assets, background);
+			if (!assets.empty())
+				asset = assets[0];
+		}
+		VCAsset data;
+		if (asset && _data.getAsset(asset, data) && !data.files.empty()) {
+			VCPhoto photo;
+			photo.asset = asset;
+			photo.clipTime = _hooks ? _hooks->getPhotoTime() : 0;
+			// The viewfinder, 320 wide, moved back into the 600 wide band; top 0, bottom 240
+			int left = pos.x - kCameraWidth / 2;
+			if (left < 0)
+				left = 0;
+			if (left + kCameraWidth > kBandWidth)
+				left = kBandWidth - kCameraWidth;
+			photo.crop[0] = left;
+			photo.crop[1] = 0;
+			photo.crop[2] = left + kCameraWidth;
+			photo.crop[3] = kBandHeight;
+			photo.disc = _disc;
+			_photos.push_back(photo);
+		}
+		_photosOnCamera++;
+		log(Common::String::format("      camera: photos %d", _photosOnCamera));
+	}
+
+	// The objects under the viewfinder (320 wide at the click, in the band): the character views of the view, then
+	// the explorables; the first of each kind that had a camera action to run ends its loop
+	int vLeft = MAX<int>(pos.x - kCameraWidth / 2, kBandLeft);
+	int vRight = MIN<int>(pos.x + kCameraWidth / 2, kBandLeft + kBandWidth);
+	VCView view;
+	if (!_data.getView(_view, view))
+		return;
+	for (int kind = 0; kind < 2; kind++) {
+		Common::Array<uint32> ids;
+		_data.getMembers(kind == 0 ? view.characters : view.explorables, ids);
+		for (uint i = 0; i < ids.size(); i++) {
+			VCRect r;
+			if (!isEnabled(ids[i]))
+				continue;
+			if (kind == 0) {
+				VCCharView cv;
+				if (!_data.getCharView(ids[i], cv))
+					continue;
+				r = cv.rect;
+			} else {
+				VCExplorable e;
+				if (!_data.getExplorable(ids[i], e))
+					continue;
+				r = e.rect;
+			}
+			if (r.left >= vRight || r.right <= vLeft || r.top >= kBandTop + kBandHeight || r.bottom <= kBandTop)
+				continue;
+			if (runCameraActions(ids[i]))
+				break;
+		}
+	}
+
+	// The first character view with a reaction clip in slot 2 not already playing speaks at once
+	Common::Array<uint32> charViews;
+	_data.getMembers(view.characters, charViews);
+	for (uint i = 0; i < charViews.size(); i++) {
+		uint32 slots[kReactionSlots];
+		if (!isEnabled(charViews[i]) || !getReactionSlots(charViews[i], slots) || !slots[2])
+			continue;
+		if (_sounds.contains(slots[2]) && _sounds[slots[2]])
+			continue;
+		playStock(slots[2]);
+		break;
+	}
+}
+
 void Script::followNav(uint32 navId) {
 	VCNav nav;
 	if (!_data.getNav(navId, nav)) {
@@ -2844,6 +2972,10 @@ void Script::step(const Common::String &s) {
 		VCCharView charView;
 		if (_clickOpensBox && _data.getCharView(id, charView) && (charView.conversations || hasEnabledIdea(id)))
 			openBox(id);
+	} else if (kind == "photo") {
+		// the camera tool clicked in the band at x,y
+		size_t comma = arg.findFirstOf(',');
+		cameraClick(Common::Point(id, comma == Common::String::npos ? 0 : atoi(arg.substr(comma + 1).c_str())));
 	} else if (kind == "press")
 		press(id);
 	else if (kind == "release")

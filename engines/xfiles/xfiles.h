@@ -99,6 +99,8 @@ public:
 	void playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) override;
 	void restoreSound(uint32 id, bool loop, uint32 startMs) override;
 	void playPhoneTone(uint32 id) override;
+	void playShutter(uint32 id) override;
+	uint32 getPhotoTime() const override;
 	void playClip(uint32 id, int16 x, int16 y) override;
 	void stopViewAsset(uint32 id) override;
 	bool readAssetFile(uint32 id, Common::Array<byte> &data) override;
@@ -213,6 +215,8 @@ private:
 	void closeView();
 	void updateInterface();
 	void drawView();
+	/** The camera in hand: the viewfinder over the band at the mouse, with the photos left (Camera, 0x4f2b30). */
+	void drawViewfinder();
 	void handleClick(const Common::Point &pos);
 
 	/** A view object under the mouse, found in the order clicks take them. */
@@ -281,6 +285,7 @@ private:
 	Movie *_menuLoop;                     ///< 49585, the X loop (MIDloop.mov)
 	Movie *_menuLoopSound;                ///< 94320, the loop's sound
 	Movie *_menuTop;                      ///< 49589, the top strip (a still)
+	PictureAsset *_viewfinder;            ///< 34749 moveableviewfinder.pic, loaded when the camera first shows
 	PictureAsset *_menuReturn;            ///< 72895 return.pic over Previous, only from the game
 	bool _menuIntroDone;                  ///< g_menuIntroDone (0x6b1980): the fade-in has played this run, never cleared
 	bool _menuFading;                     ///< The X is still fading in, alone
