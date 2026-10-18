@@ -598,6 +598,25 @@ VCSave::VCSave() : positionMode(1), disc(1), photos(0), hintList(0), hintTrigger
 	memset(tintColor, 0, sizeof(tintColor));
 }
 
+void VCData::getPhotos(Common::Array<VCPhoto> &photos) const {
+	photos.clear();
+	Common::Array<NeoEntry> entries;
+	if (!_gam.getObjects(kClassPhoto, entries))
+		return;
+	for (uint i = 0; i < entries.size(); i++) {
+		// VCPhoto: the thumbnail's blob at +6, then the fields (docs/formats/saves.md)
+		uint32 m = entries[i].mark;
+		VCPhoto photo;
+		photo.asset = _gam.readUint32(m + 14);
+		photo.clipTime = _gam.readUint32(m + 18);
+		for (int j = 0; j < 4; j++)
+			photo.crop[j] = _gam.readSint16(m + 22 + 2 * j);
+		photo.disc = _gam.readByte(m + 30);
+		photo.downloaded = _gam.readByte(m + 31) != 0;
+		photos.push_back(photo);
+	}
+}
+
 bool VCData::getSave(VCSave &save) const {
 	Common::Array<NeoEntry> states;
 	if (!_gam.getObjects(kClassGameState, states) || states.empty())
@@ -617,6 +636,7 @@ bool VCData::getSave(VCSave &save) const {
 	}
 	save.disc = (int32)_gam.readUint32(m + 42);
 	save.photos = (int32)_gam.readUint32(m + 46);
+	getPhotos(save.photoList);
 	save.hintList = _gam.readUint32(m + 50);
 	save.hintTrigger = _gam.readUint32(m + 54);
 	save.hintGlow = (int32)_gam.readUint32(m + 58);

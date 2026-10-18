@@ -38,7 +38,7 @@ namespace XFiles {
  * Add fields only with a version bump and syncAs...(x, firstVersion).
  */
 enum {
-	kSaveVersion = 1
+	kSaveVersion = 2
 };
 
 /** A list of records of per values each: the number of records, then the values. */
@@ -109,6 +109,28 @@ static bool syncSave(Common::Serializer &s, Script::SavedValues &values, VCSave 
 	s.syncAsUint32LE(save.dialogBox);
 	s.syncAsUint32LE(save.layout);
 	s.syncAsSint16LE(save.positionMode);
+
+	// Version 2: the photos, after the state
+	uint32 count = save.photoList.size();
+	s.syncAsUint32LE(count, 2);
+	if (s.getVersion() >= 2) {
+		if (s.isLoading()) {
+			if (count > limit)
+				return false;
+			save.photoList.resize(count);
+		}
+		for (uint i = 0; i < count; i++) {
+			VCPhoto &photo = save.photoList[i];
+			s.syncAsUint32LE(photo.asset);
+			s.syncAsUint32LE(photo.clipTime);
+			for (int j = 0; j < 4; j++)
+				s.syncAsSint16LE(photo.crop[j]);
+			s.syncAsByte(photo.disc);
+			byte downloaded = photo.downloaded;
+			s.syncAsByte(downloaded);
+			photo.downloaded = downloaded != 0;
+		}
+	}
 	return true;
 }
 
@@ -158,7 +180,6 @@ bool XFilesEngine::canLoadGameStateCurrently(Common::U32String *msg) {
 void XFilesEngine::fillSnapshot(VCSave &save) {
 	// GameState_Save (0x4d9450); Script knows its part
 	_script->snapshot(save);
-	save.photos = 0;
 	if (_dialogBox.isOpen())
 		save.dialogBox = _dialogBox.getCharView();
 

@@ -218,7 +218,7 @@ public:
 	 * position (mode 1), history, notes, e-mail lists, disc, hint list and
 	 * glow, flashlight, letterbox tint, inventory, evidence, kit, dialog box
 	 * and layout. What only the engine knows (timers, sounds, the view's clip,
-	 * the head credits) and the photos are left as they are in save.
+	 * the head credits) are left as they are in save.
 	 */
 	void snapshot(VCSave &save) const;
 
@@ -651,6 +651,9 @@ private:
 	Common::Array<Layout> _layouts;
 	Common::Array<uint32> _kit;
 	Common::Array<uint32> _inventory, _evidence, _history;
+	Common::Array<VCPhoto> _photos;            ///< The VCPhotos in database order
+	int32 _photosOnCamera;                     ///< VCGameState +46: taken, not yet downloaded
+	bool _cameraEnabled;                       ///< The camera in hand was taken outside a special view (Camera +0x1c0)
 	bool firesOnRestore(uint32 id) const;
 	int _restoreMode;                          ///< Position mode while restore() runs, else -1: which Object Activation fires
 	int32 _disc;                               ///< Disc in use (VCGameState +42)

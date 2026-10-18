@@ -342,6 +342,19 @@ struct VCAsset {
 	Common::Array<VCMediaFile> files;
 };
 
+/** A VCPhoto (class 89) of the camera: what the viewfinder framed (docs/formats/saves.md). */
+struct VCPhoto {
+	VCPhoto() : asset(0), clipTime(0), disc(0), downloaded(false) {
+		crop[0] = crop[1] = crop[2] = crop[3] = 0;
+	}
+
+	uint32 asset;      ///< VCAssetRef the photo was taken of
+	uint32 clipTime;   ///< The player's time in that asset when it was taken
+	int16 crop[4];     ///< Left, top, right, bottom in the video frame
+	byte disc;         ///< The disc in use when it was taken
+	bool downloaded;   ///< PhotoDownload moved it off the camera
+};
+
 /** What a .X save holds besides the variables and enable flags (VCGameState and the lists it names). */
 struct VCSave {
 	VCSave();
@@ -353,6 +366,7 @@ struct VCSave {
 	Common::Array<uint32> emails, emailsRead, emailsPending;
 	int32 disc;
 	int32 photos;                    ///< Photos on the camera, not yet downloaded
+	Common::Array<VCPhoto> photoList; ///< The VCPhotos in database order
 	uint32 hintList, hintTrigger;
 	int32 hintGlow;
 	int32 credits;                   ///< Head credits scroll position, -1 when not rolling
@@ -422,6 +436,8 @@ public:
 	bool getVariable(uint32 id, VCVariable &variable) const;
 	/** The save's VCGameState (the .gam has none): false if the database is not a save. */
 	bool getSave(VCSave &save) const;
+	/** The VCPhoto objects of the save database, in database order (none for the .gam). */
+	void getPhotos(Common::Array<VCPhoto> &photos) const;
 	/** Text of a VCString (.gam), the value of a string variable. */
 	bool getString(uint32 id, Common::String &text) const;
 	/** The .hdb object a VCEnabled (.gam) switches, and its initial state. */
