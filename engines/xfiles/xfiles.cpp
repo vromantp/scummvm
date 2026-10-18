@@ -172,9 +172,14 @@ Common::Error XFilesEngine::run() {
 		if (status.getCode() != Common::kNoError)
 			warning("Cannot load save slot %d: %s", saveSlot, status.getDesc().c_str());
 	}
-	// A step list starts the game at once, without the intro and the menu
-	if (_pendingLoad.valid || !_steps.empty() || !_fastForward.empty() || _loadedSave || (playIntro() && runMenu()))
+	// A step list starts the game at once, without the intro and the menu. The exe has shown the menu's fade-in by
+	// then, so the X corner opens the still menu (g_menuIntroDone)
+	if (_pendingLoad.valid || !_steps.empty() || !_fastForward.empty() || _loadedSave) {
+		_menuIntroDone = true;
 		runGame();
+	} else if (playIntro() && runMenu()) {
+		runGame();
+	}
 	return Common::kNoError;
 }
 
