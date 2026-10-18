@@ -828,6 +828,9 @@ void Script::addCoreHooks() {
 	t.add("WillmoreSleeps", [](Script &, const HookCall &) {
 		return true; // 0x4df9f0 is empty
 	});
+	t.add("PreloadEmIcon", [](Script &, const HookCall &) {
+		return true; // 0x49c1f0 only builds the icon's object, hidden: nothing to draw
+	});
 	t.add("RegShanksNode2", [](Script &s, const HookCall &c) {
 		return s.regShanksNode(0, 20, c);
 	});

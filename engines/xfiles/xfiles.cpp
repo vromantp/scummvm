@@ -595,6 +595,59 @@ void XFilesEngine::addHooks() {
 		e._interface->clearModalExceptions();
 		return true;
 	});
+	t.add("FadeToBlack", [](XFilesEngine &e, const HookCall &c) {
+		e.fadeToBlack();
+		return true;
+	});
+}
+
+void XFilesEngine::fadeToBlack() {
+	// 0x4ccb50: 0x5103b0 fades the whole screen (interface bar too) to colour 0x12 (black; 500 ms, then 1000 ms in
+	// 8 steps: read as start delay and length, unverified), then 2000 ms black, with the script held. The exe also
+	// flags the object from 0x5196b0 meanwhile (0x4a0480, not identified): left out. Nothing undoes the black but
+	// the next frame. A step list and a fast-forward have no time: the order only
+	static const uint32 kStartDelay = 500;
+	static const uint32 kFadeLength = 1000;
+	static const uint32 kFadeSteps = 8;
+	static const uint32 kBlackHold = 2000;
+	debugC(1, kDebugScript, "-- fade to black");
+	if (!_steps.empty() || !_fastForward.empty())
+		return;
+	Graphics::Surface shot;
+	shot.copyFrom(_screen);
+	uint32 start = g_system->getMillis();
+	uint32 total = kStartDelay + kFadeLength + kBlackHold;
+	uint32 lastStep = 0;
+	while (!shouldQuit()) {
+		uint32 elapsed = g_system->getMillis() - start;
+		if (elapsed >= total)
+			break;
+		Common::Event event;
+		while (g_system->getEventManager()->pollEvent(event)) {
+		}
+		uint32 step = 0; // 0: the picture as it was, kFadeSteps: black
+		if (elapsed >= kStartDelay + kFadeLength)
+			step = kFadeSteps;
+		else if (elapsed > kStartDelay)
+			step = (elapsed - kStartDelay) * kFadeSteps / kFadeLength;
+		if (step != lastStep || elapsed == 0) {
+			lastStep = step;
+			uint32 scale = kFadeSteps - step;
+			for (int y = 0; y < shot.h; y++) {
+				const uint16 *src = (const uint16 *)shot.getBasePtr(0, y);
+				uint16 *dst = (uint16 *)_screen.getBasePtr(0, y);
+				for (int x = 0; x < shot.w; x++) {
+					uint32 p = src[x];
+					uint32 r = (p >> 11) * scale / kFadeSteps;
+					uint32 g = ((p >> 5) & 0x3f) * scale / kFadeSteps;
+					uint32 b = (p & 0x1f) * scale / kFadeSteps;
+					dst[x] = (r << 11) | (g << 5) | b;
+				}
+			}
+		}
+		present();
+	}
+	shot.free();
 }
 
 void XFilesEngine::registerPreferences(const VCAction &action) {
