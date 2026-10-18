@@ -216,6 +216,18 @@ public:
 	int32 getPhotosOnCamera() const { return _photosOnCamera; }
 	const ComputerHooks &getComputerHooks() const { return _computer; }
 	/**
+	 * The letterbox band's background colour after SetLBoxTint (0x45d2f0 gives the band 0x6c0870 the fill map's
+	 * entry 0). False when there is no tint: the band is black.
+	 */
+	bool getBandFill(byte &r, byte &g, byte &b) const {
+		if (!_tint)
+			return false;
+		r = _tintColor[2];
+		g = _tintColor[1];
+		b = _tintColor[0];
+		return true;
+	}
+	/**
 	 * The camera is in hand and was taken outside a special view (Camera +0x1c0): a click in the band is its
 	 * cameraClick and the viewfinder shows.
 	 */

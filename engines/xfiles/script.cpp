@@ -1063,11 +1063,11 @@ void Script::addCoreHooks() {
 			s._tintColor[1] = c.args[1];
 			s._tintColor[2] = c.args[0];
 		}
-		return false;
+		return true; // the band's background, drawn by XFilesEngine::clearScreen
 	});
 	t.add("ClearLBoxTint", [](Script &s, const HookCall &c) {
 		s._tint = 0;
-		return false;
+		return true;
 	});
 	t.add("DispEvIcons", [](Script &s, const HookCall &c) {
 		// The engine shows or hides the row (XFilesEngine)

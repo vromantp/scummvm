@@ -889,7 +889,7 @@ void XFilesEngine::playQueuedVideo(const Input &input) {
 		_video->stop();
 	_video->update();
 
-	_screen.fillRect(Common::Rect(_screen.w, _screen.h), 0);
+	clearScreen();
 	Common::Point pos = getBandPosition(*_video);
 	blit(_video->getFrame(), pos.x, pos.y);
 	drawCaptions(*_video, pos);
@@ -1117,8 +1117,20 @@ void XFilesEngine::clickInventory(uint32 inventory) {
 	_script->selectInventory(inventory);
 }
 
-void XFilesEngine::drawView() {
+/**
+ * Clears the screen to black, then fills the letterbox band with the SetLBoxTint colour (the band's background:
+ * it shows only where the picture or clip does not cover it). Not done: the tool modes' own band colours and the
+ * caption-on band (0x6c0c40, down to y 350).
+ */
+void XFilesEngine::clearScreen() {
 	_screen.fillRect(Common::Rect(_screen.w, _screen.h), 0);
+	byte r, g, b;
+	if (_script->getBandFill(r, g, b))
+		_screen.fillRect(Common::Rect(kBandLeft, kBandTop, kBandLeft + kBandWidth, kBandTop + kBandHeight), _screen.format.RGBToColor(r, g, b));
+}
+
+void XFilesEngine::drawView() {
+	clearScreen();
 	for (uint i = 0; i < _layers.size(); i++) {
 		Common::Point pos = getBandPosition(*_layers[i]);
 		blit(_layers[i]->getFrame(), pos.x, pos.y);

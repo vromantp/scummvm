@@ -219,6 +219,7 @@ private:
 	void closeView();
 	void updateInterface();
 	void drawView();
+	void clearScreen();
 	/** The camera in hand: the viewfinder over the band at the mouse, with the photos left (Camera, 0x4f2b30). */
 	void drawViewfinder();
 	/** The photo viewer's thumbnails and enlarged picture, over the layout (0x4afb80 pictures). */
