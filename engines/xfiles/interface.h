@@ -68,7 +68,8 @@ public:
 		kHitAction,      ///< VCActionIcon
 		kHitEvidence,    ///< VCEvidenceIcon in the open evidence kit
 		kHitItem,        ///< VCInterfaceItem of a shown layout
-		kHitAIIcon       ///< The AI icon (its click is not ported, B-118)
+		kHitAIIcon,      ///< The AI icon (its click is not ported, B-118)
+		kHitIdea         ///< VCIdeaIcon of the open dialog box
 	};
 
 	struct Hit {
@@ -158,6 +159,7 @@ private:
 		kPaneInventory,
 		kPaneEmotion,
 		kPaneAIIcon,
+		kPaneIdea,
 		kPaneCount
 	};
 
@@ -190,6 +192,7 @@ private:
 	Common::Rect getKitArea() const;
 	void freeIcons(Common::Array<Icon> &icons);
 	void placeIcons(Common::Array<Icon> &icons, Pane pane, bool captions);
+	void syncIdeas(const Script &script);
 	void syncItems(const Script &script);
 	void freeItems();
 	void syncItemTexts(const Script &script);
@@ -206,6 +209,7 @@ private:
 	Common::Array<uint32> _classOrder[3];         ///< Every icon of a class, in database order
 	Common::Array<Icon> _inventory, _emotions, _actions;
 	Common::Array<Icon> _kit;                     ///< Evidence icons in the kit
+	Common::Array<Icon> _ideas;                   ///< The idea icons of the open dialog box
 	Common::Array<Icon> _aiIcon;                  ///< The AI icon while it is shown, else empty
 	bool _kitOpen;
 	Common::Rect _kitFrom;                        ///< The inventory icon the kit opened from

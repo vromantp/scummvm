@@ -2083,13 +2083,17 @@ void Script::openBox(uint32 charViewId) {
 	activateIdeaIcons();
 }
 
+bool Script::getBoxIdeaMaps(Common::Array<uint32> &maps) const {
+	VCCharView charView;
+	return _box && _data.getCharView(_box, charView) && charView.ideaMaps && _data.getMembers(charView.ideaMaps, maps);
+}
+
 void Script::activateIdeaIcons() {
 	// 0x435d90 -> 0x460360: at each show of the box, a new object for every enabled idea icon of the character
 	// view in map order, whose Object Activation fires (21975's 90677 sets bN2WongIdeaIconActive). The hide only
 	// deactivates them, and no idea icon has an Object Deactivation trigger
-	VCCharView charView;
 	Common::Array<uint32> maps;
-	if (!_box || !_data.getCharView(_box, charView) || !charView.ideaMaps || !_data.getMembers(charView.ideaMaps, maps))
+	if (!getBoxIdeaMaps(maps))
 		return;
 	for (uint i = 0; i < maps.size(); i++) {
 		VCIdeaMap map;
@@ -2098,10 +2102,22 @@ void Script::activateIdeaIcons() {
 	}
 }
 
-bool Script::isIdeaIconOfBox(uint32 iconId) const {
-	VCCharView charView;
+void Script::getBoxIdeaIcons(Common::Array<uint32> &icons) const {
+	// The icons of the shown box's character are drawn as any icon in pane 0 (0x4d17f0, 0x459730, 0x50ec90)
+	icons.clear();
 	Common::Array<uint32> maps;
-	if (!_box || !_data.getCharView(_box, charView) || !charView.ideaMaps || !_data.getMembers(charView.ideaMaps, maps))
+	if (!_boxShown || !getBoxIdeaMaps(maps))
+		return;
+	for (uint i = 0; i < maps.size(); i++) {
+		VCIdeaMap map;
+		if (_data.getIdeaMap(maps[i], map) && isEnabled(map.icon))
+			icons.push_back(map.icon);
+	}
+}
+
+bool Script::isIdeaIconOfBox(uint32 iconId) const {
+	Common::Array<uint32> maps;
+	if (!getBoxIdeaMaps(maps))
 		return false;
 	for (uint i = 0; i < maps.size(); i++) {
 		VCIdeaMap map;

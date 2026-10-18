@@ -60,7 +60,8 @@ enum {
 };
 
 // Panes (0x487060, 0x45b160): start without and with closed captions,
-// spacing and direction; icons are placed by their top left corner
+// spacing and direction; icons are placed by their top left corner, idea icons
+// by their bottom left corner
 static const struct {
 	int16 x, y, captionsY;
 	int16 spacing;
@@ -69,7 +70,8 @@ static const struct {
 	{ 520, 340, 351, 20, -1 },  // Action icons
 	{ 10, 420, 425, 5, 1 },     // Inventory
 	{ 180, 340, 351, 20, 1 },   // Emotion icons
-	{ 530, 48, 48, 5, 1 }       // AI icon
+	{ 530, 48, 48, 5, 1 },      // AI icon
+	{ 20, 80, 74, 5, 1 }        // Idea icons: the icon's bottom edge is on y; 74 with the rollover text on
 };
 
 // The AI icon's VCEvidenceIcon: RegAIIcon(0xdb79) at start (0x41b060)
@@ -157,6 +159,7 @@ Interface::~Interface() {
 	freeIcons(_actions);
 	freeIcons(_kit);
 	freeIcons(_aiIcon);
+	freeIcons(_ideas);
 	freeItems();
 	delete _font;
 	for (Common::HashMap<uint, Graphics::Font *>::iterator it = _itemFonts.begin(); it != _itemFonts.end(); ++it)
@@ -198,11 +201,13 @@ void Interface::update(const Script &script, const Common::Point &mouse, bool ca
 	syncIcons(script, kClassActionIcon, _actions);
 	syncIcons(script, kClassEmotionIcon, _emotions);
 	syncIcons(script, kClassInventory, _inventory);
+	syncIdeas(script);
 	syncKit(script);
 	placeIcons(_actions, kPaneAction, captions);
 	placeIcons(_emotions, kPaneEmotion, captions);
 	placeIcons(_inventory, kPaneInventory, captions);
 	placeIcons(_aiIcon, kPaneAIIcon, captions);
+	placeIcons(_ideas, kPaneIdea, _rolloverText);
 	placeKit();
 
 	// The kit closes when the mouse leaves it and the icon it opened from
@@ -389,8 +394,29 @@ void Interface::placeIcons(Common::Array<Icon> &icons, Pane pane, bool captions)
 	for (uint i = 0; i < icons.size(); i++) {
 		const Graphics::Surface *surface = icons[i].graphic ? icons[i].graphic->getSurface() : nullptr;
 		int w = surface ? surface->w : 0, h = surface ? surface->h : 0;
-		icons[i].rect = Common::Rect(x, y, x + w, y + h);
+		int top = pane == kPaneIdea ? y - h : y;
+		icons[i].rect = Common::Rect(x, top, x + w, top + h);
 		x += (w + kPanes[pane].spacing) * kPanes[pane].direction;
+	}
+}
+
+void Interface::syncIdeas(const Script &script) {
+	// The box's idea icons, in map order; the same list keeps its objects
+	Common::Array<uint32> ids;
+	script.getBoxIdeaIcons(ids);
+	bool same = ids.size() == _ideas.size();
+	for (uint i = 0; same && i < ids.size(); i++)
+		same = ids[i] == _ideas[i].id;
+	if (!same) {
+		freeIcons(_ideas);
+		for (uint i = 0; i < ids.size(); i++) {
+			debugC(1, kDebugScript, "-- icon #%u shown (idea)", ids[i]);
+			_ideas.push_back(makeIcon(ids[i]));
+		}
+	}
+	for (uint i = 0; i < _ideas.size(); i++) {
+		if (_ideas[i].graphic)
+			_ideas[i].graphic->update();
 	}
 }
 
@@ -532,6 +558,13 @@ Interface::Hit Interface::hitTest(const Common::Point &pos) const {
 			return hit;
 		}
 	}
+	for (uint i = 0; i < _ideas.size(); i++) {
+		if (_ideas[i].rect.contains(pos)) {
+			hit.kind = kHitIdea;
+			hit.id = _ideas[i].id;
+			return hit;
+		}
+	}
 	if (!_aiIcon.empty() && _aiIcon[0].rect.contains(pos)) {
 		hit.kind = kHitAIIcon;
 		hit.id = _aiIcon[0].id;
@@ -567,6 +600,7 @@ void Interface::draw(Graphics::Surface &dst) const {
 	drawIcons(dst, _actions);
 	drawIcons(dst, _emotions);
 	drawIcons(dst, _aiIcon);
+	drawIcons(dst, _ideas);
 	if (_barOpen)
 		drawIcons(dst, _inventory);
 	bool kitShown = _kitOpen && !_evidenceRowShown;
@@ -575,6 +609,7 @@ void Interface::draw(Graphics::Surface &dst) const {
 	// Kit icons have no rollover text (0x437600 leaves out group 1)
 	drawRolloverText(dst, _actions);
 	drawRolloverText(dst, _emotions);
+	drawRolloverText(dst, _ideas);
 	if (_barOpen)
 		drawRolloverText(dst, _inventory);
 	for (uint i = 0; i < _items.size(); i++) {

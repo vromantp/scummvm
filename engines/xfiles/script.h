@@ -328,6 +328,8 @@ public:
 	 * Does nothing if the box's character has no enabled map for the icon.
 	 */
 	void idea(uint32 iconId);
+	/** The enabled idea icons of the open, shown box's character, in map order; empty otherwise. */
+	void getBoxIdeaIcons(Common::Array<uint32> &icons) const;
 	/** Whether the character view has an enabled idea icon in its map (0x49bce0). */
 	bool hasEnabledIdea(uint32 charViewId) const;
 	/** Seed the random numbers of ask(); the same seed gives the same replies. */
@@ -566,6 +568,8 @@ private:
 	void setShanksVar(uint32 variableId);
 	/** The box comes back after an idea's topic: fire the topic's Object Deactivation once its clips have ended. */
 	void endIdeaTopic();
+	/** The VCIdeaMaps of the open box's character; false if there are none. */
+	bool getBoxIdeaMaps(Common::Array<uint32> &maps) const;
 	void activateIdeaIcons();
 	bool isIdeaIconOfBox(uint32 iconId) const;
 

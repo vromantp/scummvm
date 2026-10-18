@@ -1161,7 +1161,8 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 		if (boxHit == DialogBox::kHitInside)
 			return;
 		// An emotion or action icon leaves the box open (box-click-kinds); an inventory item or the kit closes it
-		if (hit.kind != Interface::kHitEmotion && hit.kind != Interface::kHitAction) {
+		if (hit.kind != Interface::kHitEmotion && hit.kind != Interface::kHitAction &&
+				hit.kind != Interface::kHitIdea) {
 			_dialogBox.close();
 			_script->closeBox();
 		}
@@ -1184,6 +1185,10 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 	case Interface::kHitEvidence:
 		debugC(1, kDebugScript, "-- click:%u (evidence kit)", hit.id);
 		_script->click(hit.id);
+		return;
+	case Interface::kHitIdea:
+		debugC(1, kDebugScript, "-- idea:%u", hit.id);
+		_script->idea(hit.id);
 		return;
 	case Interface::kHitAIIcon:
 		return; // AIIconObj's click (0x5091d0, the hint list) is not ported (B-118)
