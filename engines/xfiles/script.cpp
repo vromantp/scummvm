@@ -2234,6 +2234,23 @@ void Script::updateLayoutItem(uint32 itemId, bool enabled) {
 	}
 }
 
+void Script::queueShowItem(uint32 itemId, bool shown) {
+	// Queue_Show on an item's object: it leaves or joins the shown layouts' lists, but its VCEnabled flag stays and no
+	// Object Activation or Deactivation runs (NoteFlipDay 0x4e6a70)
+	for (uint i = 0; i < _layouts.size(); i++) {
+		VCLayout layout;
+		if (!_data.getLayout(_layouts[i].id, layout) ||
+				Common::find(layout.items.begin(), layout.items.end(), itemId) == layout.items.end())
+			continue;
+		Common::Array<uint32> &items = _layouts[i].items;
+		Common::Array<uint32>::iterator it = Common::find(items.begin(), items.end(), itemId);
+		if (shown && it == items.end() && isEnabled(itemId))
+			insertLayoutItem(items, itemId);
+		else if (!shown && it != items.end())
+			items.erase(it);
+	}
+}
+
 void Script::ask(uint32 conversationId) {
 	// XFiles.exe 0x46d0d0: a click on a topic in the box queues its
 	// playlist (0x4e9080), then fires its Mouse Click triggers.

@@ -561,9 +561,10 @@ void PdaHooks::noteFlipDay(int32 n) {
 		day--;
 	if (day != _noteDay) {
 		_noteDay = day;
-		_script.setItemEnabled(kNoteTextItem, false);
+		// Queue_Show on the scroll text's object: no enable change, no triggers
+		_script.queueShowItem(kNoteTextItem, false);
 		showNoteDayText();
-		_script.setItemEnabled(kNoteTextItem, true);
+		_script.queueShowItem(kNoteTextItem, true);
 	}
 	showNoteMarker();
 }

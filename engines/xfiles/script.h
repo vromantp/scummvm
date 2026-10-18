@@ -524,6 +524,8 @@ private:
 	void hideLayout(uint32 layoutId);
 	void insertLayoutItem(Common::Array<uint32> &items, uint32 itemId);
 	void updateLayoutItem(uint32 itemId, bool enabled);
+	/** Hide or show an item's object without touching its enabled flag or firing triggers (Queue_Show). */
+	void queueShowItem(uint32 itemId, bool shown);
 	void enableKitIcon(uint32 id);
 	/** RandGen(var, n): a number from 0 to n (0x49f6d0). */
 	void randGen(uint32 variableId, int32 n);
