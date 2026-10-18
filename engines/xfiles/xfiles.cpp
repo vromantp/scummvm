@@ -1290,10 +1290,18 @@ uint32 XFilesEngine::getCursorAt(const Common::Point &pos) const {
 	ViewHit viewHit = hitView(pos);
 	switch (viewHit.kind) {
 	case ViewHit::kExplorable:
-	case ViewHit::kCharView:
 		// With an item in hand, an object that takes it keeps the item's
-		// cursor (0x46e050, 0x418520), any other shows its own
+		// cursor (0x46e050), any other shows its own
 		if (held && _script->isTestedOnClick(viewHit.id, _script->getHeldVariable()))
+			return held;
+		return viewHit.cursor;
+	case ViewHit::kCharView:
+		// CharView_ShowCursor (0x418520): the item's cursor is kept when the
+		// character has a reaction slot for it, or a Roll Into or Mouse Click
+		// trigger takes it
+		if (held && (_script->hasHeldReactionSlot(viewHit.id) ||
+					 _script->isTestedOnClick(viewHit.id, _script->getHeldVariable(), kEventRollInto) ||
+					 _script->isTestedOnClick(viewHit.id, _script->getHeldVariable())))
 			return held;
 		return viewHit.cursor;
 	case ViewHit::kNav:

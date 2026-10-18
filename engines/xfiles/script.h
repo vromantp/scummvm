@@ -374,6 +374,8 @@ public:
 	 * this of iCurrInventory: the object takes the item in hand).
 	 */
 	bool isTestedOnClick(uint32 id, uint32 variable, int event = kEventMouseClick) const;
+	/** The held item has a reaction slot at a character view with an Atoms topic (0x418520: no dice, no empty test) */
+	bool hasHeldReactionSlot(uint32 charViewId) const;
 	/**
 	 * The last click() on a character view leaves the dialog box to the caller (0x436080): nothing is in hand, or the
 	 * held item has no reaction clip and no trigger took it.

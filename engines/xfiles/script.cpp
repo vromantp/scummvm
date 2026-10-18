@@ -2734,6 +2734,40 @@ uint32 Script::getHeldReaction(uint32 charViewId) {
 	return slot == kReactionNone ? 0 : slots[slot];
 }
 
+bool Script::hasHeldReactionSlot(uint32 charViewId) const {
+	uint32 slots[kReactionSlots];
+	if (!isHolding() || !getReactionSlots(charViewId, slots))
+		return false;
+	// The items whose slot at 0x490d50 is not 10 (none)
+	int32 item = getVariable(_heldVariable);
+	switch (item) {
+	case 1:
+	case 4:
+	case 5:
+	case 6:
+	case 7:
+	case 9:
+	case 10:
+	case 11:
+	case 12:
+	case 16:
+	case 17:
+	case 18:
+	case 19:
+	case 20:
+	case 21:
+	case 22:
+	case 23:
+	case 25:
+	case 26:
+	case 30:
+	case 31:
+		return true;
+	default:
+		return false;
+	}
+}
+
 bool Script::isSpecialView() const {
 	static const int32 kViews[] = { 1, 1228, 1236, 7878, 7879, 19684, 19688, 19692, 23486, 70706, 70710, 70712, 71914, 84307 };
 	if (!_viewSpecialVariable)
