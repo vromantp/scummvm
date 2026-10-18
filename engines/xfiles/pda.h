@@ -48,6 +48,8 @@ public:
 	void addHooks(HookTable<Script> &table);
 
 	// What a save keeps (Script::snapshot and restore)
+	/** Add an e-mail to VCEmail unless it is there (0x41ab40, as EmailFlushMess does). */
+	void addEmail(uint32 id);
 	const Common::Array<uint32> &getEmails() const { return _emails; }
 	const Common::Array<uint32> &getEmailsRead() const { return _emailsRead; }
 	const Common::Array<uint32> &getEmailsPending() const { return _emailPending; }

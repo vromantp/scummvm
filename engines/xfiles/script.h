@@ -528,6 +528,10 @@ private:
 	/** RandGen(var, n): a number from 0 to n (0x49f6d0). */
 	void randGen(uint32 variableId, int32 n);
 	void isIItemHeld(uint32 variableId, int32 item);
+	/** RegShanksNode2/3/6: keep the argument variables of node slot 0, 1 or 2. */
+	bool regShanksNode(int slot, uint count, const HookCall &call);
+	/** SetShanksVar (0x4c4710): compute the "tell will" flag, then the warehouse e-mail check. */
+	void setShanksVar(uint32 variableId);
 
 	/** Set an interface item's enabled flag; an item of a shown layout comes or goes with it. */
 	void setItemEnabled(uint32 item, bool enabled);
@@ -650,6 +654,7 @@ private:
 	Common::HashMap<uint32, ItemText> _itemTexts;
 	uint32 _focus;
 	uint32 _currNodeVariable;                  ///< RegCurrNode
+	Common::Array<uint32> _shanksVars[3];      ///< RegShanksNode2, 3 and 6: their variables, in argument order
 	uint32 _viewSpecialVariable;               ///< RegViewSpecial: iCurrViewSpecial
 	bool _clickOpensBox;                       ///< See opensBoxOnClick()
 	uint32 _heldVariable;                      ///< RegCurrInvVar: iCurrInventory

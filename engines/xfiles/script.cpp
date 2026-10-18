@@ -507,6 +507,159 @@ void Script::callFunction(const VCAction &a, int event, const EventFields &field
 	}
 }
 
+bool Script::regShanksNode(int node, uint count, const HookCall &c) {
+	// 0x4c42f0, 0x4c4510, 0x48e8d0: each argument variable is kept in its own global, in argument order
+	if (c.action.args.size() < count)
+		return false;
+	_shanksVars[node].clear();
+	for (uint i = 0; i < count; i++) {
+		if (!c.isVariable(i))
+			return false;
+		_shanksVars[node].push_back(c.action.args[i].value);
+	}
+	return true;
+}
+
+void Script::setShanksVar(uint32 var) {
+	// SetShanksVar 0x4c4710 (docs/exe/hooks/shanks.md): the argument is a "tell will" flag; it is set to 1 when its
+	// rule holds, else 0, and the call ends with the warehouse e-mail check
+	// Positions in the RegShanksNode2, 3 and 6 argument lists
+	enum {
+		kGotLapTop = 0,
+		kGotPhone,
+		kGotLicense,
+		kBeenToWarehouse,
+		kGotBlackPowder,
+		kGotBlood,
+		kGotBullet,
+		kPowderToLab,
+		kBloodToLab,
+		kBulletToLab,
+		kTalkedToWong,
+		kDoneWithWong,
+		kWongBackgroundChecked,
+		kTellGoBackToComity,
+		kTellGetLicense,
+		kTellGoBackToWarehouse,
+		kTellTalkToWong,
+		kTellRunBackgroundCheck,
+		kTellTakeEvidenceToCrimeLab,
+		kTellLooksCompleteToMe,
+		kN2Count
+	};
+	enum {
+		kAllWongBoatEvidence = 0,
+		kHarbormasterQuestioned,
+		kAllQuestionsHarborMaster,
+		kVisitedTarakan,
+		kAllTarakanEvidence,
+		kTalkedToCoroner,
+		kGotWongBullet,
+		kKnowsMSDidAutopsies,
+		kKnowsBodiesAreMissing,
+		kLogBookToLab,
+		kLeadSphereToLab,
+		kWongBulletToLab,
+		kTellTakeYourEvidence,
+		kTellGoBackToWong,
+		kTellMissedAtTarakan,
+		kTellTalkToCoroner,
+		kTellTalkToCoronerAgain,
+		kTellTalkToHarbormaster,
+		kN3Count
+	};
+	enum { kBeenToSmolWarehouse = 0,
+		   kGotSmolGun,
+		   kSmolGunToLab,
+		   kTellTieSmol,
+		   kTellTakeEvidence6,
+		   kN6Count };
+	// Variables the exe finds by ID
+	static const uint32 kCalledComputerCrimes = 5054, kTellCallComputerCrimes = 5053, kHadEncounterWithNSA = 4553,
+						kArrestedSmolnikoff = 5155, kSkinnerIsInSeattle = 1990, kFoundWarehouseInING = 5051,
+						kSentWarehouseEmail = 5052;
+	static const uint32 kWarehouseEmail = 88440;
+
+	const Common::Array<uint32> &n2 = _shanksVars[0], &n3 = _shanksVars[1], &n6 = _shanksVars[2];
+	if (n2.size() != kN2Count || n3.size() != kN3Count || n6.size() != kN6Count)
+		return;
+	// The variables found by ID must exist (never missing in this data), else the call ends before the tail
+	static const uint32 kFound[] = {kCalledComputerCrimes, kTellCallComputerCrimes, kHadEncounterWithNSA,
+									kArrestedSmolnikoff, kSkinnerIsInSeattle, kFoundWarehouseInING, kSentWarehouseEmail};
+	for (uint i = 0; i < ARRAYSIZE(kFound); i++) {
+		if (!_variables.contains(kFound[i]))
+			return;
+	}
+
+	int32 node = getCurrentNode();
+	int32 value = 0;
+	uint32 flag = 0;
+	if (var == n2[kTellGoBackToComity]) {
+		flag = var;
+		value = node == 2 && (!getVariable(n2[kGotPhone]) || !getVariable(n2[kGotLapTop]));
+	} else if (var == n2[kTellGetLicense]) {
+		flag = var;
+		value = node == 2 && !getVariable(n2[kGotLicense]);
+	} else if (var == kTellCallComputerCrimes) {
+		flag = var;
+		value = node == 2 && getVariable(n2[kGotLapTop]) == 1 && getVariable(kCalledComputerCrimes) == 0;
+	} else if (var == n2[kTellGoBackToWarehouse]) {
+		flag = var;
+		value = node == 2 && getVariable(n2[kBeenToWarehouse]) == 1 && getVariable(kHadEncounterWithNSA) == 0;
+	} else if (var == n2[kTellTalkToWong]) {
+		flag = var;
+		value = node == 2 && getVariable(n2[kTalkedToWong]) == 1 && !getVariable(n2[kDoneWithWong]);
+	} else if (var == n2[kTellTakeEvidenceToCrimeLab]) {
+		flag = var;
+		value = node == 2 && getVariable(n2[kBeenToWarehouse]) == 1 && getVariable(n2[kGotBlackPowder]) == 1 &&
+				getVariable(n2[kGotBlood]) == 1 && getVariable(n2[kGotBullet]) == 1 &&
+				(!getVariable(n2[kPowderToLab]) || !getVariable(n2[kBloodToLab]) || !getVariable(n2[kBulletToLab]));
+	} else if (var == n2[kTellRunBackgroundCheck]) {
+		flag = var;
+		value = node == 2 && getVariable(n2[kDoneWithWong]) == 1 && getVariable(kSkinnerIsInSeattle) == 0 &&
+				!getVariable(n2[kWongBackgroundChecked]);
+	} else if (var == n2[kTellLooksCompleteToMe]) {
+		flag = var;
+		value = 1;
+	} else if (var == n3[kTellGoBackToWong]) {
+		flag = var;
+		value = node == 3 && !getVariable(n3[kAllWongBoatEvidence]);
+	} else if (var == n3[kTellTalkToHarbormaster]) {
+		flag = var;
+		value = node == 3 && getVariable(n3[kHarbormasterQuestioned]) == 1 && !getVariable(n3[kAllQuestionsHarborMaster]);
+	} else if (var == n3[kTellMissedAtTarakan]) {
+		flag = var;
+		value = node == 3 && getVariable(n3[kAllQuestionsHarborMaster]) == 1 && !getVariable(n3[kAllTarakanEvidence]);
+	} else if (var == n3[kTellTalkToCoroner]) {
+		flag = var;
+		value = node == 3 && getVariable(n3[kAllTarakanEvidence]) == 1 && !getVariable(n3[kTalkedToCoroner]);
+	} else if (var == n3[kTellTalkToCoronerAgain]) {
+		flag = var;
+		value = node == 3 && getVariable(n3[kTalkedToCoroner]) == 1 &&
+				(!getVariable(n3[kGotWongBullet]) || !getVariable(n3[kKnowsMSDidAutopsies]) ||
+				 !getVariable(n3[kKnowsBodiesAreMissing]));
+	} else if (var == n3[kTellTakeYourEvidence]) {
+		flag = var;
+		value = node == 3 && getVariable(n3[kGotWongBullet]) == 1 &&
+				(!getVariable(n3[kLogBookToLab]) || !getVariable(n3[kLeadSphereToLab]) || !getVariable(n3[kWongBulletToLab]));
+	} else if (var == n6[kTellTieSmol]) {
+		flag = var;
+		value = node == 6 && getVariable(n6[kBeenToSmolWarehouse]) == 1 && getVariable(kArrestedSmolnikoff) == 0;
+	} else if (var == n6[kTellTakeEvidence6]) {
+		flag = var;
+		value = node == 6 && getVariable(n6[kGotSmolGun]) == 1 && !getVariable(n6[kSmolGunToLab]);
+	}
+	if (flag)
+		_variables[flag] = value;
+
+	// The tail, after every call: the first review after the laptop and phone are found sends the warehouse e-mail
+	if (node == 2 && !getVariable(n2[kTellGoBackToComity]) && !getVariable(kFoundWarehouseInING) &&
+		!getVariable(kSentWarehouseEmail)) {
+		_pda.addEmail(kWarehouseEmail);
+		_variables[kSentWarehouseEmail] = 1;
+	}
+}
+
 void Script::addHooks() {
 	addCoreHooks();
 	_phone.addHooks(_hookTable);
@@ -555,6 +708,21 @@ void Script::addCoreHooks() {
 		if (!c.isVariable(0))
 			return false;
 		s._currNodeVariable = c.action.args[0].value; // 0x4926a0
+		return true;
+	});
+	t.add("RegShanksNode2", [](Script &s, const HookCall &c) {
+		return s.regShanksNode(0, 20, c);
+	});
+	t.add("RegShanksNode3", [](Script &s, const HookCall &c) {
+		return s.regShanksNode(1, 18, c);
+	});
+	t.add("RegShanksNode6", [](Script &s, const HookCall &c) {
+		return s.regShanksNode(2, 5, c);
+	});
+	t.add("SetShanksVar", [](Script &s, const HookCall &c) {
+		if (!c.isVariable(0))
+			return false;
+		s.setShanksVar(c.action.args[0].value);
 		return true;
 	});
 	t.add("RegViewSpecial", [](Script &s, const HookCall &c) {

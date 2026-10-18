@@ -284,6 +284,11 @@ void PdaHooks::displayInBox(int32 value) {
 	showInboxTexts();
 }
 
+void PdaHooks::addEmail(uint32 id) {
+	if (!listHas(_emails, id))
+		_emails.push_back(id);
+}
+
 void PdaHooks::initEmailRead(int32 item, int32 email) {
 	// 0x43df10: the whole file goes into a scroll text over the item, or over the text item
 	// of the three special e-mails
