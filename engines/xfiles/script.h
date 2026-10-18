@@ -231,6 +231,20 @@ public:
 	 * The camera is in hand and was taken outside a special view (Camera +0x1c0): a click in the band is its
 	 * cameraClick and the viewfinder shows.
 	 */
+	/** The view mode of the view change in progress (Screen_PlayView 0x464330). */
+	enum {
+		kTransitionCut,
+		kTransitionLeft,   ///< slide
+		kTransitionRight,  ///< slide, the other way
+		kTransitionForward ///< wipe opening out from the hotspot
+	};
+	int getTransition() const { return _transition; }
+	/** The hotspot's centre in screen coordinates, if its rectangle is not empty. */
+	bool getTransitionCentre(Common::Point &centre) const {
+		centre = _transitionCentre;
+		return !_transitionEmpty;
+	}
+	void clearTransition() { _transition = kTransitionCut; }
 	bool isCameraEnabled() const { return _cameraEnabled && isHolding() && getVariable(_heldVariable) == 3; }
 	/**
 	 * Camera_OnMouseClick (0x4f26a0) at a click in the band, for the camera in hand: the shutter, the photo and the
@@ -654,6 +668,7 @@ private:
 	void releaseHeldSounds();
 	/** A travel ends every sound, clip and queued video as a stop (0x493090), between the old and new activations. */
 	void stopAllForTravel();
+	void setNavTransition(const VCNav &nav);
 	void enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, bool deactivateAll = false);
 	void travel();
 	void showView();
@@ -700,6 +715,10 @@ private:
 	Common::Array<uint32> _inventory, _evidence, _history;
 	Common::Array<VCPhoto> _photos;            ///< The VCPhotos in database order
 	int32 _photosOnCamera;                     ///< VCGameState +46: taken, not yet downloaded
+	int _navTransition = kTransitionCut;       ///< The mode of the nav being followed, taken by enter()
+	int _transition = kTransitionCut;          ///< The mode of the view entered last, until the engine plays it
+	Common::Point _navTransitionCentre, _transitionCentre;
+	bool _navTransitionEmpty = true, _transitionEmpty = true;
 	bool _cameraEnabled;                       ///< The camera in hand was taken outside a special view (Camera +0x1c0)
 	bool firesOnRestore(uint32 id) const;
 	int _restoreMode;                          ///< Position mode while restore() runs, else -1: which Object Activation fires

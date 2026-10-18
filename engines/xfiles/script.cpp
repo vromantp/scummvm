@@ -1486,6 +1486,11 @@ void Script::stopAllForTravel() {
 void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, bool deactivateAll) {
 	const uint32 newPath[4] = { node, location, viewPoint, view };
 	const uint32 oldPath[4] = { _node, _location, _viewPoint, _view };
+	// Only a nav click passes a view mode (0x46ae70); every other way into a view cuts
+	_transition = _navTransition;
+	_transitionCentre = _navTransitionCentre;
+	_transitionEmpty = _navTransitionEmpty;
+	_navTransition = kTransitionCut;
 	int first = 0;
 	while (!deactivateAll && first < 4 && oldPath[first] == newPath[first])
 		first++;
@@ -3047,6 +3052,7 @@ void Script::followNav(uint32 navId) {
 	VCLocation location;
 	if (!_data.getLocation(_location, location))
 		return;
+	setNavTransition(nav);
 	for (uint i = 0; i < location.viewPoints.size(); i++) {
 		VCViewPoint vp;
 		if (!_data.getViewPoint(location.viewPoints[i], vp))
@@ -3059,6 +3065,26 @@ void Script::followNav(uint32 navId) {
 		}
 	}
 	warning("Script: nav #%u leads out of the location", navId);
+}
+
+void Script::setNavTransition(const VCNav &nav) {
+	// 0x46ae70: the view mode comes from the cursor of the nav's hotspot, 284 Left, 285 Right, 286 Forward (the
+	// VCDefaultHotSpots' cursors); any other cursor cuts. The wipe opens from the middle of the hotspot's rectangle
+	_navTransition = kTransitionCut;
+	_navTransitionEmpty = true;
+	VCHotSpot hotSpot;
+	uint32 defaults[3];
+	if (!_data.getHotSpot(nav.hotSpot, hotSpot) || !_data.getDefaultHotSpots(defaults))
+		return;
+	for (int i = 0; i < 3; i++) {
+		VCHotSpot standard;
+		if (_data.getHotSpot(defaults[i], standard) && standard.cursor == hotSpot.cursor) {
+			_navTransition = kTransitionLeft + i;
+			break;
+		}
+	}
+	_navTransitionCentre = Common::Point((hotSpot.rect.left + hotSpot.rect.right) / 2, (hotSpot.rect.top + hotSpot.rect.bottom) / 2);
+	_navTransitionEmpty = hotSpot.rect.left >= hotSpot.rect.right || hotSpot.rect.top >= hotSpot.rect.bottom;
 }
 
 void Script::goTo(uint32 target) {

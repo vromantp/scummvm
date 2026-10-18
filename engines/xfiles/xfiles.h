@@ -216,6 +216,8 @@ private:
 	void playQueuedVideo(const Input &input);
 	void updateTimers();
 	void syncView();
+	bool canPlayTransition() const;
+	void playTransition(int mode, const Graphics::Surface &oldBand, const Graphics::Surface &newBand);
 	void closeView();
 	void updateInterface();
 	void drawView();

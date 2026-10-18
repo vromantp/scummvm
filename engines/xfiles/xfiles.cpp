@@ -997,6 +997,14 @@ void XFilesEngine::syncView() {
 		return;
 	}
 
+	// A nav click's view change animates in the band (the Transitions preference)
+	int mode = _script->getTransition();
+	_script->clearTransition();
+	bool animate = mode != Script::kTransitionCut && _viewId && _viewId != _script->getView() && canPlayTransition();
+	Graphics::Surface oldBand;
+	if (animate)
+		oldBand.copyFrom(_screen.getSubArea(Common::Rect(kBandLeft, kBandTop, kBandLeft + kBandWidth, kBandTop + kBandHeight)));
+
 	closeView();
 	_viewId = _script->getView();
 	_viewAssets = ids;
@@ -1018,6 +1026,128 @@ void XFilesEngine::syncView() {
 		_layers.push_back(movie);
 	}
 	_pendingClipTime = -1;
+	if (animate) {
+		for (uint i = 0; i < _layers.size(); i++)
+			_layers[i]->update();
+		// The new picture, drawn into the band the way drawView does
+		Graphics::Surface keep;
+		keep.copyFrom(_screen);
+		clearScreen();
+		for (uint i = 0; i < _layers.size(); i++) {
+			Common::Point pos = getBandPosition(*_layers[i]);
+			blit(_layers[i]->getFrame(), pos.x, pos.y);
+		}
+		Graphics::Surface newBand;
+		newBand.copyFrom(_screen.getSubArea(Common::Rect(kBandLeft, kBandTop, kBandLeft + kBandWidth, kBandTop + kBandHeight)));
+		_screen.copyFrom(keep);
+		keep.free();
+		playTransition(mode, oldBand, newBand);
+		newBand.free();
+	}
+	oldBand.free();
+}
+
+bool XFilesEngine::canPlayTransition() const {
+	// Screen_PlayView 0x464330: the preference is on and the held item is not a tool mode of type 3 (the camera). A
+	// step list and a fast-forward have no time: they cut, so fixtures stay deterministic
+	if (!_steps.empty() || !_fastForward.empty() || !getPreference(kPrefTransitions))
+		return false;
+	return !(_script->isHolding() && _script->getVariable(_script->getHeldVariable()) == 3);
+}
+
+/**
+ * The slide (modes 1, 2; 0x5664b0) and the wipe (mode 3; 0x565fd0) in the band: the old picture, a 100 px soft edge in
+ * the band fill, the new picture. The slide's edge starts 100 px in and moves by 25, 50, 100, 125, 125, 100, 50, 25
+ * (0x65ee40), 700 px in all; the wipe's two edges start at the centre x and each tick move 100 px apart. Not read:
+ * the tick rate (kTransitionTick), the side the slide enters from, how the edge blends (here the new picture
+ * fades into the fill toward the old one).
+ */
+void XFilesEngine::playTransition(int mode, const Graphics::Surface &oldBand, const Graphics::Surface &newBand) {
+	static const uint32 kTransitionTick = 60; // a guess: 8 to 9 ticks of 60 ms fit the 400 to 600 ms the reference runs show
+	static const int kEdge = 100;
+	static const int kSlideSteps[] = {100, 25, 50, 100, 125, 125, 100, 50, 25};
+	debugC(1, kDebugScript, "-- transition mode %d", mode);
+
+	byte fr = 0, fg = 0, fb = 0;
+	_script->getBandFill(fr, fg, fb);
+	const Graphics::PixelFormat &fmt = _screen.format;
+	Common::Point centre(kBandLeft + kBandWidth / 2, kBandTop + kBandHeight / 2);
+	_script->getTransitionCentre(centre);
+	int wipeX = centre.x - kBandLeft;
+
+	uint32 start = g_system->getMillis();
+	int slidePos = 0; // the slide's edge, in the strip of the new picture, the edge and the old one
+	for (int tick = 0;; tick++) {
+		int left = 0, right = 0; // the wipe's edges
+		bool done;
+		if (mode == Script::kTransitionForward) {
+			left = wipeX - kEdge - kEdge * tick;
+			right = wipeX + kEdge * tick;
+			done = left + kEdge <= 0 && right >= kBandWidth;
+		} else {
+			slidePos += kSlideSteps[MIN<int>(tick, ARRAYSIZE(kSlideSteps) - 1)];
+			done = slidePos >= kBandWidth + kEdge;
+		}
+		for (int y = 0; y < kBandHeight; y++) {
+			const uint16 *newRow = (const uint16 *)newBand.getBasePtr(0, y);
+			const uint16 *oldRow = (const uint16 *)oldBand.getBasePtr(0, y);
+			uint16 *dst = (uint16 *)_screen.getBasePtr(kBandLeft, kBandTop + y);
+			for (int x = 0; x < kBandWidth; x++) {
+				// 0: old, 1: new, 2 to 101: the edge column (2 = the new picture's side)
+				int where;
+				if (done) {
+					where = 1;
+				} else if (mode == Script::kTransitionForward) {
+					if (x < left)
+						where = 0;
+					else if (x < left + kEdge)
+						where = 2 + (left + kEdge - 1 - x); // the left edge: new on its right
+					else if (x < right)
+						where = 1;
+					else if (x < right + kEdge)
+						where = 2 + (x - right);
+					else
+						where = 0;
+				} else {
+					// Left (1): the strip moves right; Right (2) is its mirror image
+					int sx = mode == Script::kTransitionLeft ? x : kBandWidth - 1 - x;
+					int c = sx - (slidePos - kBandWidth - kEdge);
+					if (c < kBandWidth)
+						where = 1;
+					else if (c < kBandWidth + kEdge)
+						where = 2 + (c - kBandWidth);
+					else
+						where = 0;
+				}
+				uint16 p;
+				if (where == 0) {
+					p = oldRow[x];
+				} else if (where == 1) {
+					p = newRow[x];
+				} else {
+					// the new picture fading into the fill, the ramp 1 to 254 of the edge object
+					int a = 1 + (where - 2) * 253 / (kEdge - 1);
+					byte r, g, b;
+					fmt.colorToRGB(newRow[x], r, g, b);
+					p = fmt.RGBToColor((r * (255 - a) + fr * a) / 255, (g * (255 - a) + fg * a) / 255, (b * (255 - a) + fb * a) / 255);
+				}
+				dst[x] = p;
+			}
+		}
+		present();
+		if (done)
+			break;
+		// The scene's sounds keep playing; the player's input is dropped
+		Common::Event event;
+		while (g_system->getEventManager()->pollEvent(event)) {
+		}
+		if (shouldQuit())
+			break;
+		_sound.update(getPreference(kPref3DSound));
+		uint32 due = start + (tick + 1) * kTransitionTick;
+		while (!shouldQuit() && (int32)(due - g_system->getMillis()) > 0)
+			g_system->delayMillis(5);
+	}
 }
 
 void XFilesEngine::closeView() {
