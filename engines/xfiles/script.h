@@ -276,6 +276,7 @@ public:
 		Common::Array<uint32> enabled;     ///< Pairs (VCEnabled ID, flag)
 		Common::Array<uint32> stringIds;   ///< VCString IDs of the strings that changed
 		Common::StringArray strings;       ///< Their values
+		uint32 nextId = 0;                 ///< The next free object ID (0: not saved)
 	};
 	/** Every variable, enable flag and changed string now. */
 	void getSaved(SavedValues &values) const;
@@ -815,6 +816,7 @@ private:
 		ActionFrame(const Common::Array<uint32> *a = nullptr, uint n = 0) : actions(a), next(n) {}
 	};
 	Common::Array<ActionFrame> _actionFrames;  ///< The running action lists, outermost first (isViewChangeQueued)
+	uint32 _nextId;                            ///< The database's next free object ID (new VCStrings take it)
 	bool _navViewQueued;                       ///< A nav click is running: its view change is queued (0x46f210)
 	bool _travelPending;                       ///< SwapDisc was called in this event (0x6b19a8)
 	uint32 _travelTo[4];                       ///< Node, location, viewpoint and view of the pending travel

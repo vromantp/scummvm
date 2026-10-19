@@ -38,7 +38,7 @@ namespace XFiles {
  * Add fields only with a version bump and syncAs...(x, firstVersion).
  */
 enum {
-	kSaveVersion = 2
+	kSaveVersion = 3
 };
 
 /** A list of records of per values each: the number of records, then the values. */
@@ -131,6 +131,8 @@ static bool syncSave(Common::Serializer &s, Script::SavedValues &values, VCSave 
 			photo.downloaded = downloaded != 0;
 		}
 	}
+	// Version 3: the next free object ID
+	s.syncAsUint32LE(values.nextId, 3);
 	return true;
 }
 

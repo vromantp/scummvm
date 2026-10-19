@@ -117,12 +117,17 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	_jumpCut.first = _jumpCut.later = false;
 	memset(_flashlight, 0, sizeof(_flashlight));
 	memset(_tintColor, 0, sizeof(_tintColor));
 	addHooks();
+	// The next free object ID: a save has the game state's six objects in its header count, a new game takes them
+	// at its start (5323-5328; phone.md "Original behaviour")
+	Common::Array<NeoEntry> states;
+	data.getGam().getObjects(kClassGameState, states);
+	_nextId = data.getGam()._nextId + (states.empty() ? 6 : 0);
 	Common::Array<NeoEntry> entries;
 	data.getGam().getObjects(kClassVariable, entries);
 	for (uint i = 0; i < entries.size(); i++) {
@@ -169,9 +174,15 @@ Common::String Script::getString(uint32 variableId) const {
 }
 
 void Script::setString(uint32 variableId, const Common::String &value) {
-	uint32 stringId = getVariable(variableId);
-	if (stringId)
-		_strings[stringId] = value;
+	// 0x5ce4e0: a changed text is a new VCString with the database's next free ID, which replaces the old one in the
+	// variable; the same text changes nothing (the callers test it, 0x41bcb0)
+	uint32 oldId = getVariable(variableId);
+	if (getString(variableId) == value)
+		return;
+	_strings.erase(oldId);
+	uint32 newId = _nextId++;
+	_strings[newId] = value;
+	_variables[variableId] = (int32)newId;
 }
 
 const Script::ItemText *Script::getItemText(uint32 itemId) const {
@@ -2061,6 +2072,7 @@ void Script::snapshot(VCSave &save) const {
 
 void Script::getSaved(SavedValues &values) const {
 	values = SavedValues();
+	values.nextId = _nextId;
 	Common::Array<NeoEntry> entries;
 	_data.getGam().getObjects(kClassVariable, entries);
 	for (uint i = 0; i < entries.size(); i++) {
@@ -2102,6 +2114,8 @@ void Script::applySaved(const SavedValues &values) {
 	}
 	for (uint i = 0; i < values.stringIds.size() && i < values.strings.size(); i++)
 		_strings[values.stringIds[i]] = values.strings[i];
+	if (values.nextId)
+		_nextId = values.nextId;
 }
 
 void Script::click(uint32 id) {
