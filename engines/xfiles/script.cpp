@@ -1582,10 +1582,12 @@ void Script::activateView() {
 	log("  == view activated " + getObjectLabel(_data, _view));
 	_viewHeld = false;
 	_viewActive = true;
-	// The exe activates the view's asset before the view's own actions run (B-151)
+	// The exe activates the view's asset before the view's own actions run (B-151),
+	// its character views after them (tarakan-to-evidence2: view 11705's
+	// Activation actions run before character view 24182 is activated, B-167)
 	activateViewAsset();
-	activateViewObjects(true);
 	fire(_view, kEventObjectActivation);
+	activateViewObjects(true);
 	activateViewObjects(false);
 }
 
@@ -2546,12 +2548,12 @@ bool Script::hasEnabledIdea(uint32 charViewId) const {
 	return findIdeaTopic(charViewId, 0, conversation);
 }
 
-void Script::idea(uint32 iconId) {
+void Script::idea(uint32 iconId, uint32 charView) {
 	// IdeaIcon_DragEnd 0x4d15f0 -> PlayItemTopic 0x4c5500: asked (History) or count + 1, the topic's Object
 	// Activation and its playlist with +0x144 clear; no Mouse Click and no Drop triggers. The box comes back
 	// after the clips, so it stays open here.
 	uint32 conversation;
-	if (!_box || !findIdeaTopic(_box, iconId, conversation) || !conversation)
+	if (!_box || !findIdeaTopic(charView ? charView : _box, iconId, conversation) || !conversation)
 		return;
 	// Recorded whatever +0x40 holds (PlayItemTopic does not test it)
 	recordTopic(conversation);
@@ -3247,9 +3249,12 @@ void Script::step(const Common::String &s) {
 		expireTimer(id, true); // pda-usage-run1: expiries queued before a stop still run
 	else if (kind == "ask")
 		ask(id);
-	else if (kind == "idea")
-		idea(id);
-	else if (kind == "goto")
+	else if (kind == "idea") {
+		// idea:ICON[:CHARVIEW]: the icon dropped on that character view (the exe plays the topic of the one under the
+		// drop; tarakan-to-evidence2, B-167)
+		size_t second = arg.findFirstOf(':');
+		idea(id, second == Common::String::npos ? 0 : (uint32)atoi(arg.c_str() + second + 1));
+	} else if (kind == "goto")
 		goTo(id);
 	else if (kind == "nav")
 		followNav(id);

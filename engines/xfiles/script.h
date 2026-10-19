@@ -354,7 +354,7 @@ public:
 	 * the icon's VCIdeaMap plays as a dropped item's topic does (0x4c5500).
 	 * Does nothing if the box's character has no enabled map for the icon.
 	 */
-	void idea(uint32 iconId);
+	void idea(uint32 iconId, uint32 charView = 0);
 	/** The enabled idea icons of the open, shown box's character, in map order; empty otherwise. */
 	void getBoxIdeaIcons(Common::Array<uint32> &icons) const;
 	/** Whether the character view has an enabled idea icon in its map (0x49bce0). */
