@@ -531,6 +531,7 @@ private:
 	void fire(uint32 id, int event, const EventFields &fields = EventFields());
 	void fireTriggers(uint32 id, int event, const EventFields &fields);
 	void runActions(const Common::Array<uint32> &actions, int event, const EventFields &fields);
+	bool isViewChangeQueued() const;
 	void execute(const VCAction &action, int event, const EventFields &fields, LocalVariables &locals);
 	int32 getValue(const VCOperand &operand, const EventFields &fields, const LocalVariables &locals) const;
 	bool test(const VCExpression &condition, const EventFields &fields, const LocalVariables &locals) const;
@@ -808,6 +809,13 @@ private:
 	uint _viewSerial;                          ///< _fireSerial of the event that held the view: the videos it waits for
 	uint _fireDepth;                           ///< Nesting of fire(): a pending travel runs when it returns to 0
 	Common::Array<uint32> _pendingStops;       ///< Stopped sounds and clips whose Object Deactivation waits for the event's end
+	struct ActionFrame {
+		const Common::Array<uint32> *actions;
+		uint next; ///< Index of the next action to run
+		ActionFrame(const Common::Array<uint32> *a = nullptr, uint n = 0) : actions(a), next(n) {}
+	};
+	Common::Array<ActionFrame> _actionFrames;  ///< The running action lists, outermost first (isViewChangeQueued)
+	bool _navViewQueued;                       ///< A nav click is running: its view change is queued (0x46f210)
 	bool _travelPending;                       ///< SwapDisc was called in this event (0x6b19a8)
 	uint32 _travelTo[4];                       ///< Node, location, viewpoint and view of the pending travel
 	bool _viewHeld;                            ///< The view is entered but not activated until the video ends

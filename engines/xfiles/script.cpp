@@ -117,7 +117,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	_jumpCut.first = _jumpCut.later = false;
 	memset(_flashlight, 0, sizeof(_flashlight));
@@ -298,7 +298,10 @@ bool Script::isTestedOnClick(uint32 id, uint32 variable, int event) const {
 
 void Script::runActions(const Common::Array<uint32> &actions, int event, const EventFields &fields) {
 	LocalVariables locals; // Local variables live for one action list
+	_actionFrames.push_back(ActionFrame(&actions, 0));
+	uint frame = _actionFrames.size() - 1;
 	for (uint i = 0; i < actions.size(); i++) {
+		_actionFrames[frame].next = i + 1;
 		VCAction a;
 		if (!_data.getAction(actions[i], a)) {
 			warning("Script: bad action #%u", actions[i]);
@@ -308,6 +311,23 @@ void Script::runActions(const Common::Array<uint32> &actions, int event, const E
 			continue;
 		execute(a, event, fields, locals);
 	}
+	_actionFrames.pop_back();
+}
+
+bool Script::isViewChangeQueued() const {
+	// 0x46f210: the exe's event queue holds a Set View action (condition not evaluated) or a nav's view change.
+	// A trigger queues its whole action list at once, so the later actions of every running list count
+	if (_navViewQueued)
+		return true;
+	for (uint f = 0; f < _actionFrames.size(); f++) {
+		const Common::Array<uint32> &list = *_actionFrames[f].actions;
+		for (uint i = _actionFrames[f].next; i < list.size(); i++) {
+			VCAction a;
+			if (_data.getAction(list[i], a) && a.type == kActionSetView)
+				return true;
+		}
+	}
+	return false;
 }
 
 int32 Script::getValue(const VCOperand &operand, const EventFields &fields, const LocalVariables &locals) const {
@@ -1708,7 +1728,7 @@ void Script::updateViewAsset(uint32 id) {
 	// disables the clip 33974, whose Deactivation stops timer 0 (B-052).
 	// Only a change of the shown asset is modelled
 	VCView v;
-	if (!_viewActive || _viewHeld || _travelPending || !_data.getView(_view, v))
+	if (!_viewActive || _viewHeld || _travelPending || isViewChangeQueued() || !_data.getView(_view, v))
 		return;
 	Common::Array<uint32> ids;
 	_data.getMembers(v.assets, ids);
@@ -3128,7 +3148,10 @@ void Script::followNav(uint32 navId) {
 		warning("Script: #%u is not a nav", navId);
 		return;
 	}
+	// The nav's view change is queued after its Mouse Click runners (0x46ae70), so the click's triggers see it
+	_navViewQueued = nav.target != _view;
 	fire(navId, kEventMouseClick);
+	_navViewQueued = false;
 	VCLocation location;
 	if (!_data.getLocation(_location, location))
 		return;
