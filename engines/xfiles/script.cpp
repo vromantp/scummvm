@@ -2364,8 +2364,11 @@ void Script::enableTarget(uint32 target, bool value) {
 	// hidden it joins later (0x4a1fb0), when the engine says
 	if (_data.getClassOf(target) == kClassInventory) {
 		Common::Array<uint32>::iterator it = Common::find(_inventory.begin(), _inventory.end(), target);
-		if (value && it == _inventory.end() && !(_hooks && _hooks->deferInventoryIcon(target)))
+		if (value && it == _inventory.end() && !(_hooks && _hooks->deferInventoryIcon(target))) {
 			_inventory.push_back(target);
+			// The icon object's activation runs the item's Object Activation (0x440f80)
+			fire(target, kEventObjectActivation);
+		}
 		else if (!value && it != _inventory.end())
 			_inventory.erase(it);
 	}
@@ -2392,9 +2395,13 @@ void Script::addInventoryIcon(uint32 id) {
 	if (!isEnabled(id) || _data.getClassOf(id) != kClassInventory)
 		return;
 	Common::Array<uint32>::iterator it = Common::find(_inventory.begin(), _inventory.end(), id);
-	if (it != _inventory.end())
+	bool joins = it == _inventory.end();
+	if (!joins)
 		_inventory.erase(it);
 	_inventory.push_back(id);
+	// Only a new icon activates its item (0x440f80)
+	if (joins)
+		fire(id, kEventObjectActivation);
 }
 
 void Script::addUberParanoia(int32 n) {
