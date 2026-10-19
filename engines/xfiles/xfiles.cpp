@@ -1070,27 +1070,25 @@ bool XFilesEngine::canPlayTransition() const {
 }
 
 /**
- * The slide (modes 1, 2; 0x5664b0) and the wipe (mode 3; 0x565fd0) in the band: the old picture, a 100 px soft edge in
- * the band fill, the new picture. The slide's edge starts 100 px in and moves by 25, 50, 100, 125, 125, 100, 50, 25
- * (0x65ee40), 700 px in all; the wipe's two edges start at the centre x and each tick move 100 px apart. Not read:
- * the tick rate (kTransitionTick), the side the slide enters from, how the edge blends (here the new picture
- * fades into the fill toward the old one).
+ * The slide (modes 1, 2; 0x5664b0) and the wipe (mode 3; 0x565fd0) in the band (docs/exe/view-transitions.md). The
+ * slide moves the old picture, a 100 px edge and the new picture together by the step table (0x65ee40) per tick;
+ * the wipe's two edges start at the hotspot centre and each tick move 100 px apart. The edge is a linear
+ * cross-fade of old and new, the last tick's frame is the plain new view. The exe has no tick period (one tick per
+ * compositor pass, about 33 ms in DOSBox), so one fixed period is used.
  */
 void XFilesEngine::playTransition(int mode, const Graphics::Surface &oldBand, const Graphics::Surface &newBand) {
-	static const uint32 kTransitionTick = 60; // a guess: 8 to 9 ticks of 60 ms fit the 400 to 600 ms the reference runs show
+	static const uint32 kTransitionTick = 33;
 	static const int kEdge = 100;
-	static const int kSlideSteps[] = {100, 25, 50, 100, 125, 125, 100, 50, 25};
+	static const int kSlideSteps[] = {25, 50, 100, 125, 125, 100, 50, 25};
 	debugC(1, kDebugScript, "-- transition mode %d", mode);
 
-	byte fr = 0, fg = 0, fb = 0;
-	_script->getBandFill(fr, fg, fb);
 	const Graphics::PixelFormat &fmt = _screen.format;
 	Common::Point centre(kBandLeft + kBandWidth / 2, kBandTop + kBandHeight / 2);
 	_script->getTransitionCentre(centre);
-	int wipeX = centre.x - kBandLeft;
+	int wipeX = centre.x; // the hotspot's screen x, taken as a band x (the exe does not subtract the band's left)
 
 	uint32 start = g_system->getMillis();
-	int slidePos = 0; // the slide's edge, in the strip of the new picture, the edge and the old one
+	int slidePos = 0; // S, the old picture's offset
 	for (int tick = 0;; tick++) {
 		int left = 0, right = 0; // the wipe's edges
 		bool done;
@@ -1098,52 +1096,63 @@ void XFilesEngine::playTransition(int mode, const Graphics::Surface &oldBand, co
 			left = wipeX - kEdge - kEdge * tick;
 			right = wipeX + kEdge * tick;
 			done = left + kEdge <= 0 && right >= kBandWidth;
+			debugC(1, kDebugScript, "-- transition wipe tick %d l=%d r=%d%s", tick, left, right, done ? " done" : "");
 		} else {
 			slidePos += kSlideSteps[MIN<int>(tick, ARRAYSIZE(kSlideSteps) - 1)];
-			done = slidePos >= kBandWidth + kEdge;
+			done = slidePos > kBandWidth - kEdge;
+			debugC(1, kDebugScript, "-- transition slide tick %d S=%d%s", tick, slidePos, done ? " done" : "");
 		}
 		for (int y = 0; y < kBandHeight; y++) {
 			const uint16 *newRow = (const uint16 *)newBand.getBasePtr(0, y);
 			const uint16 *oldRow = (const uint16 *)oldBand.getBasePtr(0, y);
 			uint16 *dst = (uint16 *)_screen.getBasePtr(kBandLeft, kBandTop + y);
 			for (int x = 0; x < kBandWidth; x++) {
-				// 0: old, 1: new, 2 to 101: the edge column (2 = the new picture's side)
-				int where;
+				// the pixel is old[oi], new[ni], or the blend of both with the new share a (1 to 254 of 255)
+				int oi = x, ni = x, a = 0;
 				if (done) {
-					where = 1;
+					a = 255;
 				} else if (mode == Script::kTransitionForward) {
-					if (x < left)
-						where = 0;
-					else if (x < left + kEdge)
-						where = 2 + (left + kEdge - 1 - x); // the left edge: new on its right
-					else if (x < right)
-						where = 1;
-					else if (x < right + kEdge)
-						where = 2 + (x - right);
-					else
-						where = 0;
+					if (x < left) {
+						a = 0;
+					} else if (x < left + kEdge) {
+						a = 1 + (x - left) * 253 / (kEdge - 1); // old on its left, new on its right
+					} else if (x < right) {
+						a = 255;
+					} else if (x < right + kEdge) {
+						a = 1 + (kEdge - 1 - (x - right)) * 253 / (kEdge - 1);
+					} else {
+						a = 0;
+					}
 				} else {
-					// Left (1): the strip moves right; Right (2) is its mirror image
-					int sx = mode == Script::kTransitionLeft ? x : kBandWidth - 1 - x;
-					int c = sx - (slidePos - kBandWidth - kEdge);
-					if (c < kBandWidth)
-						where = 1;
-					else if (c < kBandWidth + kEdge)
-						where = 2 + (c - kBandWidth);
-					else
-						where = 0;
+					// Right (2): the old picture at x + S, the new one at x - (500 - S), the edge between; Left (1)
+					// is its mirror image
+					int sx = mode == Script::kTransitionRight ? x : kBandWidth - 1 - x;
+					int nx = sx - (kBandWidth - kEdge - slidePos);
+					int ox = sx + slidePos;
+					if (nx < 0) {
+						a = 0;
+					} else if (nx < kEdge) {
+						a = 1 + nx * 253 / (kEdge - 1);
+					} else {
+						a = 255;
+					}
+					if (mode != Script::kTransitionRight) {
+						ox = kBandWidth - 1 - ox;
+						nx = kBandWidth - 1 - nx;
+					}
+					oi = ox;
+					ni = nx;
 				}
 				uint16 p;
-				if (where == 0) {
-					p = oldRow[x];
-				} else if (where == 1) {
-					p = newRow[x];
+				if (a == 0) {
+					p = oldRow[CLIP(oi, 0, kBandWidth - 1)];
+				} else if (a == 255) {
+					p = newRow[CLIP(ni, 0, kBandWidth - 1)];
 				} else {
-					// the new picture fading into the fill, the ramp 1 to 254 of the edge object
-					int a = 1 + (where - 2) * 253 / (kEdge - 1);
-					byte r, g, b;
-					fmt.colorToRGB(newRow[x], r, g, b);
-					p = fmt.RGBToColor((r * (255 - a) + fr * a) / 255, (g * (255 - a) + fg * a) / 255, (b * (255 - a) + fb * a) / 255);
+					byte r1, g1, b1, r2, g2, b2;
+					fmt.colorToRGB(oldRow[CLIP(oi, 0, kBandWidth - 1)], r1, g1, b1);
+					fmt.colorToRGB(newRow[CLIP(ni, 0, kBandWidth - 1)], r2, g2, b2);
+					p = fmt.RGBToColor((r2 * a + r1 * (255 - a)) / 255, (g2 * a + g1 * (255 - a)) / 255, (b2 * a + b1 * (255 - a)) / 255);
 				}
 				dst[x] = p;
 			}
@@ -1478,6 +1487,7 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 		break;
 	}
 	case ViewHit::kNav:
+		_script->setClickPoint(_mouse);
 		_script->step(Common::String::format("nav:%u", viewHit.id));
 		break;
 	default:

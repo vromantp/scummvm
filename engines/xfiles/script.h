@@ -239,11 +239,13 @@ public:
 		kTransitionForward ///< wipe opening out from the hotspot
 	};
 	int getTransition() const { return _transition; }
-	/** The hotspot's centre in screen coordinates, if its rectangle is not empty. */
+	/** The wipe's centre in screen coordinates: the hotspot's centre, the click point when its rectangle is empty. */
 	bool getTransitionCentre(Common::Point &centre) const {
 		centre = _transitionCentre;
-		return !_transitionEmpty;
+		return true;
 	}
+	/** The point of the click that follows a nav, for a wipe from an empty hotspot rectangle. */
+	void setClickPoint(const Common::Point &p) { _clickPoint = p; }
 	void clearTransition() { _transition = kTransitionCut; }
 	bool isCameraEnabled() const { return _cameraEnabled && isHolding() && getVariable(_heldVariable) == 3; }
 	/**
@@ -727,6 +729,7 @@ private:
 	int _transition = kTransitionCut;          ///< The mode of the view entered last, until the engine plays it
 	Common::Point _navTransitionCentre, _transitionCentre;
 	bool _navTransitionEmpty = true, _transitionEmpty = true;
+	Common::Point _clickPoint = Common::Point(320, 240); ///< The last click on a nav, the screen centre when none
 	bool _cameraEnabled;                       ///< The camera in hand was taken outside a special view (Camera +0x1c0)
 	bool firesOnRestore(uint32 id) const;
 	int _restoreMode;                          ///< Position mode while restore() runs, else -1: which Object Activation fires

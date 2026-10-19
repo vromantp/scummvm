@@ -3198,22 +3198,19 @@ void Script::followNav(uint32 navId) {
 
 void Script::setNavTransition(const VCNav &nav) {
 	// 0x46ae70: the view mode comes from the cursor of the nav's hotspot, 284 Left, 285 Right, 286 Forward (the
-	// VCDefaultHotSpots' cursors); any other cursor cuts. The wipe opens from the middle of the hotspot's rectangle
+	// literals at 0x6b2aac); any other cursor cuts. The wipe opens from the middle of the hotspot's rectangle, from
+	// the click point when the rectangle is empty
 	_navTransition = kTransitionCut;
 	_navTransitionEmpty = true;
+	_navTransitionCentre = _clickPoint;
 	VCHotSpot hotSpot;
-	uint32 defaults[3];
-	if (!_data.getHotSpot(nav.hotSpot, hotSpot) || !_data.getDefaultHotSpots(defaults))
+	if (!_data.getHotSpot(nav.hotSpot, hotSpot))
 		return;
-	for (int i = 0; i < 3; i++) {
-		VCHotSpot standard;
-		if (_data.getHotSpot(defaults[i], standard) && standard.cursor == hotSpot.cursor) {
-			_navTransition = kTransitionLeft + i;
-			break;
-		}
-	}
-	_navTransitionCentre = Common::Point((hotSpot.rect.left + hotSpot.rect.right) / 2, (hotSpot.rect.top + hotSpot.rect.bottom) / 2);
+	if (hotSpot.cursor >= 284 && hotSpot.cursor <= 286)
+		_navTransition = kTransitionLeft + (hotSpot.cursor - 284);
 	_navTransitionEmpty = hotSpot.rect.left >= hotSpot.rect.right || hotSpot.rect.top >= hotSpot.rect.bottom;
+	if (!_navTransitionEmpty)
+		_navTransitionCentre = Common::Point((hotSpot.rect.left + hotSpot.rect.right) / 2, (hotSpot.rect.top + hotSpot.rect.bottom) / 2);
 }
 
 void Script::goTo(uint32 target) {
