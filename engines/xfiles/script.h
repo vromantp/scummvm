@@ -660,7 +660,7 @@ private:
 	 * first RegPreferences among the title's trigger actions runs, unlogged.
 	 */
 	void loadPreferences();
-	void queueVideo(uint32 id, uint32 limit, bool loop);
+	void queueVideo(uint32 id, uint32 limit, bool loop, bool viewLoop = false);
 	void startVideo();
 	/** The video on screen ended or was stopped (how is logged). */
 	void endVideo(const char *how);
@@ -686,6 +686,12 @@ private:
 	/** An asset of the current view enabled or disabled: the view picks the asset it shows again. */
 	void updateViewAsset(uint32 id);
 	void activateViewAsset();
+	/**
+	 * An asset object counts its activations (XFiles.exe +0x14c): Object Activation fires on the first,
+	 * Object Deactivation when the last user lets go.
+	 */
+	void activateAsset(uint32 id);
+	void deactivateAsset(uint32 id, bool fireEvent = true);
 	bool isInView(uint32 id) const;
 	void spendIcons(uint32 classId);
 	/** Whether the Timer Expiration actions of an object test for timer n. */
@@ -761,6 +767,7 @@ private:
 		uint serial;    ///< _fireSerial of the event that queued it
 		bool viewWait;  ///< Queued before a held view was entered but not started: the view waits for it
 		bool activated; ///< Its Object Activation has fired already (at queueing, see queueVideo())
+		bool viewLoop;  ///< A piece of the view's loop: its asset is the view's, so it fires no Activation or Deactivation
 	};
 	Common::Array<VideoPlay> _videoPlays;      ///< Per queued video
 	bool _videoNextPending;                    ///< The queue's first video has not started yet (a video just ended)
@@ -795,6 +802,7 @@ private:
 	bool _clipQueued;                          ///< A clip after the question is queued (topic +0x150)
 	uint32 _node, _location, _viewPoint, _view;
 	Common::Array<uint32> _viewObjects;        ///< Activated with the view, in activation order
+	Common::HashMap<uint32, uint> _assetActive; ///< Asset ID -> users of its asset object, see activateAsset()
 	uint _fireSerial;                          ///< Counts the events fired from outside (see _viewSerial)
 	bool _inEvent;                             ///< An event spans several fire() calls: they share a _fireSerial
 	uint _viewSerial;                          ///< _fireSerial of the event that held the view: the videos it waits for

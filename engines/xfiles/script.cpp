@@ -1165,6 +1165,13 @@ void Script::enableKitIcon(uint32 id) {
 
 // -- Media --------------------------------------------------------------------
 
+static bool isVideoAsset(const VCAsset &a) {
+	bool video = false;
+	for (uint i = 0; i < a.files.size(); i++)
+		video |= a.files[i].file.hasPrefix("XV:") || a.files[i].file.hasPrefix("XN:") || a.files[i].file.hasSuffixIgnoreCase(".nmv");
+	return video;
+}
+
 void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 	VCAsset a;
 	if (!_data.getAsset(id, a)) {
@@ -1181,9 +1188,7 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 		endSound(id, "stopped");
 		endClip(id, "stopped");
 	}
-	bool video = false;
-	for (uint i = 0; i < a.files.size(); i++)
-		video |= a.files[i].file.hasPrefix("XV:") || a.files[i].file.hasPrefix("XN:") || a.files[i].file.hasSuffixIgnoreCase(".nmv");
+	bool video = isVideoAsset(a);
 	Common::String file = a.files.empty() ? Common::String() : formatFile(a.files[0]);
 
 	// XFiles.exe makes a sound object for every asset it plays (Action_DoAsset
@@ -1201,10 +1206,17 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 		log(Common::String::format("      %s #%u ", kModeNames[mode], id) + file + where + "  \"" + nameOrNone(_data, a.name) + "\"");
 		// A sound (.amv, .mus, .wav) ends on its own; its end or a stop
 		// deactivates its asset object too (0x43a970): see endSound()
-		if (!a.files.empty() && a.files[0].file.hasPrefix("XS:"))
+		// A sound already playing shares its asset object: no second activation
+		bool xs = !a.files.empty() && a.files[0].file.hasPrefix("XS:");
+		bool fresh = xs && !_sounds.contains(id);
+		if (xs)
 			_sounds[id] = true;
-		if (!_clipsActivated)
-			fire(id, kEventObjectActivation);
+		if (!_clipsActivated) {
+			if (fresh)
+				activateAsset(id);
+			else if (!xs)
+				fire(id, kEventObjectActivation);
+		}
 		// The sound object's event is held while a video plays (0x433000,
 		// raised by 0x44f860), so the sound starts after the videos, in
 		// order; its asset object is active at once (media2.log: 30399
@@ -1237,6 +1249,9 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 			} else if (i == 0) {
 				endVideo("stopped");
 			} else {
+				// Nothing deactivates it, so its use of the asset object ends without an event
+				if (_videoPlays[i].activated && !_videoPlays[i].viewLoop)
+					deactivateAsset(id, false);
 				_videoQueue.remove_at(i);
 				_videoPlays.remove_at(i);
 			}
@@ -1258,7 +1273,7 @@ void Script::endSound(uint32 id, const char *how) {
 		return;
 	_sounds.erase(id);
 	log(Common::String::format("  << sound #%u %s", id, how));
-	fire(id, kEventObjectDeactivation);
+	deactivateAsset(id);
 }
 
 bool Script::isPlaying(uint32 id) const {
@@ -1281,7 +1296,7 @@ void Script::playAssetAt(uint32 asset, int x, int y) {
 void Script::startClip(const VCAsset &a, int x, int y) {
 	log(Common::String::format("      %s #%u ", kModeNames[kModePlayOnce], a.id) + formatFile(a.files[0]) + "  \"" + nameOrNone(_data, a.name) + "\"");
 	_clips[a.id] = true;
-	fire(a.id, kEventObjectActivation);
+	activateAsset(a.id);
 	if (_hooks)
 		_hooks->playClip(a.id, x, y);
 }
@@ -1291,7 +1306,7 @@ void Script::endClip(uint32 id, const char *how) {
 		return;
 	_clips.erase(id);
 	log(Common::String::format("  << clip #%u %s", id, how));
-	fire(id, kEventObjectDeactivation);
+	deactivateAsset(id);
 }
 
 void Script::stopEnvSounds() {
@@ -1365,8 +1380,10 @@ void Script::loadPreferences() {
 	}
 }
 
-void Script::queueVideo(uint32 id, uint32 limit, bool loop) {
-	VideoPlay play = {limit, _nextVideoEnd, loop, _fireSerial, false, _clipsActivated};
+void Script::queueVideo(uint32 id, uint32 limit, bool loop, bool viewLoop) {
+	// A piece of the view's loop is the view's shown asset, already active: it fires neither Activation nor
+	// Deactivation (0x4ea320, B-162)
+	VideoPlay play = {limit, _nextVideoEnd, loop, _fireSerial, false, _clipsActivated || viewLoop, viewLoop};
 	_videoQueue.push_back(id);
 	_videoPlays.push_back(play);
 	if (_videoQueue.size() == 1) {
@@ -1374,7 +1391,7 @@ void Script::queueVideo(uint32 id, uint32 limit, bool loop) {
 	} else if (!play.activated) {
 		// The exe activates a clip's asset object when it is queued, not when it starts
 		_videoPlays.back().activated = true;
-		fire(id, kEventObjectActivation);
+		activateAsset(id);
 	}
 }
 
@@ -1388,7 +1405,7 @@ void Script::startVideo() {
 	log(Common::String::format("  >> video #%u ", id) + a.files[0].file + limit + "  \"" + nameOrNone(_data, a.name) + "\"");
 	if (!_videoPlays[0].activated) {
 		_videoPlays[0].activated = true;
-		fire(id, kEventObjectActivation);
+		activateAsset(id);
 	}
 }
 
@@ -1399,6 +1416,7 @@ void Script::endVideo(const char *how) {
 	}
 	uint32 id = _videoQueue.remove_at(0);
 	bool viewVideo = _videoPlays[0].serial == _viewSerial || _videoPlays[0].viewWait;
+	bool viewLoop = _videoPlays[0].viewLoop;
 	_videoPlays.remove_at(0);
 	log(Common::String::format("  << video #%u %s", id, how));
 	bool next = !_videoQueue.empty();
@@ -1415,7 +1433,8 @@ void Script::endVideo(const char *how) {
 	else if (_viewAssetHeld)
 		activateViewAsset();
 	_videoNextPending = next;
-	fire(id, kEventObjectDeactivation);
+	if (!viewLoop)
+		deactivateAsset(id);
 	_videoNextPending = false;
 	if (next)
 		startVideo();
@@ -1478,7 +1497,8 @@ void Script::stopAllForTravel() {
 	Common::sort(sounds.begin(), sounds.end());
 	Common::Array<uint32> videos;
 	videos.swap(_videoQueue);
-	_videoPlays.clear();
+	Common::Array<VideoPlay> plays;
+	plays.swap(_videoPlays);
 	_ideaTopic = 0;
 	_heldSounds.clear();
 	_pendingStops.clear();
@@ -1488,7 +1508,8 @@ void Script::stopAllForTravel() {
 		endClip(clips[i], "stopped");
 	for (uint i = 0; i < videos.size(); i++) {
 		log(Common::String::format("  << video #%u stopped", videos[i]));
-		fire(videos[i], kEventObjectDeactivation);
+		if (!plays[i].viewLoop)
+			deactivateAsset(videos[i]);
 	}
 }
 
@@ -1600,7 +1621,7 @@ void Script::deactivateViewAsset() {
 		Common::Array<uint32>::iterator it = Common::find(_viewObjects.begin(), _viewObjects.end(), ids[j]);
 		if (it != _viewObjects.end())
 			_viewObjects.erase(it);
-		fire(ids[j], kEventObjectDeactivation);
+		deactivateAsset(ids[j]);
 	}
 }
 
@@ -1701,7 +1722,7 @@ void Script::updateViewAsset(uint32 id) {
 		if (old == shown)
 			return;
 		_viewObjects.remove_at(i);
-		fire(old, kEventObjectDeactivation);
+		deactivateAsset(old);
 		break;
 	}
 	_viewAssetHeld = !_videoQueue.empty();
@@ -1718,7 +1739,26 @@ void Script::activateViewAsset() {
 		return;
 	_viewObjects.push_back(ids[0]);
 	logViewAsset(ids[0], background);
-	fire(ids[0], kEventObjectActivation);
+	activateAsset(ids[0]);
+}
+
+void Script::activateAsset(uint32 id) {
+	// XFiles.exe 0x446580 shares the asset object of a second user; its Object Activation fires on the first
+	// use only (0x45a330, B-162)
+	uint &count = _assetActive[id];
+	if (count++ == 0)
+		fire(id, kEventObjectActivation);
+}
+
+void Script::deactivateAsset(uint32 id, bool fireEvent) {
+	if (!_assetActive.contains(id))
+		return;
+	uint &count = _assetActive[id];
+	if (--count > 0)
+		return;
+	_assetActive.erase(id);
+	if (fireEvent)
+		fire(id, kEventObjectDeactivation);
 }
 
 void Script::getViewAssets(Common::Array<uint32> &assets, uint32 &background) const {
@@ -1846,6 +1886,7 @@ void Script::restore(const VCSave &save) {
 	// each repeat still counts)
 	_history.clear();
 	_asked.clear();
+	_assetActive.clear();
 	for (uint i = 0; i < save.history.size(); i++)
 		recordTopic(save.history[i]);
 	_pda.restore(save);
@@ -1892,6 +1933,7 @@ void Script::restoreView() {
 		if (!_data.getAsset(id, a))
 			continue;
 		_sounds[id] = true;
+		_assetActive[id]++; // No Object Activation (kind 27), but its end deactivates the asset object
 		log(Common::String::format("  restored sound #%u at %u%s", id, save.sounds[i + 2], save.sounds[i + 1] ? ", looped" : ""));
 		if (_hooks)
 			_hooks->restoreSound(id, save.sounds[i + 1] != 0, save.sounds[i + 2]);
@@ -2566,14 +2608,23 @@ void Script::mergeTopicClips() {
 	}
 	// The exe activates every clip's asset object (Object Activation triggers and their actions) before the first
 	// clip plays; the clips whose asset has no PC file are included
-	for (uint i = 0; i < list.size(); i++)
-		fire(list[i].id, kEventObjectActivation);
+	// (a piece of the view's loop is the view's own asset: none). Only a clip that is queued or a sound whose end
+	// deactivates it counts as a use of the asset object; any other fires directly (B-141, B-162)
+	for (uint i = 0; i < list.size(); i++) {
+		VCAsset a;
+		if (list[i].limit)
+			continue;
+		if (_data.getAsset(list[i].id, a) && !a.files.empty() && (a.files[0].file.hasPrefix("XS:") || isVideoAsset(a)))
+			activateAsset(list[i].id);
+		else
+			fire(list[i].id, kEventObjectActivation);
+	}
 	_clipsActivated = true;
 	for (uint i = 0; i < list.size(); i++) {
 		const TopicClip &s = list[i];
 		_nextVideoEnd = s.end;
 		if (s.limit)
-			queueVideo(s.id, s.limit, false);
+			queueVideo(s.id, s.limit, false, true);
 		else
 			playAsset(s.id, kModePlayOnce, nullptr);
 		_nextVideoEnd = 0;
@@ -2705,7 +2756,7 @@ void Script::queueViewLoop() {
 		_topicClips.push_back(clip);
 		return;
 	}
-	queueVideo(id, 750, false);
+	queueVideo(id, 750, false, true);
 }
 
 uint32 Script::getViewLoop() const {
