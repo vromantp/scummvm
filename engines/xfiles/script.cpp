@@ -117,7 +117,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	_jumpCut.first = _jumpCut.later = false;
 	memset(_flashlight, 0, sizeof(_flashlight));
@@ -1203,7 +1203,8 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 		// deactivates its asset object too (0x43a970): see endSound()
 		if (!a.files.empty() && a.files[0].file.hasPrefix("XS:"))
 			_sounds[id] = true;
-		fire(id, kEventObjectActivation);
+		if (!_clipsActivated)
+			fire(id, kEventObjectActivation);
 		// The sound object's event is held while a video plays (0x433000,
 		// raised by 0x44f860), so the sound starts after the videos, in
 		// order; its asset object is active at once (media2.log: 30399
@@ -1365,11 +1366,16 @@ void Script::loadPreferences() {
 }
 
 void Script::queueVideo(uint32 id, uint32 limit, bool loop) {
-	VideoPlay play = {limit, _nextVideoEnd, loop, _fireSerial, false};
+	VideoPlay play = {limit, _nextVideoEnd, loop, _fireSerial, false, _clipsActivated};
 	_videoQueue.push_back(id);
 	_videoPlays.push_back(play);
-	if (_videoQueue.size() == 1)
+	if (_videoQueue.size() == 1) {
 		startVideo();
+	} else if (!play.activated) {
+		// The exe activates a clip's asset object when it is queued, not when it starts
+		_videoPlays.back().activated = true;
+		fire(id, kEventObjectActivation);
+	}
 }
 
 void Script::startVideo() {
@@ -1380,7 +1386,10 @@ void Script::startVideo() {
 	if (_videoPlays[0].loop)
 		limit += " looped";
 	log(Common::String::format("  >> video #%u ", id) + a.files[0].file + limit + "  \"" + nameOrNone(_data, a.name) + "\"");
-	fire(id, kEventObjectActivation);
+	if (!_videoPlays[0].activated) {
+		_videoPlays[0].activated = true;
+		fire(id, kEventObjectActivation);
+	}
 }
 
 void Script::endVideo(const char *how) {
@@ -2534,6 +2543,7 @@ void Script::playTopic(uint32 conversationId, bool inBox) {
 void Script::mergeTopicClips() {
 	Common::Array<TopicClip> clips;
 	clips.swap(_topicClips);
+	Common::Array<TopicClip> list;
 	for (uint i = 0; i < clips.size(); i++) {
 		TopicClip &s = clips[i];
 		VCAsset a;
@@ -2545,6 +2555,15 @@ void Script::mergeTopicClips() {
 				i++; // The merged sound is dropped and stepped over
 			}
 		}
+		list.push_back(s);
+	}
+	// The exe activates every clip's asset object (Object Activation triggers and their actions) before the first
+	// clip plays; the clips whose asset has no PC file are included
+	for (uint i = 0; i < list.size(); i++)
+		fire(list[i].id, kEventObjectActivation);
+	_clipsActivated = true;
+	for (uint i = 0; i < list.size(); i++) {
+		const TopicClip &s = list[i];
 		_nextVideoEnd = s.end;
 		if (s.limit)
 			queueVideo(s.id, s.limit, false);
@@ -2552,6 +2571,7 @@ void Script::mergeTopicClips() {
 			playAsset(s.id, kModePlayOnce, nullptr);
 		_nextVideoEnd = 0;
 	}
+	_clipsActivated = false;
 }
 
 void Script::playTopicClips(uint32 conversationId, bool inBox) {

@@ -760,6 +760,7 @@ private:
 		bool loop;      ///< Plays until stopped
 		uint serial;    ///< _fireSerial of the event that queued it
 		bool viewWait;  ///< Queued before a held view was entered but not started: the view waits for it
+		bool activated; ///< Its Object Activation has fired already (at queueing, see queueVideo())
 	};
 	Common::Array<VideoPlay> _videoPlays;      ///< Per queued video
 	bool _videoNextPending;                    ///< The queue's first video has not started yet (a video just ended)
@@ -790,6 +791,7 @@ private:
 	bool _planning;                            ///< playTopic collects its clips in _topicClips
 	Common::Array<TopicClip> _topicClips;
 	uint32 _nextVideoEnd;                      ///< For queueVideo() while a merged clip is played
+	bool _clipsActivated;                      ///< mergeTopicClips() fired the clips' Object Activation: queueing and playing skip it
 	bool _clipQueued;                          ///< A clip after the question is queued (topic +0x150)
 	uint32 _node, _location, _viewPoint, _view;
 	Common::Array<uint32> _viewObjects;        ///< Activated with the view, in activation order
