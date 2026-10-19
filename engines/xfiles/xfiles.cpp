@@ -579,6 +579,20 @@ void XFilesEngine::addHooks() {
 			e._interface->closeBar();
 		return true;
 	});
+	t.add("DisplayDBox", [](XFilesEngine &e, const HookCall &c) {
+		// The Script hook has opened or closed the box's script side
+		if (!c.has(1))
+			return false;
+		VCCharView charView;
+		if (c.args[0] == 0) {
+			e._dialogBox.close();
+			return true;
+		}
+		if (!e._data->getCharView(c.args[0], charView))
+			return false;
+		e.openDialogBox(charView, false);
+		return true;
+	});
 	t.add("DispEvIcons", [](XFilesEngine &e, const HookCall &c) {
 		if (!c.has(1))
 			return false;
@@ -1583,7 +1597,7 @@ void XFilesEngine::handleDoubleClick(const Interface::Hit &hit) {
 
 // -- Dialog box ---------------------------------------------------------------
 
-void XFilesEngine::openDialogBox(const VCCharView &charView) {
+void XFilesEngine::openDialogBox(const VCCharView &charView, bool openScript) {
 	// DisplayDBox / XFiles.exe 0x481660: only for a character with topics or an enabled idea (0x436080)
 	if (!charView.conversations && !_script->hasEnabledIdea(charView.id))
 		return;
@@ -1591,7 +1605,8 @@ void XFilesEngine::openDialogBox(const VCCharView &charView) {
 	_dialogBox.open(charView.id, Common::Rect(charView.rect.left, charView.rect.top, charView.rect.right, charView.rect.bottom));
 	_dialogBoxView = _script->getView();
 	debugC(1, kDebugScript, "-- dialog box of #%u", charView.id);
-	_script->openBox(charView.id);
+	if (openScript)
+		_script->openBox(charView.id);
 	updateDialogBox();
 }
 

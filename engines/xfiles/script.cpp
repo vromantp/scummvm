@@ -1089,6 +1089,18 @@ void Script::addCoreHooks() {
 		s._tint = 0;
 		return true;
 	});
+	t.add("DisplayDBox", [](Script &s, const HookCall &c) {
+		// 0x451d90 -> 0x481660: opens the box of a character view with topics or an enabled idea, replacing the
+		// open one; 0 closes it (0x4bdc30). The engine hook opens the widget
+		if (!c.has(1))
+			return false;
+		VCCharView charView;
+		if (c.args[0] == 0)
+			s.closeBox();
+		else if (s._data.getCharView(c.args[0], charView) && (charView.conversations || s.hasEnabledIdea(charView.id)))
+			s.openBox(charView.id);
+		return false;
+	});
 	t.add("DispEvIcons", [](Script &s, const HookCall &c) {
 		// The engine shows or hides the row (XFilesEngine)
 		if (c.has(1))

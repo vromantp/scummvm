@@ -257,7 +257,7 @@ private:
 	void addHooks();
 	/** FadeToBlack (0x4ccb50): the screen fades to black, stays black for 2 s, and the script waits meanwhile. */
 	void fadeToBlack();
-	void openDialogBox(const VCCharView &charView);
+	void openDialogBox(const VCCharView &charView, bool openScript = true);
 	/** Close the box if its character left the view, and update its topics. */
 	void updateDialogBox();
 	void askTopic(uint32 conversation);
