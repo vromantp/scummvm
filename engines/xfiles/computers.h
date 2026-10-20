@@ -63,6 +63,7 @@ private:
 	void mediaInit();
 	void ingSearch(char category, char database, int event, const Common::Array<int32> &fields);
 	void ingClear();
+	void ingDisplayCook(int event, const Common::Array<int32> &fields);
 	void mediaSearch(int event, const Common::Array<int32> &fields);
 	void mediaKeyPress(uint key, int event, const Common::Array<int32> &fields);
 	void pwbkOK(uint32 variableId);
@@ -117,6 +118,7 @@ private:
 	int _wrongTries;            ///< 0x6b16c4: failed connections with the right user name; not in a save
 	int _pwbkTries;             ///< 0x6b16c0: Powerbook log-in tries; not in a save
 	uint32 _record;             ///< 0x6b9b94: the asset of the record shown, 0 if none (MediaInit clears it)
+	bool _cookShown;            ///< 0x6b1f20: INGDisplayCook has run its action list (never reset)
 	bool _recordShown;          ///< 0x6b1f1c: an ING record is shown
 	uint _sbaseCount;           ///< 0x6b19cc: SBase items shown
 	Common::Array<uint> _photoThumbs; ///< 0x6bbaf8: the photo of each thumbnail, slot 0 up

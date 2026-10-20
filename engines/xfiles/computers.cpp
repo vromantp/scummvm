@@ -111,6 +111,9 @@ static const uint32 kIngPlateGText = 58350;
 static const uint32 kIngPlateZText = 88652;
 static const uint32 kIngPlateNote = 63294;
 static const uint32 kIngPlateSeen = 4713;
+static const uint32 kIngCookVariable = 5095;
+static const uint kIngCookRecord = 3;
+static const uint32 kIngCookActions = 90360;
 static const uint32 kIngPhoneText = 89863;
 static const uint32 kIngPhoneSpecialText = 42225;
 static const uint32 kIngPhoneSpecialActions = 75767;
@@ -241,7 +244,7 @@ static const uint32 kSbaseItems[31] = {
 };
 // clang-format on
 
-ComputerHooks::ComputerHooks(Script &script) : _script(script), _loginState(0), _connectedBefore(false), _wrongTries(0), _pwbkTries(0), _record(0), _recordShown(false), _sbaseCount(0), _photosDownloaded(0), _photoOffset(0), _photoEnlarged(-1), _photoOpen(false) {
+ComputerHooks::ComputerHooks(Script &script) : _script(script), _loginState(0), _connectedBefore(false), _wrongTries(0), _pwbkTries(0), _record(0), _cookShown(false), _recordShown(false), _sbaseCount(0), _photosDownloaded(0), _photoOffset(0), _photoEnlarged(-1), _photoOpen(false) {
 }
 
 void ComputerHooks::addHooks(HookTable<Script> &t) {
@@ -297,6 +300,10 @@ void ComputerHooks::addHooks(HookTable<Script> &t) {
 	});
 	t.add("INGClear", [](Script &s, const HookCall &c) {
 		s._computer.ingClear();
+		return true;
+	});
+	t.add("INGDisplayCook", [](Script &s, const HookCall &c) {
+		s._computer.ingDisplayCook(c.event, c.fields);
 		return true;
 	});
 	t.add("MediaSearch", [](Script &s, const HookCall &c) {
@@ -936,6 +943,20 @@ void ComputerHooks::ingClear() {
 	_query.clear();
 	moveIngCaret();
 	_script.setItemEnabled(kIngHiddenItem, false);
+}
+
+void ComputerHooks::ingDisplayCook(int event, const Common::Array<int32> &fields) {
+	// 0x4fa650 (variable 5095): 0: record 3 is shown (0x467070) and, once per run of the program, the action list
+	// 90360 runs (items 35551..35559 and the clip 55941); otherwise text 58350 is drawn into 58344 as for the plate
+	if (_script.getVariable(kIngCookVariable) == 0) {
+		showRecord(kIngCookRecord);
+		if (!_cookShown) {
+			_script.runActionList(kIngCookActions, event, fields);
+			_cookShown = true;
+		}
+	} else {
+		setFieldAsset(kIngResultText, kIngPlateGText, kIngPlateSize, kColorBlue);
+	}
 }
 
 // -- Media index --------------------------------------------------------------
