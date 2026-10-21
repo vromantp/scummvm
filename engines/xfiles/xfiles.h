@@ -45,6 +45,7 @@ class Font;
 #include "xfiles/dialogbox.h"
 #include "xfiles/discfiles.h"
 #include "xfiles/headcredits.h"
+#include "xfiles/hot.h"
 #include "xfiles/interface.h"
 #include "xfiles/script.h"
 #include "xfiles/sound.h"
@@ -164,6 +165,8 @@ private:
 	void present();
 	void blit(const Graphics::Surface &src, int x, int y);
 	Common::Point getBandPosition(const Movie &movie) const;
+	/** The gun in hand over a live .HOT entry of the shootout (kinds 221-223) at a screen position; its kind or 0. */
+	uint32 hotKindAt(const Common::Point &pos) const;
 	bool openMovie(Movie &movie, uint32 assetId);
 
 	void runGame();
@@ -326,6 +329,8 @@ private:
 	int32 _pendingClipTime;              ///< A restored save's clip time for the first view played; -1 if none
 	uint32 _viewId;
 	Common::Array<Movie *> _layers;      ///< Background and overlays of the view
+	HotFile _hot;                        ///< The .HOT entries of the view's clip (B-177)
+	Movie *_hotMovie;                    ///< The layer whose time opens and closes their windows
 	Interface *_interface;
 	Cursors *_cursors;
 	uint32 _lastClickTime;               ///< For double-clicks

@@ -50,6 +50,8 @@ public:
 
 	/** Load the default cursor from XFiles.exe and show it. */
 	void init(const Graphics::PixelFormat &format);
+	/** Passed to show(): the tool cursor, group 132 of XFiles.exe (Screen_SetToolCursor, shown with the gun in hand). */
+	static const uint32 kToolCursorId = 0x7fffff84;
 	/** Show a VCCursor; 0 shows the default cursor. */
 	void show(uint32 cursorId);
 	/** Step the frames of an animated cursor. */
@@ -71,6 +73,7 @@ private:
 	const DiscFiles &_files;
 	Graphics::PixelFormat _format;
 	Graphics::WinCursorGroup *_default;
+	Graphics::WinCursorGroup *_tool;
 	Common::HashMap<uint32, Cursor *> _cursors;   ///< Loaded cursors; nullptr for those without a picture
 	uint32 _shown;                ///< The VCCursor shown; 0: the default
 	const Cursor *_cursor;        ///< Its pictures; nullptr: the default

@@ -442,6 +442,8 @@ public:
 	void putBack();
 	/** A gun click on a .HOT hotspot of the given kind (HotSpotObj_OnMouseClick 0x4b4470). */
 	void hotClick(uint32 kind);
+	/** The gun (OnGunClick's inventory value) is in hand: .HOT hotspots of the shootout take clicks and show the tool cursor. */
+	bool isGunHeld() const { return _gunValue && isHolding() && getVariable(_heldVariable) == (int32)_gunValue; }
 	/** The click on an inventory icon (InvIcon_OnMouseClick 0x49c180): put back, take the item, run its Mouse Click triggers. */
 	void selectInventory(uint32 id);
 	/** Whether the item has an icon in the bar: asks the engine, else every enabled VCInventory has one (0x4201a0). */

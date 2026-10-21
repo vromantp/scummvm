@@ -23,9 +23,10 @@
 #include "common/system.h"
 #include "image/png.h"
 
-#include "xfiles/xfiles.h"
+#include "xfiles/movie.h"
 #include "xfiles/vcdata.h"
 #include "xfiles/vcdump.h"
+#include "xfiles/xfiles.h"
 
 namespace XFiles {
 
@@ -104,6 +105,28 @@ void XFilesEngine::runSteps() {
 		if (step == "shot") {
 			// The input command shot of xfref.dll: a screenshot now
 			scheduleShot("shot", 0, 100);
+			return;
+		}
+		if (step == "xclick:hot" || step == "xclick:hotlate") {
+			// Engine only (B-177): wait until a .HOT entry of the view's clip is live (hot) or its window has
+			// passed (hotlate), then click the middle of its rectangle
+			bool late = step == "xclick:hotlate";
+			if (_hotMovie && !_hotMovie->hasEnded() && queue.empty()) {
+				uint32 now = _hotMovie->getTime();
+				const Common::Array<HotEntry> &entries = _hot.getEntries();
+				for (uint i = 0; i < entries.size(); i++) {
+					const HotEntry &e = entries[i];
+					if (late ? now >= e.endMs : (now >= e.startMs && now < e.endMs)) {
+						Common::Point band = getBandPosition(*_hotMovie);
+						Common::Point pos(band.x + (e.rect.left + e.rect.right) / 2, band.y + (e.rect.top + e.rect.bottom) / 2);
+						debugC(1, kDebugScript, "-- xclick %s at %d,%d (clip time %u)", late ? "after the window" : "in the window", pos.x, pos.y, now);
+						_mouse = pos;
+						handleClick(pos);
+						return;
+					}
+				}
+			}
+			_nextStep--; // not yet: try again next frame
 			return;
 		}
 		if (step.hasPrefix("xclick:")) {

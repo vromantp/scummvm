@@ -8,6 +8,7 @@ MODULE_OBJS = \
 	dialogbox.o \
 	discfiles.o \
 	headcredits.o \
+	hot.o \
 	interface.o \
 	itemtext.o \
 	menu.o \

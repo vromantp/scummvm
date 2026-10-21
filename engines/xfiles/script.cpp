@@ -1730,7 +1730,7 @@ void Script::deactivateView() {
 
 void Script::hotClick(uint32 kind) {
 	// HotSpotObj_OnMouseClick (0x4b4470) -> 0x4b4a20 actions 6-8
-	if (!_gunValue || !_heldVariable || getVariable(_heldVariable) != (int32)_gunValue) {
+	if (!isGunHeld()) {
 		log("  (no gun in hand)");
 		return;
 	}

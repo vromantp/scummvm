@@ -65,7 +65,7 @@ static const int kMenuCornerLeft = 501, kMenuCornerBottom = 34;
 static const uint32 kXCursor = 25541;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
-	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _viewfinder(nullptr), _counterFont(nullptr), _counterFontOwned(false), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuOpen(false), _menuLayout(false), _menuReopen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
+	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _viewfinder(nullptr), _counterFont(nullptr), _counterFontOwned(false), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuOpen(false), _menuLayout(false), _menuReopen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _hotMovie(nullptr), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
 	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _timersPaused(false), _barRevealed(false), _barRevealEnd(0), _sound(_discFiles) {
 	g_engine = this;
 	addHooks();
@@ -267,6 +267,16 @@ void XFilesEngine::blit(const Graphics::Surface &src, int x, int y) {
 
 Common::Point XFilesEngine::getBandPosition(const Movie &movie) const {
 	return Common::Point(kBandLeft + (kBandWidth - (int)movie.getWidth()) / 2, kBandTop + (kBandHeight - (int)movie.getHeight()) / 2);
+}
+
+uint32 XFilesEngine::hotKindAt(const Common::Point &pos) const {
+	// Kind 29 objects test the point moved by the band origin (HitTestObject 0x519e40, 0x51ad80); only the
+	// shootout's gun click is ported (Script::hotClick), so the other kinds are left to the view
+	if (!_hotMovie || !_script->isGunHeld() || _hotMovie->hasEnded())
+		return 0;
+	Common::Point band = getBandPosition(*_hotMovie);
+	const HotEntry *e = _hot.find(_hotMovie->getTime(), Common::Point(pos.x - band.x, pos.y - band.y));
+	return e && e->kind >= 221 && e->kind <= 223 ? e->kind : 0;
 }
 
 bool XFilesEngine::openMovie(Movie &movie, uint32 assetId) {
@@ -1034,6 +1044,9 @@ void XFilesEngine::syncView() {
 		else {
 			// The restored clip time applies to the first player started
 			movie->play(asset.flags & kAssetLoop, _pendingClipTime);
+			// The clip's .HOT file: its entries open and close by the clip's time
+			if (!_hotMovie && _hot.load(_discFiles, asset))
+				_hotMovie = movie;
 			debugC(2, kDebugScript, "-- view clip #%u from %d ms", ids[i], _pendingClipTime >= 0 ? _pendingClipTime : (int)asset.files[0].start);
 			_pendingClipTime = -1;
 		}
@@ -1174,6 +1187,8 @@ void XFilesEngine::playTransition(int mode, const Graphics::Surface &oldBand, co
 }
 
 void XFilesEngine::closeView() {
+	_hot.clear();
+	_hotMovie = nullptr;
 	for (uint i = 0; i < _layers.size(); i++)
 		delete _layers[i];
 	_layers.clear();
@@ -1469,6 +1484,13 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 	if (_interface->isModal())
 		return; // A layout has the input
 
+	// A live .HOT entry under the gun takes the click (kind 29 objects come before the view's own)
+	if (uint32 kind = hotKindAt(pos)) {
+		debugC(1, kDebugScript, "-- hot:%u", kind);
+		_script->hotClick(kind);
+		return;
+	}
+
 	ViewHit viewHit = hitView(pos);
 	switch (viewHit.kind) {
 	case ViewHit::kExplorable:
@@ -1568,6 +1590,9 @@ uint32 XFilesEngine::getCursorAt(const Common::Point &pos) const {
 	if (_script->isCameraEnabled() && pos.x >= kBandLeft && pos.x < kBandLeft + kBandWidth && pos.y >= kBandTop &&
 		pos.y < kBandTop + kBandHeight)
 		return 0;
+	// A live .HOT entry under the gun: the tool cursor (Screen_SetToolCursor, group 132)
+	if (hotKindAt(pos))
+		return Cursors::kToolCursorId;
 	ViewHit viewHit = hitView(pos);
 	switch (viewHit.kind) {
 	case ViewHit::kExplorable:

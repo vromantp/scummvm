@@ -35,10 +35,11 @@ namespace XFiles {
 
 // The cursor group XFiles.exe loads for the screen (0x4946b0) and shows
 // when no VCCursor is shown. The screen also loads 132, shown instead
-// while inventory value 9 is in hand (a tool mode, not in the engine).
+// while inventory value 9 is in hand (a tool mode, Cursors::kToolCursorId).
 static const uint16 kDefaultCursorId = 129;
+static const uint16 kToolCursorGroup = 132;
 
-Cursors::Cursors(const VCData &data, const DiscFiles &files) : _data(data), _files(files), _default(nullptr),
+Cursors::Cursors(const VCData &data, const DiscFiles &files) : _data(data), _files(files), _default(nullptr), _tool(nullptr),
 	_shown(0), _cursor(nullptr), _frame(0), _frameStart(0) {
 }
 
@@ -53,6 +54,7 @@ Cursors::~Cursors() {
 		delete it->_value;
 	}
 	delete _default;
+	delete _tool;
 }
 
 void Cursors::init(const Graphics::PixelFormat &format) {
@@ -61,6 +63,8 @@ void Cursors::init(const Graphics::PixelFormat &format) {
 	Common::WinResources *exe = stream ? Common::WinResources::createFromEXE(stream) : nullptr;
 	if (exe)
 		_default = Graphics::WinCursorGroup::createCursorGroup(exe, Common::WinResourceID(kDefaultCursorId));
+	if (exe)
+		_tool = Graphics::WinCursorGroup::createCursorGroup(exe, Common::WinResourceID(kToolCursorGroup));
 	delete exe;
 	delete stream;
 	if (!_default || _default->cursors.empty())
@@ -73,7 +77,12 @@ void Cursors::show(uint32 cursorId) {
 	if (cursorId == _shown)
 		return;
 	_shown = cursorId;
-	_cursor = cursorId ? getCursor(cursorId) : nullptr;
+	if (cursorId == kToolCursorId && _tool && !_tool->cursors.empty()) {
+		_cursor = nullptr;
+		CursorMan.replaceCursor(_tool->cursors[0].cursor);
+		return;
+	}
+	_cursor = cursorId && cursorId != kToolCursorId ? getCursor(cursorId) : nullptr;
 	if (!_cursor) {
 		showDefault();
 		return;
