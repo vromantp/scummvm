@@ -111,6 +111,8 @@ public:
 	 * as a movie of its own, not a sound object, from its beginning.
 	 */
 	virtual void playShutter(uint32 id) {}
+	/** The firing cursor after a gun click on a .HOT hotspot (0x4b4a20): an animated cursor asset. */
+	virtual void showCursorAnimation(uint32 id) {}
 	/** The player's current time in the clip shown in the band (0x41cdd0), for the photo the camera takes. */
 	virtual uint32 getPhotoTime() const { return 0; }
 	/** PlayAssetAt: draw the graphic clip once with its top-left at (x, y) over the screen; Script::finishSound ends it. */
@@ -438,6 +440,8 @@ public:
 	void clearHeldItem();
 	/** Inv_PutBack (0x429f00): acts only while something is in hand; tells the engine. */
 	void putBack();
+	/** A gun click on a .HOT hotspot of the given kind (HotSpotObj_OnMouseClick 0x4b4470). */
+	void hotClick(uint32 kind);
 	/** The click on an inventory icon (InvIcon_OnMouseClick 0x49c180): put back, take the item, run its Mouse Click triggers. */
 	void selectInventory(uint32 id);
 	/** Whether the item has an icon in the bar: asks the engine, else every enabled VCInventory has one (0x4201a0). */
@@ -690,6 +694,7 @@ private:
 	/** Activate what the current view shows: its first asset, character views, navs, explorables. */
 	void activateView();
 	void activateViewObjects(bool before);
+	void deactivateView();
 	void deactivateViewAsset();
 	void deactivateViewObjects();
 	/** An enabled character view, nav or explorable of the current view gets activated. */
@@ -763,6 +768,7 @@ private:
 	bool _clickOpensBox;                       ///< See opensBoxOnClick()
 	uint32 _heldVariable;                      ///< RegCurrInvVar: iCurrInventory
 	int32 _heldNone;                           ///< Its Inventory_None value
+	uint32 _gunValue;                          ///< The inventory value OnGunClick set (0 until the gun is taken)
 	uint32 _heldCursorItem;                    ///< Inv_Held() + 4 (0x6b8974): the VCInventory ID whose cursor is held
 	Common::Array<uint32> _pressed;            ///< See takePressedItems()
 	uint32 _held;                              ///< The interface item the mouse button is down on (press()), 0 for none
@@ -841,6 +847,7 @@ private:
 	uint32 _travelTo[4];                       ///< Node, location, viewpoint and view of the pending travel
 	bool _viewHeld;                            ///< The view is entered but not activated until the video ends
 	bool _viewActive;                          ///< The view's activation has run
+	bool _viewGone;                            ///< A gun click already deactivated the view (hotClick): enter() skips it
 	bool _viewAssetHeld;                       ///< The view's new asset is activated when the video ends
 };
 

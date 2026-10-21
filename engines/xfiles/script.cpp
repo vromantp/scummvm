@@ -117,7 +117,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _gunValue(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewGone(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	memset(_shootVars, 0, sizeof(_shootVars));
 	memset(_shootIdx, 0, sizeof(_shootIdx));
@@ -963,6 +963,15 @@ void Script::addCoreHooks() {
 		}
 		return true;
 	});
+	t.add("OnGunClick", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		// 0x4e1e80: the gun is taken like the camera, without a character reaction (no Tool_CharReaction)
+		if (s._heldVariable && s.getVariable(s._heldVariable) != c.args[0])
+			s._variables[s._heldVariable] = c.args[0];
+		s._gunValue = c.args[0];
+		return true;
+	});
 	t.add("RegCurrInvVar", [](Script &s, const HookCall &c) {
 		if (!c.has(2) || !c.isVariable(0))
 			return false;
@@ -1709,6 +1718,45 @@ void Script::stopAllForTravel() {
 	}
 }
 
+void Script::deactivateView() {
+	// The shown asset's deactivation runs before the view's own triggers (0x458e10, B-112)
+	deactivateViewAsset();
+	// The view is being left: an asset enabled by the deactivations below is not started (0x46f210)
+	_viewActive = false;
+	if (_view && !_viewHeld)
+		fire(_view, kEventObjectDeactivation);
+	deactivateViewObjects();
+}
+
+void Script::hotClick(uint32 kind) {
+	// HotSpotObj_OnMouseClick (0x4b4470) -> 0x4b4a20 actions 6-8
+	if (!_gunValue || !_heldVariable || getVariable(_heldVariable) != (int32)_gunValue) {
+		log("  (no gun in hand)");
+		return;
+	}
+	uint32 asset;
+	switch (kind) {
+	case 221:
+		asset = 21230;
+		break;
+	case 222:
+		asset = 21232;
+		break;
+	case 223:
+		asset = 21234;
+		break;
+	default:
+		log(Common::String::format("  (.HOT kind %u not ported, B-023)", kind));
+		return;
+	}
+	// The click queues the current view's deactivation; the scene has no view left to drop afterwards
+	deactivateView();
+	_viewGone = true;
+	if (_hooks)
+		_hooks->showCursorAnimation(73520);
+	playAsset(asset, kModePlayOnce, nullptr);
+}
+
 void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, bool deactivateAll) {
 	const uint32 newPath[4] = { node, location, viewPoint, view };
 	const uint32 oldPath[4] = { _node, _location, _viewPoint, _view };
@@ -1725,14 +1773,12 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, 
 		// one drops it, as Action_DoSetView (0x46a950) cancels its activation
 		// The shown asset's deactivation runs before the view's own triggers (0x458e10, B-112)
 		if (i == 3) {
-			deactivateViewAsset();
-			// The view is being left: an asset enabled by the deactivations below is not started (0x46f210)
-			_viewActive = false;
-		}
-		if (oldPath[i] && !(i == 3 && _viewHeld))
+			// After a gun click the scene has no view left to drop (hotClick)
+			if (!_viewGone)
+				deactivateView();
+			_viewGone = false;
+		} else if (oldPath[i])
 			fire(oldPath[i], kEventObjectDeactivation);
-		if (i == 3)
-			deactivateViewObjects();
 	}
 	if (first < 4) {
 		_viewHeld = false;
@@ -2065,6 +2111,7 @@ void Script::start() {
 	log("== start: " + nameOrNone(_data, title.name));
 	// Game_Start (0x48cd70) writes the preferences before the title activates
 	shootoutReset(); // 0x48ccd0
+	_gunValue = 0;
 	loadPreferences();
 	fire(title.id, kEventObjectActivation);
 }
@@ -3431,6 +3478,8 @@ void Script::step(const Common::String &s) {
 		VCCharView charView;
 		if (_clickOpensBox && _data.getCharView(id, charView) && (charView.conversations || hasEnabledIdea(id)))
 			openBox(id);
+	} else if (kind == "hot") {
+		hotClick(id);
 	} else if (kind == "photo") {
 		// the camera tool clicked in the band at x,y
 		size_t comma = arg.findFirstOf(',');
