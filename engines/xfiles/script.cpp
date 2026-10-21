@@ -119,6 +119,12 @@ static Common::String formatFile(const VCMediaFile &f) {
 
 Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
+	memset(_shootVars, 0, sizeof(_shootVars));
+	memset(_shootIdx, 0, sizeof(_shootIdx));
+	memset(_shootDead, 0, sizeof(_shootDead));
+	memset(_shootPerm, 0, sizeof(_shootPerm));
+	_shootCur = 0;
+	_fbiShot = true;
 	_jumpCut.first = _jumpCut.later = false;
 	memset(_flashlight, 0, sizeof(_flashlight));
 	memset(_tintColor, 0, sizeof(_tintColor));
@@ -802,6 +808,35 @@ void Script::addCoreHooks() {
 		s.randGen(c.action.args[0].value, c.args[1]);
 		return true;
 	});
+	t.add("InitSmShootout", [](Script &s, const HookCall &c) {
+		if (!c.isVariable(0) || !c.isVariable(1) || !c.isVariable(2))
+			return false;
+		for (int i = 0; i < 3; i++)
+			s._shootVars[i] = c.action.args[i].value;
+		s.shootoutReset(); // its three rolls are the reset's (0x4f9630)
+		return true;
+	});
+	t.add("DoSmolShootout", [](Script &s, const HookCall &c) {
+		s.doSmolShootout(c);
+		return true;
+	});
+	t.add("SmIsWillShot1", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		s.smIsWillShot(c.args[0]);
+		return true;
+	});
+	t.add("SmolGoonShot1", [](Script &s, const HookCall &) {
+		s.smolGoonShot();
+		return true;
+	});
+	t.add("GetPlayFBIShot", [](Script &s, const HookCall &c) {
+		if (!c.isVariable(0))
+			return false;
+		s.setVariable(c.action.args[0].value, s._fbiShot); // 0x4f9ef0
+		s._fbiShot = false;
+		return true;
+	});
 	t.add("IsIItemHeld", [](Script &s, const HookCall &c) {
 		if (!c.has(2) || !c.isVariable(1))
 			return false;
@@ -1185,6 +1220,124 @@ void Script::randGen(uint32 variableId, int32 n) {
 	Common::U32String name;
 	_data.getVariableName(variableId, name);
 	log(Common::String::format("      %s = %d", name.encode().c_str(), value));
+}
+
+void Script::shootoutReset() {
+	// 0x48ccd0 (Game_Start) and InitSmShootout 0x4f9630: forget the shots, clear the variables, roll three permutations
+	for (int i = 0; i < 3; i++) {
+		_shootIdx[i] = 0;
+		_shootDead[i] = false;
+		if (_shootVars[i])
+			setVariable(_shootVars[i], 0);
+	}
+	_shootCur = 0;
+	static const int perms[6][3] = {{1, 2, 3}, {1, 3, 2}, {2, 1, 3}, {2, 3, 1}, {3, 1, 2}, {3, 2, 1}};
+	for (int i = 0; i < 3; i++) {
+		// Nothing reads the permutations; without fixed seeds the dice would draw from (and shift) the shared sequence
+		if (!_fixedSeeds)
+			break;
+		Dice dice = newDice(0x4f9658);
+		const int *perm = perms[roll(dice, 1, 6) - 1];
+		for (int k = 0; k < 3; k++)
+			_shootPerm[i][k] = perm[k];
+	}
+}
+
+bool Script::findViewPath(uint32 view, uint32 (&path)[4]) const {
+	// The exe finds the view's owners in the database; the current viewpoint is the likely one
+	path[0] = view;
+	VCViewPoint viewPoint;
+	if (_data.getViewPoint(_viewPoint, viewPoint) && Common::find(viewPoint.views.begin(), viewPoint.views.end(), view) != viewPoint.views.end()) {
+		path[1] = _node;
+		path[2] = _location;
+		path[3] = _viewPoint;
+		return true;
+	}
+	Common::Array<NeoEntry> nodes;
+	_data.getHdb().getObjects(kClassNode, nodes);
+	for (uint n = 0; n < nodes.size(); n++) {
+		VCNode node;
+		if (!_data.getNode(nodes[n].key, node))
+			continue;
+		for (uint l = 0; l < node.locations.size(); l++) {
+			VCLocation location;
+			if (!_data.getLocation(node.locations[l], location))
+				continue;
+			for (uint v = 0; v < location.viewPoints.size(); v++) {
+				if (_data.getViewPoint(location.viewPoints[v], viewPoint) &&
+					Common::find(viewPoint.views.begin(), viewPoint.views.end(), view) != viewPoint.views.end()) {
+					path[1] = node.id;
+					path[2] = location.id;
+					path[3] = viewPoint.id;
+					return true;
+				}
+			}
+		}
+	}
+	return false;
+}
+
+void Script::doSmolShootout(const HookCall &call) {
+	// 0x4f9a40: the next goon to appear, then a Set View the exe makes (0x4b3bc0, no VCAction in the data)
+	static const uint32 views[3][3] = {{62256, 62258, 62260}, {62262, 62264, 62266}, {62268, 62270, 62272}};
+	if (_shootDead[0] && _shootDead[1] && _shootDead[2]) {
+		_shootCur = 0;
+	} else {
+		Dice dice = newDice(0x4f9a59);
+		int r = roll(dice, 1, 3);
+		int goon = r - 1;
+		if (_shootDead[goon])
+			goon = (goon + 1) % 3;
+		if (_shootDead[goon])
+			goon = (goon + 1) % 3;
+		_shootCur = goon + 1;
+	}
+	uint32 view = 5208;
+	if (_shootCur) {
+		int &idx = _shootIdx[_shootCur - 1];
+		view = views[_shootCur - 1][idx];
+		if (idx < 2)
+			idx++;
+	}
+	// The exe also drops the pending .HOT entries first (nothing to drop until B-175)
+	VCAction a;
+	a.id = 0;
+	a.type = kActionSetView;
+	if (!findViewPath(view, a.path)) {
+		warning("Script: DoSmolShootout: no owner for view %u", view);
+		return;
+	}
+	LocalVariables locals;
+	execute(a, call.event, call.fields, locals);
+}
+
+void Script::smIsWillShot(uint32 timer) {
+	// 0x4f9bf0
+	if (!_shootCur)
+		return;
+	int n = _shootIdx[_shootCur - 1];
+	Dice dice = newDice(0x4f9c07);
+	int r = roll(dice, 0, 100);
+	int32 difficulty = getPreferenceValue(kPrefActionSceneDifficulty);
+	bool easy = difficulty == 'E', hard = difficulty == 'H';
+	int limit1 = easy ? 20 : (hard ? 60 : 40);
+	int limit2 = easy ? 50 : (hard ? 80 : 65);
+	bool shot = n >= 3 || (n == 1 && r < limit1) || (n == 2 && r < limit2);
+	if (shot) {
+		// No reference run takes this branch (docs/subsystems/smolnikoff-shootout.md): a Timer Stop, then asset 21168
+		_timers.erase(timer);
+		playAsset(21168, kModePreload, nullptr); // mode 0, as an Asset action of the data
+	}
+}
+
+void Script::smolGoonShot() {
+	// 0x4f9d20: the goon on screen is dead; every variable is written, changed or not
+	if (_shootCur >= 1 && _shootCur <= 3)
+		_shootDead[_shootCur - 1] = true;
+	for (int i = 0; i < 3; i++) {
+		if (_shootVars[i])
+			setVariable(_shootVars[i], _shootDead[i]);
+	}
 }
 
 void Script::isIItemHeld(uint32 variableId, int32 item) {
@@ -1911,6 +2064,7 @@ void Script::start() {
 	}
 	log("== start: " + nameOrNone(_data, title.name));
 	// Game_Start (0x48cd70) writes the preferences before the title activates
+	shootoutReset(); // 0x48ccd0
 	loadPreferences();
 	fire(title.id, kEventObjectActivation);
 }

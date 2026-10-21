@@ -593,6 +593,14 @@ private:
 	/** RandGen(var, n): a number from 0 to n (0x49f6d0). */
 	void randGen(uint32 variableId, int32 n);
 	void isIItemHeld(uint32 variableId, int32 item);
+	/** The Smolnikoff shootout hooks (docs/subsystems/smolnikoff-shootout.md). */
+	void shootoutReset();
+	void doSmolShootout(const HookCall &call);
+	void smIsWillShot(uint32 timer);
+	void smolGoonShot();
+	void setShootoutVariables();
+	/** The node, location and viewpoint that hold a view: the current viewpoint first, else the whole database. */
+	bool findViewPath(uint32 view, uint32 (&path)[4]) const;
 	/** RegShanksNode2/3/6: keep the argument variables of node slot 0, 1 or 2. */
 	bool regShanksNode(int slot, uint count, const HookCall &call);
 	/** SetShanksVar (0x4c4710): compute the "tell will" flag, then the warehouse e-mail check. */
@@ -787,6 +795,14 @@ private:
 	uint32 _prefVariables[kPrefCount];         ///< The variable RegPreferences gave each preference, or 0
 	uint32 _prefArtificialIntuition;           ///< The variable RegPreferences gives Pref_bArtificialIntuition, or 0
 	uint32 _uberParanoia;                      ///< The variable RegUberVars gives iUberParanoia, or 0
+
+	// The Smolnikoff shootout: exe globals a save does not hold (0x6b1ef0..0x6b1f10, 0x6be8a4/7cc/834)
+	uint32 _shootVars[3];                      ///< The variables InitSmShootout was given (left, center, right goon dead)
+	int _shootIdx[3];                          ///< Next index into each goon's view table, at most 2
+	bool _shootDead[3];                        ///< Goon shot
+	int _shootCur;                             ///< Goon on screen, 0 for none
+	int _shootPerm[3][3];                      ///< Permutations of 1, 2, 3 the reset fills (no reader known)
+	bool _fbiShot;                             ///< GetPlayFBIShot gives 1 once per process
 
 	/** FixJumpCut(first, later) of a topic's Object Activation (0x47ca30). */
 	struct JumpCut {
