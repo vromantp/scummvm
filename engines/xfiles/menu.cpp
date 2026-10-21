@@ -255,6 +255,7 @@ void XFilesEngine::menuChoice(MenuEntry entry) {
 		break;
 	case kMenuSave:
 		// The menu stays up, as after the original's save
+		commitCheckpoint(); // Menu_AskSave snapshots even when the save screen is left
 		saveGameDialog();
 		break;
 	case kMenuLoad:
@@ -276,6 +277,7 @@ bool XFilesEngine::saveOnExit() {
 	// A scripted run (xfiles_steps) has nobody to answer
 	if (!_script || !_steps.empty())
 		return true;
+	commitCheckpoint(); // Menu_AskSave snapshots, whatever the answer
 	int32 mode = _prefVariables[kPrefSaveGameOnExit] ? _script->getVariable(_prefVariables[kPrefSaveGameOnExit]) : 'A';
 	if (mode == 'Y') {
 		// The original saves to the current save without asking; the autosave slot never overwrites a player's slot

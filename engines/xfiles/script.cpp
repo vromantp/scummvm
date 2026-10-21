@@ -117,7 +117,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _gunValue(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewGone(false), _viewAssetHeld(false), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _gunValue(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewGone(false), _viewAssetHeld(false), _endGamePending(false), _endGameVar(0), _endGameValue(0), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	memset(_shootVars, 0, sizeof(_shootVars));
 	memset(_shootIdx, 0, sizeof(_shootIdx));
@@ -837,6 +837,16 @@ void Script::addCoreHooks() {
 		s._fbiShot = false;
 		return true;
 	});
+	t.add("EndGame", [](Script &s, const HookCall &c) {
+		if (!c.isVariable(0))
+			return false;
+		// 0x4cc870 closes the dialog box; the question and the restart are the engine's (answerEndGame)
+		s.closeBox();
+		s._endGameVar = c.action.args[0].value;
+		s._endGameValue = s.getVariable(s._endGameVar);
+		s._endGamePending = true;
+		return true;
+	});
 	t.add("IsIItemHeld", [](Script &s, const HookCall &c) {
 		if (!c.has(2) || !c.isVariable(1))
 			return false;
@@ -1164,8 +1174,7 @@ void Script::addCoreHooks() {
 	});
 
 	// Hooks only logged on purpose: the menu's Save and Load (B-063)
-	static const char *const kLoggedMenuHooks[] = {"SaveGameState", "SaveKeyPress",
-		"SaveLoadComit", "SaveLoadInit", "SaveSlotSelect"};
+	static const char *const kLoggedMenuHooks[] = {"SaveKeyPress", "SaveLoadComit", "SaveLoadInit", "SaveSlotSelect"};
 	for (uint i = 0; i < ARRAYSIZE(kLoggedMenuHooks); i++)
 		t.addLogged(kLoggedMenuHooks[i]);
 }
@@ -1668,7 +1677,15 @@ void Script::endIdeaTopic() {
 
 // -- Navigation ---------------------------------------------------------------
 
+void Script::answerEndGame(bool asked) {
+	if (asked)
+		setVariable(_endGameVar, 0); // 0x4fbd60 writes the changed value back, after the answer
+	_endGamePending = false;
+}
+
 void Script::travel() {
+	if (_hooks)
+		_hooks->checkpoint(); // 0x5068b0 snapshots the game before it travels
 	// 0x5068b0, 0x493090: the emotion and action icons are deactivated first (0x44d850; clears their enable
 	// flags, idea icons keep theirs), then all four old objects, whatever the new path shares, then the new
 	// four are activated. The exe also hides the inventory and AI icons and clears the letterbox tint; the
@@ -3478,6 +3495,8 @@ void Script::step(const Common::String &s) {
 		VCCharView charView;
 		if (_clickOpensBox && _data.getCharView(id, charView) && (charView.conversations || hasEnabledIdea(id)))
 			openBox(id);
+	} else if (kind == "answer") {
+		answerEndGame(true); // the question of EndGame answered (the engine reads yes or no from the step)
 	} else if (kind == "hot") {
 		hotClick(id);
 	} else if (kind == "photo") {

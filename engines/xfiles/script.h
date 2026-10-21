@@ -111,6 +111,11 @@ public:
 	 * as a movie of its own, not a sound object, from its beginning.
 	 */
 	virtual void playShutter(uint32 id) {}
+	/**
+	 * A SwapDisc travel is about to run (0x5068b0 snapshots the game first): the checkpoint "Try again" restarts
+	 * from (B-176).
+	 */
+	virtual void checkpoint() {}
 	/** The firing cursor after a gun click on a .HOT hotspot (0x4b4a20): an animated cursor asset. */
 	virtual void showCursorAnimation(uint32 id) {}
 	/** The player's current time in the clip shown in the band (0x41cdd0), for the photo the camera takes. */
@@ -432,6 +437,12 @@ public:
 	/** The notepad's notes (VCPDANotes), for the state dump. */
 	const Common::Array<uint32> &getPDANotes() const { return _pda.getNotes(); }
 	void setVariable(uint32 id, int32 value) { _variables[id] = value; }
+	/** EndGame(var) ran (0x4cc870): the dialog box is closed, the answer is the engine's (B-176). */
+	bool isEndGamePending() const { return _endGamePending; }
+	/** The value of the EndGame variable when it ran: non-zero asks "Try again?" if the preference is on. */
+	int32 getEndGameValue() const { return _endGameValue; }
+	/** The end is taken: asked (the question was shown) writes 0 back to the variable, as 0x4fbd60 does. */
+	void answerEndGame(bool asked);
 	/** The variable registered by RegCurrInvVar (iCurrInventory); 0 before it. */
 	uint32 getHeldVariable() const { return _heldVariable; }
 	/** An item is in hand: iCurrInventory is not Inventory_None. */
@@ -811,6 +822,9 @@ private:
 	int _shootCur;                             ///< Goon on screen, 0 for none
 	int _shootPerm[3][3];                      ///< Permutations of 1, 2, 3 the reset fills (no reader known)
 	bool _fbiShot;                             ///< GetPlayFBIShot gives 1 once per process
+	bool _endGamePending;                      ///< EndGame ran and waits for the engine's answer
+	uint32 _endGameVar;                        ///< Its variable (bReplay)
+	int32 _endGameValue;                       ///< and the value it had
 
 	/** FixJumpCut(first, later) of a topic's Object Activation (0x47ca30). */
 	struct JumpCut {

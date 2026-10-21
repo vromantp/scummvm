@@ -105,6 +105,7 @@ public:
 	void restoreSound(uint32 id, bool loop, uint32 startMs) override;
 	void playPhoneTone(uint32 id) override;
 	void playShutter(uint32 id) override;
+	void checkpoint() override { commitCheckpoint(); }
 	uint32 getPhotoTime() const override;
 	void playClip(uint32 id, int16 x, int16 y) override;
 	void stopViewAsset(uint32 id) override;
@@ -169,6 +170,14 @@ private:
 	uint32 hotKindAt(const Common::Point &pos) const;
 	bool openMovie(Movie &movie, uint32 assetId);
 
+	/** A load read by loadGameStream, waiting for the frame boundary. */
+	struct PendingLoad {
+		PendingLoad() : valid(false) {}
+		bool valid;
+		Script::SavedValues values;
+		VCSave save;
+	};
+
 	void runGame();
 	void createScript();
 	/** The new-game half of runGame (Game_Start, XFiles.exe 0x48cd70). */
@@ -181,6 +190,15 @@ private:
 	void restoreGame(const VCSave &save);
 	/** A queued load (loadGameStream): teardown, a new Script with the saved values, restore. */
 	void applyPendingLoad();
+	/** The save of the running game (saveGameStream's data); false when no game runs. */
+	bool buildSave(PendingLoad &out);
+	/** GameState_Save (0x4d9450) commits the running game: the checkpoint Try again restarts from. */
+	void commitCheckpoint();
+	/**
+	 * EndGame ran (B-176): ask "Try again?" when the variable and Pref_bAutoRewind say so. Yes queues the checkpoint,
+	 * No ends the game (teardown). false: still waiting for a scripted answer. true: the game ended or restarts.
+	 */
+	bool handleEndGame();
 
 	// The intro and the main menu, also the one the X corner opens during play (menu.cpp)
 	bool playIntro();
@@ -379,14 +397,11 @@ private:
 	Common::StringArray _steps;
 	bool _loadedSave;                     ///< xfiles_save: the game continues from an original .X save
 	VCSave _save;
-	/** A load read by loadGameStream, waiting for the frame boundary. */
-	struct PendingLoad {
-		PendingLoad() : valid(false) {}
-		bool valid;
-		Script::SavedValues values;
-		VCSave save;
-	};
 	PendingLoad _pendingLoad;
+	PendingLoad _checkpoint;              ///< The latest commit of the working database (Temp.gam in the exe)
+	bool _checkpointNew;                  ///< The game began with New: no commit yet, Try again restarts from XFiles.gam
+	bool _gameEnded;                      ///< EndGame took the game down: back to the start-up menu
+	int _stepAnswer;                      ///< The answer: step for "Try again?": 1 Yes, 0 No, -1 none yet
 	Common::StringArray _fastForward;     ///< xfiles_fastforward: steps run headless before the game starts (cleared after)
 	uint _nextStep;
 	uint32 _waitVideo;                    ///< A wait step waits for this video to end

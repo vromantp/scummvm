@@ -139,15 +139,11 @@ static bool syncSave(Common::Serializer &s, Script::SavedValues &values, VCSave 
 Common::Error XFilesEngine::saveGameStream(Common::WriteStream *stream, bool isAutosave) {
 	if (!_script)
 		return Common::kWritingFailed;
-	// An icon still waiting for the reveal's timer is saved in the bar
-	flushPendingIcons(false);
-	VCSave save;
-	fillSnapshot(save);
-	Script::SavedValues values;
-	_script->getSaved(values);
+	PendingLoad snapshot;
+	buildSave(snapshot);
 
 	Common::Serializer s(nullptr, stream);
-	syncSave(s, values, save, 0);
+	syncSave(s, snapshot.values, snapshot.save, 0);
 	debugC(1, kDebugScript, "-- game saved (%u bytes)", s.bytesSynced());
 	return stream->err() ? Common::kWritingFailed : Common::kNoError;
 }

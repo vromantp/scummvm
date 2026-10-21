@@ -27,11 +27,13 @@
 #include "common/formats/winexe.h"
 #include "common/system.h"
 #include "common/tokenizer.h"
+#include "common/translation.h"
 #include "engines/util.h"
 #include "graphics/font.h"
 #include "graphics/fontman.h"
 #include "graphics/fonts/ttf.h"
 #include "graphics/pixelformat.h"
+#include "gui/message.h"
 
 #include "xfiles/xfiles.h"
 #include "xfiles/console.h"
@@ -70,6 +72,9 @@ XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : E
 	g_engine = this;
 	addHooks();
 	_loadedSave = false;
+	_checkpointNew = false;
+	_gameEnded = false;
+	_stepAnswer = -1;
 	_pendingClipTime = -1;
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	memset(_uberVariables, 0, sizeof(_uberVariables));
@@ -180,11 +185,18 @@ Common::Error XFilesEngine::run() {
 	}
 	// A step list starts the game at once, without the intro and the menu. The exe has shown the menu's fade-in by
 	// then, so the X corner opens the still menu (g_menuIntroDone)
+	bool play;
 	if (_pendingLoad.valid || !_steps.empty() || !_fastForward.empty() || _loadedSave) {
 		_menuIntroDone = true;
+		play = true;
+	} else {
+		play = playIntro() && runMenu();
+	}
+	// EndGame without a Try again takes the game down to the start-up menu (B-176); a scripted run has nobody there
+	while (play && !shouldQuit()) {
+		_gameEnded = false;
 		runGame();
-	} else if (playIntro() && runMenu()) {
-		runGame();
+		play = _gameEnded && _steps.empty() && !shouldQuit() && runMenu();
 	}
 	return Common::kNoError;
 }
@@ -344,6 +356,9 @@ void XFilesEngine::startNewGame() {
 	// (XFiles.exe Game_Start 0x48cd70)
 	_headCredits.setEnabled(true);
 	flushPendingIcons(true);
+	// No commit yet: Try again restarts from XFiles.gam
+	_checkpointNew = true;
+	_checkpoint = PendingLoad();
 	_script->start();
 }
 
@@ -388,6 +403,11 @@ void XFilesEngine::runGame() {
 		// steps) runs here, between two frames
 		if (_pendingLoad.valid)
 			applyPendingLoad();
+		if (_script->isEndGamePending() && handleEndGame()) {
+			if (_gameEnded)
+				return;
+			continue;
+		}
 		Input input = pollInput();
 		if (_menuReopen)
 			reopenMenu();
@@ -459,11 +479,70 @@ void XFilesEngine::applyPendingLoad() {
 	debugC(1, kDebugScript, "-- load");
 	PendingLoad load = _pendingLoad;
 	_pendingLoad = PendingLoad();
+	// A load is the commit Try again restarts from (the .X is copied to Temp.gam)
+	_checkpoint = load;
+	_checkpointNew = false;
 	if (!teardownGame())
 		return;
 	createScript();
 	_script->applySaved(load.values);
 	restoreGame(load.save);
+}
+
+bool XFilesEngine::buildSave(PendingLoad &out) {
+	if (!_script)
+		return false;
+	// An icon still waiting for the reveal's timer is saved in the bar
+	flushPendingIcons(false);
+	out.valid = false;
+	fillSnapshot(out.save);
+	_script->getSaved(out.values);
+	out.valid = true;
+	return true;
+}
+
+void XFilesEngine::commitCheckpoint() {
+	// GameState_Save commits the working database to Temp.gam
+	if (buildSave(_checkpoint))
+		_checkpointNew = false;
+}
+
+bool XFilesEngine::handleEndGame() {
+	// 0x4cc870: the dialog box closes; a non-zero bReplay with Pref_bAutoRewind asks "Try again?"
+	bool ask = _script->getEndGameValue() != 0 && getPreference(kPrefAutoRewind);
+	bool again = false;
+	if (ask) {
+		if (!_steps.empty()) {
+			// A scripted run has nobody to answer: the answer: step does
+			if (_stepAnswer < 0)
+				return false;
+			again = _stepAnswer != 0;
+			_stepAnswer = -1;
+		} else {
+			_dialogBox.close();
+			GUI::MessageDialog question(_("Try again?"), _("Yes"), _("No"));
+			again = question.runModal() == GUI::kMessageOK;
+		}
+	}
+	if (_dialogBox.isOpen())
+		_dialogBox.close();
+	_script->answerEndGame(ask);
+	const char *what = !ask ? "no question" : (again ? "try again" : "no");
+	debugC(1, kDebugScript, "-- end game: %s", what);
+	if (again) {
+		// Yes reopens Temp.gam: the last commit, or a new game when there is none
+		if (_checkpoint.valid) {
+			_pendingLoad = _checkpoint;
+			applyPendingLoad();
+		} else {
+			restartGame();
+		}
+		return true;
+	}
+	// No: g_gameLoaded = 0, the start-up menu (Game_Start kind 1)
+	if (teardownGame())
+		_gameEnded = true;
+	return true;
 }
 
 bool XFilesEngine::teardownGame() {
@@ -535,6 +614,10 @@ bool XFilesEngine::callFunction(const HookCall &call) {
 
 void XFilesEngine::addHooks() {
 	HookTable<XFilesEngine> &t = _hookTable;
+	t.add("SaveGameState", [](XFilesEngine &e, const HookCall &c) {
+		e.commitCheckpoint();
+		return true;
+	});
 	t.add("StartVideoText", [](XFilesEngine &e, const HookCall &c) {
 		e.startVideoText(c.action, c.args);
 		return true;

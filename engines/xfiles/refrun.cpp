@@ -129,6 +129,15 @@ void XFilesEngine::runSteps() {
 			_nextStep--; // not yet: try again next frame
 			return;
 		}
+		if (step.hasPrefix("answer:")) {
+			// Engine only (B-176): the answer to EndGame's "Try again?" (answer:yes, answer:no); waits for the question
+			if (!_script->isEndGamePending() || _stepAnswer >= 0) {
+				_nextStep--;
+				return;
+			}
+			_stepAnswer = step == "answer:yes" ? 1 : 0;
+			return;
+		}
 		if (step.hasPrefix("xclick:")) {
 			// Engine only: a click at a screen position (the menu's while it is up)
 			int x = 0, y = 0;
