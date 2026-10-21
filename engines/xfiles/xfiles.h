@@ -118,6 +118,8 @@ public:
 	bool queryPreference(uint index, int32 &value) const override;
 	void stopAllSounds() override;
 	void pauseTimers() override;
+	void fadeToBlack() override;
+	void suspendScene() override { pauseGame(true); }
 	/** ScummVM's volumes, scaled by the game volume preference (the exe's wave-out master volume). */
 	void syncSoundSettings() override;
 
@@ -276,8 +278,6 @@ private:
 	void putBack();
 	/** Fill _hookTable with the hooks the engine implements. */
 	void addHooks();
-	/** FadeToBlack (0x4ccb50): the screen fades to black, stays black for 2 s, and the script waits meanwhile. */
-	void fadeToBlack();
 	void openDialogBox(const VCCharView &charView, bool openScript = true);
 	/** Close the box if its character left the view, and update its topics. */
 	void updateDialogBox();

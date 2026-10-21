@@ -282,13 +282,13 @@ Common::Point XFilesEngine::getBandPosition(const Movie &movie) const {
 }
 
 uint32 XFilesEngine::hotKindAt(const Common::Point &pos) const {
-	// Kind 29 objects test the point moved by the band origin (HitTestObject 0x519e40, 0x51ad80); only the
-	// shootout's gun click is ported (Script::hotClick), so the other kinds are left to the view
-	if (!_hotMovie || !_script->isGunHeld() || _hotMovie->hasEnded())
+	// Kind 29 objects test the point moved by the band origin (HitTestObject 0x519e40, 0x51ad80), before every
+	// view object, and the first live one takes the click and the cursor even when nothing happens (B-031)
+	if (!_hotMovie || _hotMovie->hasEnded())
 		return 0;
 	Common::Point band = getBandPosition(*_hotMovie);
 	const HotEntry *e = _hot.find(_hotMovie->getTime(), Common::Point(pos.x - band.x, pos.y - band.y));
-	return e && e->kind >= 221 && e->kind <= 223 ? e->kind : 0;
+	return e ? e->kind : 0;
 }
 
 bool XFilesEngine::openMovie(Movie &movie, uint32 assetId) {
@@ -1128,7 +1128,7 @@ void XFilesEngine::syncView() {
 			// The restored clip time applies to the first player started
 			movie->play(asset.flags & kAssetLoop, _pendingClipTime);
 			// The clip's .HOT file: its entries open and close by the clip's time
-			if (!_hotMovie && _hot.load(_discFiles, asset))
+			if (!_hotMovie && _hot.load(_discFiles, asset, _script->getPreferenceValue(kPrefActionSceneDifficulty)))
 				_hotMovie = movie;
 			debugC(2, kDebugScript, "-- view clip #%u from %d ms", ids[i], _pendingClipTime >= 0 ? _pendingClipTime : (int)asset.files[0].start);
 			_pendingClipTime = -1;
@@ -1567,7 +1567,7 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 	if (_interface->isModal())
 		return; // A layout has the input
 
-	// A live .HOT entry under the gun takes the click (kind 29 objects come before the view's own)
+	// A live .HOT entry takes the click (kind 29 objects come before the view's own), also when nothing happens
 	if (uint32 kind = hotKindAt(pos)) {
 		debugC(1, kDebugScript, "-- hot:%u", kind);
 		_script->hotClick(kind);
@@ -1673,9 +1673,33 @@ uint32 XFilesEngine::getCursorAt(const Common::Point &pos) const {
 	if (_script->isCameraEnabled() && pos.x >= kBandLeft && pos.x < kBandLeft + kBandWidth && pos.y >= kBandTop &&
 		pos.y < kBandTop + kBandHeight)
 		return 0;
-	// A live .HOT entry under the gun: the tool cursor (Screen_SetToolCursor, group 132)
-	if (hotKindAt(pos))
-		return Cursors::kToolCursorId;
+	// A live .HOT entry (HotSpotObj_Cursor 0x491b20, read from the exe only): the stiletto and fist cursors of some
+	// kinds, else the tool cursor (Screen_SetToolCursor, group 132) with the gun in hand. With none of these the
+	// exe shows no cursor of its own; what stays then is not read (B-031), so the lookup below goes on
+	if (uint32 kind = hotKindAt(pos)) {
+		const int32 value = _script->getHeldValue();
+		const bool stiletto = value == 23;
+		switch (kind) {
+		case 433:
+		case 461:
+		case 470:
+			if (stiletto)
+				return 31931; // InventoryStiletto
+			break;
+		case 462:
+			if (stiletto)
+				return 58095; // ActionStiletto
+			break;
+		case 441:
+		case 451:
+		case 463:
+			return 17492; // ActionFist
+		default:
+			break;
+		}
+		if (_script->isGunHeld())
+			return Cursors::kToolCursorId;
+	}
 	ViewHit viewHit = hitView(pos);
 	switch (viewHit.kind) {
 	case ViewHit::kExplorable:

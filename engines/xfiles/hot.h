@@ -33,7 +33,7 @@ struct VCAsset;
 /** One entry of a clip's .HOT file: a timed hotspot over the clip (docs/formats/hot.md). */
 struct HotEntry {
 	uint32 kind;
-	Common::Rect rect;   ///< In clip coordinates, grown for the "E" action scene difficulty
+	Common::Rect rect; ///< In clip coordinates, adjusted for the action scene difficulty
 	uint32 startMs, endMs;
 };
 
@@ -44,8 +44,8 @@ struct HotEntry {
  */
 class HotFile {
 public:
-	/** Load the entries of the asset's first file that has a .HOT; false if there is none. */
-	bool load(const DiscFiles &files, const VCAsset &asset);
+	/** Load the entries of the asset's first file that has a .HOT; false if there is none. difficulty: the preference's character (E, H, S). */
+	bool load(const DiscFiles &files, const VCAsset &asset, int32 difficulty);
 	void clear() { _entries.clear(); }
 	bool isEmpty() const { return _entries.empty(); }
 	const Common::Array<HotEntry> &getEntries() const { return _entries; }

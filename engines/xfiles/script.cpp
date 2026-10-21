@@ -117,7 +117,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _gunValue(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewGone(false), _viewAssetHeld(false), _endGamePending(false), _endGameVar(0), _endGameValue(0), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _gunValue(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewGone(false), _viewStateVariable(0), _viewAssetHeld(false), _endGamePending(false), _endGameVar(0), _endGameValue(0), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	memset(_shootVars, 0, sizeof(_shootVars));
 	memset(_shootIdx, 0, sizeof(_shootIdx));
@@ -1094,6 +1094,7 @@ void Script::addCoreHooks() {
 		if (!c.isVariable(0))
 			return false;
 		s._variables[c.action.args[0].value] = 0; // 0x47e9d0 clears the variable it registers
+		s._viewStateVariable = c.action.args[0].value; // and keeps it as the view-state variable (0x6c1450)
 		return true;
 	});
 	t.add("PDAEscape", [](Script &s, const HookCall &c) {
@@ -1745,33 +1746,237 @@ void Script::deactivateView() {
 	deactivateViewObjects();
 }
 
-void Script::hotClick(uint32 kind) {
-	// HotSpotObj_OnMouseClick (0x4b4470) -> 0x4b4a20 actions 6-8
-	if (!isGunHeld()) {
-		log("  (no gun in hand)");
-		return;
-	}
-	uint32 asset;
+int Script::hotActionFor(uint32 kind, bool &gunAnimation) const {
+	// HotSpotObj_OnMouseClick (0x4b4470): kind -> action number of 0x4b4a20 (docs/formats/hot.md, the census table;
+	// read from the exe, only 221-223 are confirmed by a run). "Gun" is the gun in hand, "stiletto" inventory value 23
+	const bool gun = isGunHeld();
+	const bool stiletto = getHeldValue() == 23;
+	gunAnimation = false;
 	switch (kind) {
+	case 100:
+		gunAnimation = true;
+		return gun ? 27 : -1;
+	case 101:
+	case 103:
+		return gun ? 1 : -1;
+	case 102:
+	case 104:
+		return gun ? 2 : -1;
+	case 111:
+	case 113:
+	case 121:
+	case 131:
+	case 141:
+		return gun ? 4 : -1;
+	case 112:
+	case 114:
+	case 122:
+	case 132:
+	case 142:
+		return gun ? 5 : -1;
+	case 201:
+		return gun ? 9 : -1;
+	case 211:
+		return gun ? 10 : -1;
 	case 221:
-		asset = 21230;
-		break;
 	case 222:
-		asset = 21232;
-		break;
 	case 223:
-		asset = 21234;
-		break;
+		return gun ? (int)(kind - 221 + 6) : -1;
+	case 401:
+		return gun ? 11 : -1;
+	case 411:
+		return gun ? 12 : -1;
+	case 421:
+		return gun ? 13 : -1;
+	case 431:
+		return gun ? 14 : -1;
+	case 432:
+		return gun ? 15 : -1;
+	case 434:
+		return gun ? 23 : -1;
+	case 433:
+		if (stiletto)
+			return 17;
+		gunAnimation = true;
+		return gun ? 16 : -1;
+	case 441:
+		return 18;
+	case 442:
+		return gun ? 19 : -1;
+	case 451:
+		return 20;
+	case 461:
+		gunAnimation = gun;
+		return gun || stiletto ? 21 : -1;
+	case 462:
+		return stiletto ? 22 : (gun ? 24 : -1);
+	case 463:
+		return 25;
+	case 470:
+		gunAnimation = gun;
+		return gun || stiletto ? 26 : -1;
+	case 500:
+		gunAnimation = true;
+		return gun ? 27 : -1;
+	case 600:
+		gunAnimation = true;
+		return gun ? 28 : -1;
+	case 666:
+		gunAnimation = true;
+		return gun ? 3 : -1;
 	default:
-		log(Common::String::format("  (.HOT kind %u not ported, B-023)", kind));
+		return -1; // 2400, 6000, 8000 and the kinds without a case: a click that does nothing
+	}
+}
+
+void Script::hotClick(uint32 kind) {
+	bool animation;
+	int action = hotActionFor(kind, animation);
+	if (action < 0) {
+		if (!isGunHeld())
+			log("  (no gun in hand)");
 		return;
 	}
-	// The click queues the current view's deactivation; the scene has no view left to drop afterwards
+	// The held item's animation before 16, 21, 26-28 and 3 (0x4cb440: it plays once to its end, blocking) is not
+	// ported (B-031): the fork has no gun animation to run
+	hotAction(action);
+}
+
+void Script::setViewState(char letter) {
+	// ViewState_Set (0x51ce80): the variable RegViewState registered
+	if (_viewStateVariable)
+		_variables[_viewStateVariable] = (unsigned char)letter;
+}
+
+void Script::setViewByExe(uint32 view) {
+	// The exe's own Set View (0x4b3bc0, which also drops the pending .HOT entries: nothing to drop here)
+	VCAction a;
+	a.id = 0;
+	a.type = kActionSetView;
+	if (!findViewPath(view, a.path)) {
+		warning("Script: .HOT click: no owner for view %u", view);
+		return;
+	}
+	LocalVariables locals;
+	EventFields fields;
+	execute(a, kEventMouseClick, fields, locals);
+}
+
+void Script::hotAction(int n) {
+	// HotSpot_ClickAction (0x4b4a20), docs/formats/hot.md "Click actions". Only 6-8 are confirmed by a run (B-031);
+	// the rest is read from the exe
+	struct Action {
+		char state;      // the view state letter, 0 for none
+		bool cursor;     // VCCursor 73520 after the click
+		uint32 asset;    // played once, 0 for none
+		bool reshow;     // the view is entered again
+		uint32 setView;  // the Set View that follows, 0 for none
+		bool stopSounds; // every sound object is deactivated first
+	};
+	static const Action kActions[] = {
+		{0, true, 21672, true, 8138, false},     // 0 (the asset-enable rewrite of 0x4b5680 is not ported for 0)
+		{'t', true, 21664, true, 8138, false},   // 1
+		{'d', true, 21662, true, 8138, false},   // 2
+		{'m', true, 0, true, 0, true},           // 3
+		{'t', true, 21718, true, 0, false},      // 4
+		{'d', true, 21716, true, 0, false},      // 5
+		{0, true, 21230, false, 0, false},       // 6
+		{0, true, 21232, false, 0, false},       // 7
+		{0, true, 21234, false, 0, false},       // 8
+		{'r', true, 28456, true, 0, false},      // 9
+		{'r', true, 21238, false, 5501, false},  // 10
+		{'r', true, 21812, true, 0, false},      // 11
+		{'r', true, 21818, true, 0, false},      // 12
+		{'r', true, 21808, true, 0, false},      // 13
+		{'r', true, 44483, false, 44283, false}, // 14
+		{'r', true, 49014, false, 14519, false}, // 15
+		{'z', false, 80090, false, 0, true},     // 16
+		{'z', false, 49013, false, 0, true},     // 17
+		{'z', false, 21782, false, 0, false},    // 18
+		{'r', true, 21784, false, 0, false},     // 19
+		{'t', false, 0, false, 0, false},        // 20
+		{0, false, 80090, false, 0, false},      // 21
+		{0, false, 23434, false, 0, false},      // 22
+		{'w', true, 49022, false, 49374, false}, // 23
+		{'d', true, 49022, false, 49374, false}, // 24
+		{0, false, 23430, false, 0, false},      // 25
+		{'b', false, 0, false, 0, false},        // 26
+		{'S', false, 0, false, 0, false},        // 27
+		{0, false, 19656, false, 0, false},      // 28
+	};
+	if (n < 0 || n >= (int)ARRAYSIZE(kActions))
+		return;
+	Action act = kActions[n];
+	log(Common::String::format("  == .HOT click action %d", n));
+
+	// Actions 1, 2, 4, 5 first rewrite the enable flags of the view's assets (0x4b5680, 0x4b59f0); "success" is
+	// that no asset is left enabled. Action 0 does the same in the exe with a rule the doc does not give: left out
+	// (B-031), as is the view state `a` of 0x4b5680 on success
+	bool success = false;
+	if (n == 1 || n == 2 || n == 4 || n == 5) {
+		VCView v;
+		Common::Array<uint32> assets;
+		if (_data.getView(_view, v))
+			_data.getMembers(v.assets, assets);
+		uint count = assets.size();
+		uint chosen = count;
+		if (!assets.empty() && isEnabled(assets[0]))
+			chosen = (n == 1 || n == 4) ? 2 : 1;
+		for (uint i = 0; i < count; i++)
+			_enabled[assets[i]] = i == chosen;
+		success = chosen >= count;
+	}
+
+	// The current view's deactivation is queued
 	deactivateView();
 	_viewGone = true;
-	if (_hooks)
+
+	if (act.stopSounds)
+		stopAllForTravel(); // 0x44d850(scene, 27): approximated by the travel sweep of the sounds
+	if (act.state)
+		setViewState(act.state);
+	if (n == 27 || n == 28) {
+		// Stop the shown videos (approximated as above), fade to black, Scene_SuspendAll(scene, 1)
+		stopAllForTravel();
+		if (_hooks) {
+			_hooks->fadeToBlack();
+			_hooks->suspendScene();
+		}
+		if (n == 27) {
+			// Suicide Note White or Yellow (table 0x6549a0); no cursor, asset or re-show
+			static const uint32 kLayouts[2] = {62847, 62849};
+			Dice dice = newDice(0x4b4a20);
+			showLayout(kLayouts[roll(dice, 0, 1)]);
+			return;
+		}
+	}
+	if (n == 3) {
+		// Easter candy: Mel shot 1-5 (table 0x6549a8)
+		static const uint32 kLayouts[5] = {84686, 84695, 84704, 84713, 84722};
+		Dice dice = newDice(0x4b4a20);
+		uint32 layout = kLayouts[roll(dice, 0, 4)];
+		if (_hooks)
+			_hooks->showCursorAnimation(73520);
+		showLayout(layout);
+		_viewGone = false;
+		activateOrHoldView();
+		return;
+	}
+	if (act.cursor && _hooks)
 		_hooks->showCursorAnimation(73520);
-	playAsset(asset, kModePlayOnce, nullptr);
+	if (act.asset)
+		playAsset(act.asset, kModePlayOnce, nullptr);
+	if (success && (n == 4 || n == 5))
+		playAsset(38448, kModePlayOnce, nullptr);
+	if (act.reshow && !success) {
+		// 0x46a370: a new view object for the same view data
+		_viewGone = false;
+		activateOrHoldView();
+	}
+	if (success && (n == 1 || n == 2))
+		setViewByExe(8138);
+	else if (n > 2 && act.setView)
+		setViewByExe(act.setView);
 }
 
 void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, bool deactivateAll) {
@@ -1813,27 +2018,30 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, 
 		stopAllForTravel();
 	for (int i = first; i < 3; i++)
 		fire(newPath[i], kEventObjectActivation);
-	if (first < 4) {
-		// While a video plays, XFiles.exe's event loop holds the activation
-		// of views (0x433000, the table 0x6bbff8 that 0x44f860 raises when a
-		// video's movie starts and lowers when it ends): the view, its
-		// triggers and its objects come after the video
-		if (_videoQueue.empty()) {
-			activateView();
-		} else {
-			_viewHeld = true;
-			// It waits for the videos queued in this event, those queued
-			// after it too (comityinn-to-warehouse: 20061 and 19937), but
-			// not for one a later event queues (newgame-to-comityinn: 19802
-			// and 19806 behind 19796) nor those queued before it that
-			// already play
-			_viewSerial = _fireSerial;
-			for (uint i = 0; i < _videoPlays.size(); i++)
-				_videoPlays[i].viewWait = (i > 0 || _videoNextPending) && _videoPlays[i].serial != _viewSerial;
-			log("      view held until the video ends");
-		}
-	}
+	if (first < 4)
+		activateOrHoldView();
 	showView();
+}
+
+void Script::activateOrHoldView() {
+	// While a video plays, XFiles.exe's event loop holds the activation
+	// of views (0x433000, the table 0x6bbff8 that 0x44f860 raises when a
+	// video's movie starts and lowers when it ends): the view, its
+	// triggers and its objects come after the video
+	if (_videoQueue.empty()) {
+		activateView();
+	} else {
+		_viewHeld = true;
+		// It waits for the videos queued in this event, those queued
+		// after it too (comityinn-to-warehouse: 20061 and 19937), but
+		// not for one a later event queues (newgame-to-comityinn: 19802
+		// and 19806 behind 19796) nor those queued before it that
+		// already play
+		_viewSerial = _fireSerial;
+		for (uint i = 0; i < _videoPlays.size(); i++)
+			_videoPlays[i].viewWait = (i > 0 || _videoNextPending) && _videoPlays[i].serial != _viewSerial;
+		log("      view held until the video ends");
+	}
 }
 
 void Script::activateView() {

@@ -33,7 +33,7 @@ namespace XFiles {
 static const int kFrameWidth = 600;
 static const int kFrameHeight = 240;
 
-bool HotFile::load(const DiscFiles &files, const VCAsset &asset) {
+bool HotFile::load(const DiscFiles &files, const VCAsset &asset, int32 difficulty) {
 	_entries.clear();
 	for (uint i = 0; i < asset.files.size(); i++) {
 		Common::String name = asset.files[i].file;
@@ -56,10 +56,20 @@ bool HotFile::load(const DiscFiles &files, const VCAsset &asset) {
 			int x2 = stream->readUint16LE(), y2 = stream->readUint16LE();
 			e.startMs = stream->readUint32LE();
 			e.endMs = stream->readUint32LE();
-			// Difficulty "E" (the default; H and S are not ported, B-031): each side grows by 15 % of the
-			// width or height, cut off, and the rectangle is clipped to the frame
-			int dx = (x2 - x1) * 15 / 100, dy = (y2 - y1) * 15 / 100;
-			e.rect = Common::Rect(MAX(x1 - dx, 0), MAX(y1 - dy, 0), MIN(x2 + dx, kFrameWidth), MIN(y2 + dy, kFrameHeight));
+			// The action scene difficulty adjusts the rectangle (0x419e10, docs/formats/hot.md): "E" (the default)
+			// grows each side by 15 % of the width or height, cut off, and clips to the frame; "H" moves each
+			// side in by 12.5 %, a side of 10 px or less not at all, no clip; "S" and anything else leave it.
+			// H and S are read from the exe only (B-031 run (a))
+			int w = x2 - x1, h = y2 - y1;
+			if (difficulty == 'E') {
+				int dx = w * 15 / 100, dy = h * 15 / 100;
+				e.rect = Common::Rect(MAX(x1 - dx, 0), MAX(y1 - dy, 0), MIN(x2 + dx, kFrameWidth), MIN(y2 + dy, kFrameHeight));
+			} else if (difficulty == 'H') {
+				int dx = w > 10 ? w * 125 / 1000 : 0, dy = h > 10 ? h * 125 / 1000 : 0;
+				e.rect = Common::Rect(x1 + dx, y1 + dy, x2 - dx, y2 - dy);
+			} else {
+				e.rect = Common::Rect(x1, y1, x2, y2);
+			}
 			_entries.push_back(e);
 		}
 		delete stream;

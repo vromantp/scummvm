@@ -173,6 +173,10 @@ public:
 	 * asset. Script ends the sounds' objects itself afterwards.
 	 */
 	virtual void stopAllSounds() {}
+	/** A .HOT click that ends the game (actions 27, 28): the screen fades to black (0x5103b0), as FadeToBlack. */
+	virtual void fadeToBlack() {}
+	/** Scene_SuspendAll(scene, 1): the timers and the scene's objects stop (as the X menu's). */
+	virtual void suspendScene() {}
 };
 
 /**
@@ -453,6 +457,8 @@ public:
 	void putBack();
 	/** A gun click on a .HOT hotspot of the given kind (HotSpotObj_OnMouseClick 0x4b4470). */
 	void hotClick(uint32 kind);
+	/** The value of the held inventory item (Inv_CurrentValue), or 0 when nothing is held. */
+	int32 getHeldValue() const { return isHolding() ? getVariable(_heldVariable) : 0; }
 	/** The gun (OnGunClick's inventory value) is in hand: .HOT hotspots of the shootout take clicks and show the tool cursor. */
 	bool isGunHeld() const { return _gunValue && isHolding() && getVariable(_heldVariable) == (int32)_gunValue; }
 	/** The click on an inventory icon (InvIcon_OnMouseClick 0x49c180): put back, take the item, run its Mouse Click triggers. */
@@ -615,6 +621,11 @@ private:
 	void doSmolShootout(const HookCall &call);
 	void smIsWillShot(uint32 timer);
 	void smolGoonShot();
+	/** The .HOT click actions (HotSpot_ClickAction 0x4b4a20, docs/formats/hot.md "Click actions", B-031). */
+	int hotActionFor(uint32 kind, bool &gunAnimation) const;
+	void hotAction(int n);
+	void setViewState(char letter);
+	void setViewByExe(uint32 view);
 	void setShootoutVariables();
 	/** The node, location and viewpoint that hold a view: the current viewpoint first, else the whole database. */
 	bool findViewPath(uint32 view, uint32 (&path)[4]) const;
@@ -706,6 +717,7 @@ private:
 	void logViewAsset(uint32 id, uint32 background);
 	/** Activate what the current view shows: its first asset, character views, navs, explorables. */
 	void activateView();
+	void activateOrHoldView();
 	void activateViewObjects(bool before);
 	void deactivateView();
 	void deactivateViewAsset();
@@ -864,6 +876,7 @@ private:
 	bool _viewHeld;                            ///< The view is entered but not activated until the video ends
 	bool _viewActive;                          ///< The view's activation has run
 	bool _viewGone;                            ///< A gun click already deactivated the view (hotClick): enter() skips it
+	uint32 _viewStateVariable;                 ///< The variable RegViewState registered; hotAction writes letters into it
 	bool _viewAssetHeld;                       ///< The view's new asset is activated when the video ends
 };
 
