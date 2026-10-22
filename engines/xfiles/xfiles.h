@@ -107,6 +107,7 @@ public:
 	void playShutter(uint32 id) override;
 	void checkpoint() override { commitCheckpoint(); }
 	void showCursorAnimation(uint32 id) override;
+	void reshowAIIcon() override;
 	uint32 getPhotoTime() const override;
 	void playClip(uint32 id, int16 x, int16 y) override;
 	void stopViewAsset(uint32 id) override;

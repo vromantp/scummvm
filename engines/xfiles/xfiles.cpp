@@ -1593,12 +1593,13 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 		return;
 	case Interface::kHitAIIcon:
 		// AIIconObj's click (0x5091d0): a glowing icon goes to its level's view (0x509aa0); without a glow the exe runs
-		// the first hint-list action whose condition holds (0x5097e0), not ported (B-118)
+		// the next hint-list action whose condition holds (0x5097e0)
 		if (_script->isHintGlowing()) {
 			debugC(1, kDebugScript, "-- click: AI icon glowing, level %d", _script->getHintGlowLevel());
 			_script->clickAIIcon();
 		} else {
-			debugC(1, kDebugScript, "-- click: AI icon without a glow (hint list not ported)");
+			debugC(1, kDebugScript, "-- click: AI icon without a glow");
+			_script->clickAIHint();
 		}
 		return;
 	default:
@@ -1694,6 +1695,13 @@ void XFilesEngine::updateCursor() {
 		_firingCursor = 0;
 	_cursors->show(getCursorAt(_mouse));
 	_cursors->update();
+}
+
+void XFilesEngine::reshowAIIcon() {
+	// 0x493090: the show handler (0x509280) re-applies the glow from the level; the icon exists while Artificial
+	// Intuition is on (Prefs_ApplyAIIcon). The suspension re-check that follows in the exe is B-118 step 6
+	if (_script->getPreferenceValue(kPrefArtificialIntuition) != 0)
+		_script->aiIconShown();
 }
 
 void XFilesEngine::showCursorAnimation(uint32 id) {

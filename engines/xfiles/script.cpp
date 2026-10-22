@@ -117,7 +117,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _hintGlowOn(false), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _gunValue(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewGone(false), _viewStateVariable(0), _viewAssetHeld(false), _endGamePending(false), _endGameVar(0), _endGameValue(0), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintCursor(0), _hintGlow(0), _hintGlowOn(false), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _gunValue(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewGone(false), _viewStateVariable(0), _viewAssetHeld(false), _endGamePending(false), _endGameVar(0), _endGameValue(0), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	memset(_shootVars, 0, sizeof(_shootVars));
 	memset(_shootIdx, 0, sizeof(_shootIdx));
@@ -1115,11 +1115,13 @@ void Script::addCoreHooks() {
 		if (c.has(2)) {
 			s._hintTrigger = c.args[0];
 			s._hintList = c.args[1];
+			s._hintCursor = 0;
 		}
 		return false;
 	});
 	t.add("ClearAIList", [](Script &s, const HookCall &c) {
 		s._hintTrigger = s._hintList = 0;
+		s._hintCursor = 0;
 		return false;
 	});
 	t.add("SetAIGlow", [](Script &s, const HookCall &c) {
@@ -1691,11 +1693,15 @@ void Script::travel() {
 		_hooks->checkpoint(); // 0x5068b0 snapshots the game before it travels
 	// 0x5068b0, 0x493090: the emotion and action icons are deactivated first (0x44d850; clears their enable
 	// flags, idea icons keep theirs), then all four old objects, whatever the new path shares, then the new
-	// four are activated. The exe also hides the inventory and AI icons and clears the letterbox tint; the
-	// engine does not model those yet
+	// four are activated. The exe also hides the inventory icon and clears the letterbox tint; the engine does
+	// not model those yet
 	_travelPending = false;
 	spendIcons(kClassEmotionIcon);
 	spendIcons(kClassActionIcon);
+	// The AI icon is hidden at 0x5068b0 and shown again here (0x493090) before the new node: its show handler
+	// applies the glow from the level alone. The engine draws no hidden frame in between
+	if (_hooks)
+		_hooks->reshowAIIcon();
 	// A SwapDisc in the triggers of the travel waits for it to finish
 	_fireDepth++;
 	enter(_travelTo[0], _travelTo[1], _travelTo[2], _travelTo[3], true);
@@ -1853,6 +1859,39 @@ void Script::setViewState(char letter) {
 void Script::clickAIIcon() {
 	if (_hintGlow > 0)
 		setViewByExe(_hintGlow);
+}
+
+void Script::clickAIHint() {
+	// AIIconObj's click without a glow (0x5097e0): walk the hint list from the cursor, which persists between
+	// clicks. An action whose condition holds (the hint trigger as context) runs; the cursor advances and wraps.
+	// The walk ends after the first run action that is not a Statement, or when the cursor is back at its start
+	Common::Array<uint32> actions;
+	if (!_hintList || !_data.getMembers(_hintList, actions) || actions.empty()) {
+		debugC(1, kDebugScript, "-- click: AI icon, no hint list");
+		return;
+	}
+	uint n = actions.size();
+	uint start = _hintCursor < n ? _hintCursor : 0;
+	uint i = start;
+	do {
+		VCAction a;
+		bool run = _data.getAction(actions[i], a);
+		LocalVariables locals;
+		EventFields fields;
+		if (run && a.conditional && !test(a.condition, fields, locals))
+			run = false;
+		i = (i + 1) % n;
+		if (run) {
+			// The exe closes the open dialog box first for a Play Once of a kind 1 or 2 asset (0x447340; which
+			// media kinds is not read: every Play Once closes it here)
+			if (a.type == kActionAsset && a.mode == kModePlayOnce)
+				closeBox();
+			execute(a, kEventMouseClick, fields, locals);
+			if (a.type != kActionStatement)
+				break;
+		}
+	} while (i != start);
+	_hintCursor = i;
 }
 
 void Script::setViewByExe(uint32 view) {
@@ -2377,6 +2416,7 @@ void Script::restore(const VCSave &save) {
 	_kit = save.kit;
 	_hintList = save.hintList;
 	_hintTrigger = save.hintTrigger;
+	_hintCursor = 0;
 	_hintGlow = save.hintGlow;
 	_hintGlowOn = _hintGlow != 0; // AI_RestoreGlow (0x508c00)
 	memcpy(_flashlight, save.flashlight, sizeof(_flashlight));

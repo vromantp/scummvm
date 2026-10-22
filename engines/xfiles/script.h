@@ -118,6 +118,8 @@ public:
 	virtual void checkpoint() {}
 	/** The firing cursor after a gun click on a .HOT hotspot (0x4b4a20): an animated cursor asset. */
 	virtual void showCursorAnimation(uint32 id) {}
+	/** A travel (0x493090) shows the AI icon again if there is one: its show handler re-applies the glow from the level. */
+	virtual void reshowAIIcon() {}
 	/** The player's current time in the clip shown in the band (0x41cdd0), for the photo the camera takes. */
 	virtual uint32 getPhotoTime() const { return 0; }
 	/** PlayAssetAt: draw the graphic clip once with its top-left at (x, y) over the screen; Script::finishSound ends it. */
@@ -469,6 +471,8 @@ public:
 	void aiIconShown() { _hintGlowOn = _hintGlow != 0; }
 	/** The click on the glowing AI icon (0x509aa0): a Set View to the level's view; level 0 does nothing. */
 	void clickAIIcon();
+	/** The click on a not glowing AI icon (0x5097e0): the next applicable action of the hint list, the cursor cycling. */
+	void clickAIHint();
 	/** The click on an inventory icon (InvIcon_OnMouseClick 0x49c180): put back, take the item, run its Mouse Click triggers. */
 	void selectInventory(uint32 id);
 	/** Whether the item has an icon in the bar: asks the engine, else every enabled VCInventory has one (0x4201a0). */
@@ -782,6 +786,7 @@ private:
 	int32 _disc;                               ///< Disc in use (VCGameState +42)
 	bool _evidenceRowShown;                    ///< EvIcons_SetRowShown, set by a shown evidence icon of a restore
 	uint32 _hintList, _hintTrigger;            ///< The last SetAIList, 0 after ClearAIList
+	uint _hintCursor;                          ///< Next member of _hintList a click tries (0x5097e0); not saved
 	int32 _hintGlow;                           ///< AI_GlowLevel: the last SetAIGlow above 1, else 0 (the save keeps this)
 	bool _hintGlowOn;                          ///< The glow flag (0x6b2aa8): SetAIGlow(1) sets it with level 0
 	byte _flashlight[3];                       ///< SetFLightProps as the save keeps it (FLight_SetProps 0x4d7d20 via 0x44bda0)
