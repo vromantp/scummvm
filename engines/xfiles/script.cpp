@@ -1345,7 +1345,7 @@ void Script::smIsWillShot(uint32 timer) {
 	if (shot) {
 		// No reference run takes this branch (docs/subsystems/smolnikoff-shootout.md): a Timer Stop, then asset 21168
 		_timers.erase(timer);
-		playAsset(21168, kModePreload, nullptr); // mode 0, as an Asset action of the data
+		playAsset(21168, kModePlayOnce, nullptr); // the SoundObj play of 0x491de0: a plain play of the death clip
 	}
 }
 
@@ -1927,14 +1927,16 @@ void Script::hotAction(int n) {
 		success = chosen >= count;
 	}
 
+	// The view state is written before the view's deactivation runs: the exe only queues it (0x42b230), and the
+	// view's Object Deactivation tests the state (view 5487: 'r' kills the stairs goon and enables its exits)
+	if (act.state)
+		setViewState(act.state);
 	// The current view's deactivation is queued
 	deactivateView();
 	_viewGone = true;
 
 	if (act.stopSounds)
 		stopAllForTravel(); // 0x44d850(scene, 27): approximated by the travel sweep of the sounds
-	if (act.state)
-		setViewState(act.state);
 	if (n == 27 || n == 28) {
 		// Stop the shown videos (approximated as above), fade to black, Scene_SuspendAll(scene, 1)
 		stopAllForTravel();

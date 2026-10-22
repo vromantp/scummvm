@@ -68,7 +68,7 @@ static const uint32 kXCursor = 25541;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
 	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _viewfinder(nullptr), _counterFont(nullptr), _counterFontOwned(false), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuOpen(false), _menuLayout(false), _menuReopen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _hotMovie(nullptr), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
-	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _timersPaused(false), _barRevealed(false), _barRevealEnd(0), _sound(_discFiles) {
+	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _dragIdea(0), _dragMoved(false), _timersPaused(false), _barRevealed(false), _barRevealEnd(0), _sound(_discFiles) {
 	g_engine = this;
 	addHooks();
 	_loadedSave = false;
@@ -208,18 +208,23 @@ XFilesEngine::Input XFilesEngine::pollInput() {
 	input.click = false;
 	input.skip = false;
 	input.escape = false;
+	input.release = false;
 	Common::Event event;
 	while (g_system->getEventManager()->pollEvent(event)) {
 		if (event.type == Common::EVENT_LBUTTONDOWN && _steps.empty()) {
 			input.click = true;
 			input.pos = event.mouse;
 		} else if (event.type == Common::EVENT_LBUTTONUP && _steps.empty()) {
+			input.release = true;
+			input.releasePos = event.mouse;
 			if (_script)
 				_script->release();
 		} else if (event.type == Common::EVENT_MOUSEMOVE && _steps.empty()) {
 			// A step list (xfiles_steps) keeps the mouse where a reference
 			// run puts it, whatever the real mouse does
 			_mouse = event.mouse;
+			if (_dragIdea && (ABS(_mouse.x - _dragStart.x) > 3 || ABS(_mouse.y - _dragStart.y) > 3))
+				_dragMoved = true;
 		} else if (event.type == Common::EVENT_RBUTTONDOWN) {
 			// The exe ends the playing video on a right-click as on a natural end
 			input.skip = true;
@@ -448,6 +453,8 @@ void XFilesEngine::runGame() {
 			updateDialogBox();
 			if (input.click)
 				handleClick(input.pos);
+			if (input.release)
+				handleRelease(input.releasePos);
 			updateCursor();
 			drawView();
 			_dialogBox.draw(_screen, _mouse);
@@ -567,6 +574,7 @@ bool XFilesEngine::teardownGame() {
 	_headCredits.setEnabled(false); // only a new game, or a restore with the credits rolling, allows them
 	_subliminal.stop();
 	_lastClickTime = 0;
+	_dragIdea = 0;
 	_lastClickHit.kind = Interface::kHitNone;
 	_lastClickHit.id = 0;
 	_hover = _lastClickHit;
@@ -1390,6 +1398,8 @@ void XFilesEngine::drawView() {
 		drawCaptions(*_layers[i], getBandPosition(*_layers[i]));
 	drawViewfinder();
 	_interface->draw(_screen);
+	if (_dragIdea && _dragMoved)
+		_interface->drawDragged(_screen, _dragIdea, _mouse);
 	drawPhotos();
 }
 
@@ -1556,8 +1566,11 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 		_script->click(hit.id);
 		return;
 	case Interface::kHitIdea:
-		debugC(1, kDebugScript, "-- idea:%u", hit.id);
-		_script->idea(hit.id);
+		// The icon is held until the button goes up: on a character it plays that character's topic, in place it plays
+		// the open box's (IdeaIcon_DragEnd)
+		_dragIdea = hit.id;
+		_dragStart = pos;
+		_dragMoved = false;
 		return;
 	case Interface::kHitAIIcon:
 		return; // AIIconObj's click (0x5091d0, the hint list) is not ported (B-118)
@@ -1654,6 +1667,9 @@ void XFilesEngine::updateCursor() {
 }
 
 uint32 XFilesEngine::getCursorAt(const Common::Point &pos) const {
+	// An idea icon being dragged is the pointer: no character's lips over it
+	if (_dragIdea && _dragMoved)
+		return 0;
 	uint32 held = isHolding() ? _interface->getHeldCursor() : 0;
 	Interface::Hit hit = _interface->hitTest(pos);
 	if (hit.kind == Interface::kHitItem) {
@@ -1721,6 +1737,25 @@ uint32 XFilesEngine::getCursorAt(const Common::Point &pos) const {
 		return viewHit.cursor; // 0x446aa0: the hotspot's cursor
 	default:
 		return held;
+	}
+}
+
+void XFilesEngine::handleRelease(const Common::Point &pos) {
+	if (!_dragIdea)
+		return;
+	uint32 icon = _dragIdea;
+	_dragIdea = 0;
+	if (!_dragMoved) {
+		// A click: the box's character
+		debugC(1, kDebugScript, "-- idea:%u", icon);
+		_script->idea(icon);
+		return;
+	}
+	// Dropped: the character view under the mouse takes it (a drop elsewhere does nothing)
+	ViewHit viewHit = hitView(pos);
+	if (viewHit.kind == ViewHit::kCharView) {
+		debugC(1, kDebugScript, "-- idea:%u on character view #%u", icon, viewHit.id);
+		_script->idea(icon, viewHit.id);
 	}
 }
 

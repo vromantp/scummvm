@@ -77,7 +77,7 @@ static void drawBlended(Graphics::Surface &dst, const Graphics::Surface &src, in
 	}
 }
 
-DialogBox::DialogBox() : _font(nullptr), _charView(0), _historyTab(false), _scroll(0) {
+DialogBox::DialogBox() : _font(nullptr), _charView(0), _historyTab(false), _tabAuto(false), _scroll(0) {
 	for (uint i = 0; i < kPicCount; i++)
 		_pictures[i] = nullptr;
 }
@@ -114,6 +114,7 @@ void DialogBox::open(uint32 charView, const Common::Rect &charRect) {
 	_pos = Common::Point(x, kBoxTop);
 	_charView = charView;
 	_historyTab = false;
+	_tabAuto = true;
 	_scroll = 0;
 }
 
@@ -124,10 +125,16 @@ void DialogBox::close() {
 }
 
 void DialogBox::setTopics(const Common::Array<Topic> &talk, const Common::Array<Topic> &history) {
+	bool hadTalk = !_talk.empty();
 	_talk = talk;
 	_history = history;
 	if (_history.empty())
 		_historyTab = false;
+	// With no unasked topic left the box shows History, on opening and when the last topic was just asked (B-170, seen in
+	// the original; the exe's own rule is not read)
+	else if (_talk.empty() && (_tabAuto || hadTalk))
+		_historyTab = true;
+	_tabAuto = false;
 	_scroll = MIN(_scroll, getMaxScroll());
 }
 

@@ -521,7 +521,8 @@ void PdaHooks::showNoteDayText() {
 	Common::U32String text(" ");
 	for (uint i = 0; i < _notes.size(); i++) {
 		Common::U32String note;
-		if (listHas(members, _notes[i]) && _script.readTextFile(_notes[i], note))
+		// 0x45f690: the asset's file first, else its text
+		if (listHas(members, _notes[i]) && (_script.readTextFile(_notes[i], note) || _script.getTextAsset(_notes[i], note)))
 			text += note;
 	}
 	setScrollText(kNoteTextItem, text, kNoteFontSize);

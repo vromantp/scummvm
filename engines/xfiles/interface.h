@@ -133,6 +133,9 @@ public:
 	void addModalException(uint32 layout);
 	void clearModalExceptions() { _modalExceptions.clear(); }
 
+	/** An idea icon being dragged (IdeaIcon_DragEnd 0x4d15f0): its picture centred on the mouse. */
+	void drawDragged(Graphics::Surface &dst, uint32 ideaId, const Common::Point &pos) const;
+
 	/** The width of a text in an item font (Script wraps by it), -1 if the font is missing. */
 	int measureItemText(const Common::U32String &text, int size, bool bold, bool sans) const;
 

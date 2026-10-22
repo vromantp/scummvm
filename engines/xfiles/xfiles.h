@@ -135,6 +135,8 @@ private:
 		Common::Point pos;
 		bool skip;
 		bool escape;
+		bool release;       ///< The left button went up
+		Common::Point releasePos;
 	};
 
 	/** The main menu's entries, in order from the top. */
@@ -271,6 +273,8 @@ private:
 	uint32 getCursorAt(const Common::Point &pos) const;
 	/** The second click of a double-click: Mouse Double-Click instead of Mouse Click. */
 	void handleDoubleClick(const Interface::Hit &hit);
+	/** The button went up: an idea icon held down is played on the character under the mouse (OnDrop_PlayItemTopic). */
+	void handleRelease(const Common::Point &pos);
 	void clickInventory(uint32 inventory);
 	/** An item is in hand: iCurrInventory (RegCurrInvVar) is not Inventory_None. */
 	bool isHolding() const;
@@ -312,6 +316,9 @@ private:
 	Common::SeekableReadStream *_textsDll; ///< XFilesT.dll; _texts reads it lazily, so it lives as long as _texts
 	Common::WinResources *_texts;         ///< XFilesT.dll: topic texts (string table)
 	Common::Point _mouse;
+	uint32 _dragIdea;                     ///< The idea icon held with the button down, 0 for none
+	Common::Point _dragStart;
+	bool _dragMoved;                      ///< The mouse moved since the button went down (0x44bae0)
 	HookTable<XFilesEngine> _hookTable;   ///< The C++ function hooks the engine implements, by name
 	Movie *_menuX;                        ///< The main menu's movies (49583 the X, 49587 the entries)
 	Movie *_menuEntries;

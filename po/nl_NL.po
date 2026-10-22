@@ -17691,6 +17691,10 @@ msgstr ""
 "behulp van ondertitels, indien ondersteund. Doorgaan met het starten van het "
 "spel?"
 
+#: engines/xfiles/xfiles.cpp:523
+msgid "Try again?"
+msgstr "Opnieuw proberen?"
+
 #~ msgid ""
 #~ "Unable to access the globally set save path! Please revert to default "
 #~ "from ScummVM Options"

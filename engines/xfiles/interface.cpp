@@ -596,6 +596,17 @@ void Interface::drawIcons(Graphics::Surface &dst, const Common::Array<Icon> &ico
 	}
 }
 
+void Interface::drawDragged(Graphics::Surface &dst, uint32 ideaId, const Common::Point &pos) const {
+	for (uint i = 0; i < _ideas.size(); i++) {
+		const Graphic *graphic = _ideas[i].graphic;
+		if (_ideas[i].id != ideaId || !graphic || !graphic->getSurface())
+			continue;
+		const Graphics::Surface *surface = graphic->getSurface();
+		graphic->draw(dst, pos.x - surface->w / 2, pos.y - surface->h / 2);
+		return;
+	}
+}
+
 void Interface::draw(Graphics::Surface &dst) const {
 	drawIcons(dst, _actions);
 	drawIcons(dst, _emotions);

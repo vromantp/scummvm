@@ -105,6 +105,7 @@ private:
 	Common::Point _pos;
 	uint32 _charView;
 	bool _historyTab;
+	bool _tabAuto;                     ///< Just opened: the first topic list picks the tab
 	uint _scroll;            ///< First row shown
 	Common::Array<Topic> _talk, _history;
 };
