@@ -3175,7 +3175,10 @@ void Script::playTopicClips(uint32 conversationId, bool inBox) {
 	}
 	_jumpCut = _jumpCuts.getValOrDefault(conversationId, JumpCut());
 	_clipQueued = false;
-	// Counted by recordTopic(); 0 for a topic that is never recorded
+	// Counted by recordTopic(); 0 for a topic that is never recorded.
+	// count < 2 is Topic_Play's repeat flag clear: a box click on a topic
+	// not yet in History, or a dropped item's topic asked once (0x4e9440
+	// checks count < 2 again for a character with an Atoms topic)
 	uint count = _asked.getValOrDefault(conversationId, 0);
 	playList(c.question);
 	if (count < 2) {
@@ -3183,8 +3186,16 @@ void Script::playTopicClips(uint32 conversationId, bool inBox) {
 		playList(c.answer);
 		return;
 	}
+	// 0x4e9440 returns 0 without a character (0x4e9e50): Topic_Play
+	// plays the answer alone
+	VCCharView charView;
+	if (!findTopicCharView(conversationId, inBox, charView)) {
+		beforeAnswer();
+		playList(c.answer);
+		return;
+	}
 	uint32 stock[kStockAtomCount];
-	if (!getStockAtoms(conversationId, inBox, stock)) {
+	if (!getCharViewAtoms(charView, stock)) {
 		if (c.atom) {
 			beforeLead();
 			playList(c.atom);
@@ -3365,10 +3376,8 @@ int Script::roll(Dice &dice, int min, int max) {
 	return x % (uint32)(max - min + 1) + min;
 }
 
-bool Script::getStockAtoms(uint32 conversationId, bool inBox, uint32 (&atoms)[kStockAtomCount]) const {
-	// 0x43d3d0: the atoms of the first topic of the character asked, if it
-	// has no label. Text assets (a placeholder) leave their slot empty.
-	// The character (0x4e9e50): the view's only character view, else the
+bool Script::findTopicCharView(uint32 conversationId, bool inBox, VCCharView &charView) const {
+	// 0x4e9e50: the view's only character view, else the
 	// one with the topic, looked up in its conversations for a box click
 	// and in its idea maps (any icon, enabled or not) for a dropped item
 	VCView view;
@@ -3376,7 +3385,6 @@ bool Script::getStockAtoms(uint32 conversationId, bool inBox, uint32 (&atoms)[kS
 	if (!_data.getView(_view, view) || !_data.getMembers(view.characters, charViews))
 		return false;
 	for (uint i = 0; i < charViews.size(); i++) {
-		VCCharView charView;
 		if (!_data.getCharView(charViews[i], charView))
 			continue;
 		bool found = charViews.size() == 1;
@@ -3390,7 +3398,7 @@ bool Script::getStockAtoms(uint32 conversationId, bool inBox, uint32 (&atoms)[kS
 			}
 		}
 		if (found)
-			return getCharViewAtoms(charView, atoms);
+			return true;
 	}
 	return false;
 }

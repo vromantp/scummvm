@@ -601,7 +601,8 @@ private:
 	void queueViewLoop();
 	/** The looping asset of the current view, or 0. */
 	uint32 getViewLoop() const;
-	bool getStockAtoms(uint32 conversationId, bool inBox, uint32 (&atoms)[kStockAtomCount]) const;
+	/** The character view a topic is asked of (0x4e9e50); false if none. */
+	bool findTopicCharView(uint32 conversationId, bool inBox, VCCharView &charView) const;
 	/** The atoms of the first topic of a character view, if it has no label (0x43d3d0). */
 	bool getCharViewAtoms(const VCCharView &charView, uint32 (&atoms)[kStockAtomCount]) const;
 	/** A character view's reaction slots (CharView_ctor +0x13c); false, all 0, without an Atoms topic. */
