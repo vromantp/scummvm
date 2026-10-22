@@ -191,4 +191,25 @@ bool loadFrames(const VCData &data, const DiscFiles &files, uint32 assetId, cons
 	return !frames.empty();
 }
 
+bool loadPictureFrames(const VCData &data, const DiscFiles &files, uint32 assetId, const Graphics::PixelFormat &format,
+		Common::Array<PictureAsset *> &frames, Common::Array<uint32> &durations) {
+	VCMediaFile file;
+	uint32 count;
+	Common::ScopedPtr<Common::SeekableReadStream> stream(openArchive(data, files, assetId, file, count));
+	if (!stream)
+		return false;
+	for (uint32 i = file.start; i <= file.end && i < count; i++) {
+		byte *alpha;
+		Graphics::Surface *surface = decodeEntry(*stream, count, i, format, &alpha);
+		if (!surface) {
+			warning("Pictures: cannot decode entry %u of %s for #%u", i, file.file.c_str(), assetId);
+			break;
+		}
+		frames.push_back(new PictureAsset(surface, alpha));
+		stream->seek(12 + count * 4 + i * 4);
+		durations.push_back(stream->readUint32LE());
+	}
+	return !frames.empty();
+}
+
 } // End of namespace XFiles

@@ -840,7 +840,8 @@ void XFilesEngine::applyPreferences(bool resume) {
 	// no action icon exists yet: Game_BuildObjects (0x477940) makes them after Prefs_Apply, whatever the
 	// preference
 	bool intuition = _script->getPreferenceValue(kPrefArtificialIntuition) != 0;
-	_interface->showAIIcon(intuition);
+	if (_interface->showAIIcon(intuition))
+		_script->aiIconShown();
 	if (!intuition && resume)
 		_script->removeActionIcons();
 	syncSoundSettings();
@@ -1291,6 +1292,7 @@ void XFilesEngine::closeView() {
 void XFilesEngine::updateInterface() {
 	// A new item's reveal shows the hidden bar (deferInventoryIcon)
 	bool hiddenBar = _prefVariables[kPrefInventory] && _script->getVariable(_prefVariables[kPrefInventory]) == 'H' && !_barRevealed;
+	_interface->setAIGlow(_script->isHintGlowing());
 	_interface->update(*_script, _mouse, getPreference(kPrefClosedCaptioning), hiddenBar, getPreference(kPrefRolloverText));
 	// Roll Into and Roll Out Of for the icons and layout items under the
 	// mouse (the evidence kit icon opens the kit from these)
@@ -1590,7 +1592,15 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 		_dragMoved = false;
 		return;
 	case Interface::kHitAIIcon:
-		return; // AIIconObj's click (0x5091d0, the hint list) is not ported (B-118)
+		// AIIconObj's click (0x5091d0): a glowing icon goes to its level's view (0x509aa0); without a glow the exe runs
+		// the first hint-list action whose condition holds (0x5097e0), not ported (B-118)
+		if (_script->isHintGlowing()) {
+			debugC(1, kDebugScript, "-- click: AI icon glowing, level %d", _script->getHintGlowLevel());
+			_script->clickAIIcon();
+		} else {
+			debugC(1, kDebugScript, "-- click: AI icon without a glow (hint list not ported)");
+		}
+		return;
 	default:
 		break;
 	}
@@ -1679,11 +1689,23 @@ XFilesEngine::ViewHit XFilesEngine::hitView(const Common::Point &pos) const {
 void XFilesEngine::updateCursor() {
 	// An object shows its VCCursor while the mouse is over it (vtable slot
 	// +0x68, called on Roll Into and Roll Out Of); 0 is the default cursor
+	// The firing cursor stays until the hit view is gone (the next view, see showCursorAnimation)
+	if (_firingCursor && _script->getView() != _firingView)
+		_firingCursor = 0;
 	_cursors->show(getCursorAt(_mouse));
 	_cursors->update();
 }
 
+void XFilesEngine::showCursorAnimation(uint32 id) {
+	// HotSpot_ClickAction (0x4b4a20) activates the VCCursor (slot +0x70): it is the cursor until an object under the
+	// mouse shows one, in practice after the hit view is replaced
+	_firingCursor = id;
+	_firingView = _script->getView();
+}
+
 uint32 XFilesEngine::getCursorAt(const Common::Point &pos) const {
+	if (_firingCursor)
+		return _firingCursor;
 	// An idea icon being dragged is the pointer: no character's lips over it
 	if (_dragIdea && _dragMoved)
 		return 0;

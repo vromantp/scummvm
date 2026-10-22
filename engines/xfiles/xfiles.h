@@ -106,6 +106,7 @@ public:
 	void playPhoneTone(uint32 id) override;
 	void playShutter(uint32 id) override;
 	void checkpoint() override { commitCheckpoint(); }
+	void showCursorAnimation(uint32 id) override;
 	uint32 getPhotoTime() const override;
 	void playClip(uint32 id, int16 x, int16 y) override;
 	void stopViewAsset(uint32 id) override;
@@ -271,6 +272,8 @@ private:
 	void updateCursor();
 	/** The VCCursor to show for what is at a point; 0 for the default cursor. */
 	uint32 getCursorAt(const Common::Point &pos) const;
+	uint32 _firingCursor = 0; ///< The VCCursor a gun hit shows (73520, the red sight), 0 for none
+	uint32 _firingView = 0;   ///< The view that was current at the hit
 	/** The second click of a double-click: Mouse Double-Click instead of Mouse Click. */
 	void handleDoubleClick(const Interface::Hit &hit);
 	/** The button went up: an idea icon held down is played on the character under the mouse (OnDrop_PlayItemTopic). */

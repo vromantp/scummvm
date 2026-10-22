@@ -75,6 +75,13 @@ PictureAsset *loadPicture(const VCData &data, const DiscFiles &files, uint32 ass
 bool loadFrames(const VCData &data, const DiscFiles &files, uint32 assetId, const Graphics::PixelFormat &format,
 	Common::Array<Graphics::Surface *> &frames, Common::Array<uint32> &durations);
 
+/**
+ * Load every entry of a picture asset as a PictureAsset (the transparency rule applies to each), with the archive's
+ * durations in ms. The caller deletes the pictures. Returns false if no frame can be read.
+ */
+bool loadPictureFrames(const VCData &data, const DiscFiles &files, uint32 assetId, const Graphics::PixelFormat &format,
+	Common::Array<PictureAsset *> &frames, Common::Array<uint32> &durations);
+
 } // End of namespace XFiles
 
 #endif // XFILES_PICTURES_H

@@ -117,7 +117,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _gunValue(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewGone(false), _viewStateVariable(0), _viewAssetHeld(false), _endGamePending(false), _endGameVar(0), _endGameValue(0), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintGlow(0), _hintGlowOn(false), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _gunValue(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewGone(false), _viewStateVariable(0), _viewAssetHeld(false), _endGamePending(false), _endGameVar(0), _endGameValue(0), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	memset(_shootVars, 0, sizeof(_shootVars));
 	memset(_shootIdx, 0, sizeof(_shootIdx));
@@ -1123,9 +1123,11 @@ void Script::addCoreHooks() {
 		return false;
 	});
 	t.add("SetAIGlow", [](Script &s, const HookCall &c) {
-		// A level above 1 is kept
-		if (c.has(1))
+		// AI_SetGlow (0x480670): 0 clears the flag and the level, 1 sets the flag with level 0, n > 1 flag and level n
+		if (c.has(1)) {
 			s._hintGlow = c.args[0] > 1 ? c.args[0] : 0;
+			s._hintGlowOn = c.args[0] != 0;
+		}
 		return false;
 	});
 	t.add("SetFLightProps", [](Script &s, const HookCall &c) {
@@ -1848,6 +1850,11 @@ void Script::setViewState(char letter) {
 		_variables[_viewStateVariable] = (unsigned char)letter;
 }
 
+void Script::clickAIIcon() {
+	if (_hintGlow > 0)
+		setViewByExe(_hintGlow);
+}
+
 void Script::setViewByExe(uint32 view) {
 	// The exe's own Set View (0x4b3bc0, which also drops the pending .HOT entries: nothing to drop here)
 	VCAction a;
@@ -2371,6 +2378,7 @@ void Script::restore(const VCSave &save) {
 	_hintList = save.hintList;
 	_hintTrigger = save.hintTrigger;
 	_hintGlow = save.hintGlow;
+	_hintGlowOn = _hintGlow != 0; // AI_RestoreGlow (0x508c00)
 	memcpy(_flashlight, save.flashlight, sizeof(_flashlight));
 	_tint = save.tint;
 	memcpy(_tintColor, save.tintColor, sizeof(_tintColor));

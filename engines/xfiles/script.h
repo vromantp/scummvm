@@ -461,6 +461,14 @@ public:
 	int32 getHeldValue() const { return isHolding() ? getVariable(_heldVariable) : 0; }
 	/** The gun (OnGunClick's inventory value) is in hand: .HOT hotspots of the shootout take clicks and show the tool cursor. */
 	bool isGunHeld() const { return _gunValue && isHolding() && getVariable(_heldVariable) == (int32)_gunValue; }
+	/** The AI icon glows (flag 0x6b2aa8, apart from the level). */
+	bool isHintGlowing() const { return _hintGlowOn; }
+	/** AI_GlowLevel: the view a click on the glowing icon goes to, 0 for none. */
+	int32 getHintGlowLevel() const { return _hintGlow; }
+	/** The AI icon's show handler (0x509280) applies the glow from the level alone: after SetAIGlow(1) a re-show clears it. */
+	void aiIconShown() { _hintGlowOn = _hintGlow != 0; }
+	/** The click on the glowing AI icon (0x509aa0): a Set View to the level's view; level 0 does nothing. */
+	void clickAIIcon();
 	/** The click on an inventory icon (InvIcon_OnMouseClick 0x49c180): put back, take the item, run its Mouse Click triggers. */
 	void selectInventory(uint32 id);
 	/** Whether the item has an icon in the bar: asks the engine, else every enabled VCInventory has one (0x4201a0). */
@@ -774,7 +782,8 @@ private:
 	int32 _disc;                               ///< Disc in use (VCGameState +42)
 	bool _evidenceRowShown;                    ///< EvIcons_SetRowShown, set by a shown evidence icon of a restore
 	uint32 _hintList, _hintTrigger;            ///< The last SetAIList, 0 after ClearAIList
-	int32 _hintGlow;                           ///< The last SetAIGlow above 1, else 0
+	int32 _hintGlow;                           ///< AI_GlowLevel: the last SetAIGlow above 1, else 0 (the save keeps this)
+	bool _hintGlowOn;                          ///< The glow flag (0x6b2aa8): SetAIGlow(1) sets it with level 0
 	byte _flashlight[3];                       ///< SetFLightProps as the save keeps it (FLight_SetProps 0x4d7d20 via 0x44bda0)
 	byte _tint;                                ///< SetLBoxTint (1) or ClearLBoxTint (0)
 	byte _tintColor[3];                        ///< The tint in the order the save stores it (blue, green, red)

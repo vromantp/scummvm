@@ -22,6 +22,7 @@
 #include "common/algorithm.h"
 #include "common/debug.h"
 #include "common/formats/winexe.h"
+#include "common/system.h"
 #include "graphics/font.h"
 #include "graphics/fonts/ttf.h"
 #include "graphics/surface.h"
@@ -76,6 +77,7 @@ static const struct {
 
 // The AI icon's VCEvidenceIcon: RegAIIcon(0xdb79) at start (0x41b060)
 static const uint32 kAIIcon = 56185;
+static const uint32 kAIIconGraphic = 56700; // AI.pff, 8 frames
 
 // Layouts that leave the view and the icons working (the IFL-except list,
 // registered by XFiles.exe at start, 0x41b060): e-mail popups, the Game
@@ -90,12 +92,43 @@ static const uint32 kAlwaysNonModalLayouts[] = { 49738, 49781, 49783, 49785, 729
 
 // -- Graphic ------------------------------------------------------------------
 
-Interface::Graphic::Graphic() : _picture(nullptr), _movie(nullptr) {
+Interface::Graphic::Graphic() : _picture(nullptr), _movie(nullptr), _frame(0), _frameStart(0), _playing(false) {
 }
 
 Interface::Graphic::~Graphic() {
 	delete _picture;
 	delete _movie;
+	for (uint i = 0; i < _frames.size(); i++)
+		delete _frames[i];
+}
+
+bool Interface::Graphic::loadFrames(const VCData &data, const DiscFiles &files, uint32 assetId, const Graphics::PixelFormat &format) {
+	Common::Array<PictureAsset *> frames;
+	Common::Array<uint32> durations;
+	if (!_picture || !loadPictureFrames(data, files, assetId, format, frames, durations))
+		return false;
+	if (frames.size() < 2) {
+		for (uint i = 0; i < frames.size(); i++)
+			delete frames[i];
+		return false;
+	}
+	_frames = frames;
+	_durations = durations;
+	_frame = 0;
+	_playing = false;
+	return true;
+}
+
+void Interface::Graphic::play(bool on) {
+	if (_frames.empty())
+		return;
+	_frame = 0;
+	_playing = on;
+	_frameStart = g_system->getMillis();
+}
+
+const PictureAsset *Interface::Graphic::current() const {
+	return _frames.empty() ? _picture : _frames[_frame];
 }
 
 bool Interface::Graphic::open(const VCData &data, const DiscFiles &files, uint32 assetId, const Graphics::PixelFormat &format) {
@@ -117,28 +150,36 @@ bool Interface::Graphic::open(const VCData &data, const DiscFiles &files, uint32
 }
 
 void Interface::Graphic::update() {
+	if (_playing) {
+		// A frame without a duration stays
+		const uint32 now = g_system->getMillis();
+		while (_durations[_frame] && now - _frameStart >= _durations[_frame]) {
+			_frameStart += _durations[_frame];
+			_frame = (_frame + 1) % _frames.size();
+		}
+	}
 	if (_movie)
 		_movie->update();
 }
 
 const Graphics::Surface *Interface::Graphic::getSurface() const {
-	if (_picture)
-		return &_picture->getSurface();
+	if (const PictureAsset *picture = current())
+		return &picture->getSurface();
 	if (_movie && _movie->getFrame().getPixels())
 		return &_movie->getFrame();
 	return nullptr;
 }
 
 void Interface::Graphic::draw(Graphics::Surface &dst, int x, int y) const {
-	if (_picture)
-		_picture->draw(dst, x, y);
+	if (const PictureAsset *picture = current())
+		picture->draw(dst, x, y);
 	else if (_movie && _movie->getFrame().getPixels())
 		blit(dst, _movie->getFrame(), x, y);
 }
 
 // -- Interface ----------------------------------------------------------------
 
-Interface::Interface(const VCData &data, const DiscFiles &files) : _data(data), _files(files), _kitOpen(false),
+Interface::Interface(const VCData &data, const DiscFiles &files) : _data(data), _files(files), _aiGlow(false), _kitOpen(false),
 	_evidenceRowShown(false), _inventorySeeded(false), _texts(nullptr), _font(nullptr), _rolloverText(false), _barClosed(false), _barOpen(false),
 	_mouseInBar(false), _enteredBar(false), _held(0) {
 	static const uint32 kClasses[] = { kClassActionIcon, kClassInventory, kClassEmotionIcon };
@@ -207,6 +248,8 @@ void Interface::update(const Script &script, const Common::Point &mouse, bool ca
 	placeIcons(_emotions, kPaneEmotion, captions);
 	placeIcons(_inventory, kPaneInventory, captions);
 	placeIcons(_aiIcon, kPaneAIIcon, captions);
+	if (!_aiIcon.empty() && _aiIcon[0].graphic)
+		_aiIcon[0].graphic->update();
 	placeIcons(_ideas, kPaneIdea, _rolloverText);
 	placeKit();
 
@@ -249,12 +292,28 @@ Interface::Icon Interface::makeIcon(uint32 id) const {
 	return icon;
 }
 
-void Interface::showAIIcon(bool shown) {
-	// The icon has no rollover graphic and no rollover text; its glow (AI_SetGlow 0x480670) is not ported (B-118)
-	if (shown && _aiIcon.empty())
+bool Interface::showAIIcon(bool shown) {
+	// The icon has no rollover graphic and no rollover text; its glow is AI.pff looping (Icon_SetRollover 0x43bcb0)
+	if (shown && _aiIcon.empty()) {
 		_aiIcon.push_back(makeIcon(kAIIcon));
-	else if (!shown)
+		_aiGlow = false;
+		if (_aiIcon[0].graphic) {
+			_aiIcon[0].graphic->loadFrames(_data, _files, kAIIconGraphic, _format);
+			_aiIcon[0].graphic->play(_aiGlow);
+		}
+		return true;
+	}
+	if (!shown)
 		freeIcons(_aiIcon);
+	return false;
+}
+
+void Interface::setAIGlow(bool glow) {
+	if (glow == _aiGlow)
+		return;
+	_aiGlow = glow;
+	if (!_aiIcon.empty() && _aiIcon[0].graphic)
+		_aiIcon[0].graphic->play(glow);
 }
 
 void Interface::syncKit(const Script &script) {

@@ -118,8 +118,11 @@ public:
 	/**
 	 * The AI icon (AIIconObj, kind 34): Prefs_ApplyAIIcon (0x452780) makes it with Artificial Intuition on and
 	 * removes it with Artificial Intuition off.
+	 * Returns true if it was made now (the glow starts off; the caller sets it, AI_SetGlow).
 	 */
-	void showAIIcon(bool shown);
+	bool showAIIcon(bool shown);
+	/** AI_SetGlow (0x480670) on the icon: Icon_SetRollover on the frame animation, so AI.pff loops while it glows. */
+	void setAIGlow(bool glow);
 	/** Close the bar until the mouse leaves it (EvKitIconClick in hidden-bar mode). */
 	void closeBar() { _barClosed = true; }
 
@@ -147,14 +150,28 @@ private:
 		~Graphic();
 		bool open(const VCData &data, const DiscFiles &files, uint32 assetId, const Graphics::PixelFormat &format);
 		void update();
+		/**
+		 * Replace the picture by every frame of a multi-frame .pff asset (the frame player the exe builds, 0x459730);
+		 * it shows frame 0 until play(true). A single frame keeps the picture.
+		 */
+		bool loadFrames(const VCData &data, const DiscFiles &files, uint32 assetId, const Graphics::PixelFormat &format);
+		/** Icon_SetRollover (0x43bcb0) of a frame animation: true rewinds and loops by the durations, false stops on frame 0. */
+		void play(bool on);
 		/** Empty if nothing could be opened. */
 		const Graphics::Surface *getSurface() const;
 		/** Draw at (x, y); pictures follow the exe's transparency rule (PictureAsset). */
 		void draw(Graphics::Surface &dst, int x, int y) const;
 
 	private:
+		const PictureAsset *current() const;
+
 		PictureAsset *_picture;
 		Movie *_movie;
+		Common::Array<PictureAsset *> _frames;
+		Common::Array<uint32> _durations;
+		uint _frame;
+		uint32 _frameStart;
+		bool _playing;
 	};
 
 	enum Pane {
@@ -213,6 +230,7 @@ private:
 	Common::Array<Icon> _inventory, _emotions, _actions;
 	Common::Array<Icon> _kit;                     ///< Evidence icons in the kit
 	Common::Array<Icon> _ideas;                   ///< The idea icons of the open dialog box
+	bool _aiGlow;                                 ///< The glow the script asks for, kept while the icon is removed
 	Common::Array<Icon> _aiIcon;                  ///< The AI icon while it is shown, else empty
 	bool _kitOpen;
 	Common::Rect _kitFrom;                        ///< The inventory icon the kit opened from
