@@ -3184,7 +3184,7 @@ void Script::playTopicClips(uint32 conversationId, bool inBox) {
 		return;
 	}
 	uint32 stock[kStockAtomCount];
-	if (!getStockAtoms(conversationId, stock)) {
+	if (!getStockAtoms(conversationId, inBox, stock)) {
 		if (c.atom) {
 			beforeLead();
 			playList(c.atom);
@@ -3365,20 +3365,32 @@ int Script::roll(Dice &dice, int min, int max) {
 	return x % (uint32)(max - min + 1) + min;
 }
 
-bool Script::getStockAtoms(uint32 conversationId, uint32 (&atoms)[kStockAtomCount]) const {
+bool Script::getStockAtoms(uint32 conversationId, bool inBox, uint32 (&atoms)[kStockAtomCount]) const {
 	// 0x43d3d0: the atoms of the first topic of the character asked, if it
 	// has no label. Text assets (a placeholder) leave their slot empty.
+	// The character (0x4e9e50): the view's only character view, else the
+	// one with the topic, looked up in its conversations for a box click
+	// and in its idea maps (any icon, enabled or not) for a dropped item
 	VCView view;
 	Common::Array<uint32> charViews;
 	if (!_data.getView(_view, view) || !_data.getMembers(view.characters, charViews))
 		return false;
 	for (uint i = 0; i < charViews.size(); i++) {
 		VCCharView charView;
-		Common::Array<uint32> topics;
-		if (!_data.getCharView(charViews[i], charView) || !_data.getMembers(charView.conversations, topics) ||
-				Common::find(topics.begin(), topics.end(), conversationId) == topics.end())
+		if (!_data.getCharView(charViews[i], charView))
 			continue;
-		return getCharViewAtoms(charView, atoms);
+		bool found = charViews.size() == 1;
+		Common::Array<uint32> members;
+		if (!found && inBox && _data.getMembers(charView.conversations, members))
+			found = Common::find(members.begin(), members.end(), conversationId) != members.end();
+		else if (!found && !inBox && charView.ideaMaps && _data.getMembers(charView.ideaMaps, members)) {
+			for (uint j = 0; j < members.size() && !found; j++) {
+				VCIdeaMap map;
+				found = _data.getIdeaMap(members[j], map) && map.conversation == conversationId;
+			}
+		}
+		if (found)
+			return getCharViewAtoms(charView, atoms);
 	}
 	return false;
 }
