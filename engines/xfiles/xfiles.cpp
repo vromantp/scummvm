@@ -68,7 +68,7 @@ static const uint32 kXCursor = 25541;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
 	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _viewfinder(nullptr), _counterFont(nullptr), _counterFontOwned(false), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuOpen(false), _menuLayout(false), _menuReopen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _hotMovie(nullptr), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
-	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _dragIdea(0), _dragMoved(false), _timersPaused(false), _barRevealed(false), _barRevealEnd(0), _sound(_discFiles) {
+	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _dragIdea(0), _charHover(0), _dragMoved(false), _timersPaused(false), _barRevealed(false), _barRevealEnd(0), _sound(_discFiles) {
 	g_engine = this;
 	addHooks();
 	_loadedSave = false;
@@ -1279,6 +1279,7 @@ void XFilesEngine::playTransition(int mode, const Graphics::Surface &oldBand, co
 
 void XFilesEngine::closeView() {
 	_hot.clear();
+	_charHover = 0;
 	_hotMovie = nullptr;
 	for (uint i = 0; i < _layers.size(); i++)
 		delete _layers[i];
@@ -1301,6 +1302,22 @@ void XFilesEngine::updateInterface() {
 			_script->roll(old.id, false);
 		if (hover.kind != Interface::kHitNone)
 			_script->roll(hover.id, true);
+	}
+	// Roll Into and Roll Out Of for the character view under the mouse (CharView_OnRoll 0x443010: the gun,
+	// handcuffs or stiletto in hand make a character with stock replies say "Don't do that")
+	uint32 charHover = 0;
+	if (hover.kind == Interface::kHitNone && !_interface->isModal()) {
+		ViewHit viewHit = hitView(_mouse);
+		if (viewHit.kind == ViewHit::kCharView)
+			charHover = viewHit.id;
+	}
+	if (charHover != _charHover) {
+		uint32 old = _charHover;
+		_charHover = charHover;
+		if (old)
+			_script->roll(old, false);
+		if (charHover)
+			_script->roll(charHover, true);
 	}
 	// The item in hand goes back when the mouse moves into the bar
 	// (InvBar_OnRoll 0x468330); a disabled one goes back in Script::enable
