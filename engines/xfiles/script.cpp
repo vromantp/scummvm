@@ -3978,7 +3978,10 @@ void Script::step(const Common::String &s) {
 		finishSound(id);
 	else if (kind == "icon")
 		addInventoryIcon(id); // the exe log's late activation of the icon (the hidden bar's 500 ms, 0x4a1fb0)
-	else if (kind == "media")
+	else if (kind == "menu") {
+		// menu:new|load|previous|quit: a click in the start-up menu after a game end (steps.py, B-203). The restart is
+		// the caller's (vcdump, the engine's runMenu); nothing happens in the interpreter
+	} else if (kind == "media")
 		_soundEnds = true; // the step list has the sound ends (steps.py `end:`): later plays of a playing asset are dropped
 }
 
