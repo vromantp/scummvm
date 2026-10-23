@@ -55,7 +55,7 @@ enum {
 	kBottom = 330 - 5
 };
 
-HeadCredits::HeadCredits() : _dll(nullptr), _strings(nullptr), _font(nullptr), _enabled(false), _rolling(false),
+HeadCredits::HeadCredits() : _dll(nullptr), _strings(nullptr), _font(nullptr), _enabled(false), _rolling(false), _paused(false),
 	_shownAny(false), _index(-1), _lastShown(-1), _next(0), _hideAt(0) {
 }
 
@@ -102,9 +102,22 @@ void HeadCredits::hide() {
 	_hideAt = 0;
 }
 
+void HeadCredits::pause() {
+	_paused = true;
+	hide();
+}
+
+void HeadCredits::resume(uint32 now) {
+	if (!_paused)
+		return;
+	_paused = false;
+	_next = now + kCreditPeriod;
+}
+
 void HeadCredits::reset() {
 	// Game_Start stops the credits; the new game's roll starts as at first
 	_rolling = false;
+	_paused = false;
 	_shownAny = false;
 	_index = -1;
 	_lastShown = -1;
@@ -113,7 +126,7 @@ void HeadCredits::reset() {
 
 void HeadCredits::update(uint32 now, bool canShow) {
 	// 0x401ee0, every frame
-	if (!_rolling)
+	if (!_rolling || _paused)
 		return;
 	bool due = (int32)(now - _next) >= 0;
 	// A clip or the dialog box coming up takes the credit away (0x441190,

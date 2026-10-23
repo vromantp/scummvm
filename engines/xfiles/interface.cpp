@@ -181,7 +181,7 @@ void Interface::Graphic::draw(Graphics::Surface &dst, int x, int y) const {
 
 Interface::Interface(const VCData &data, const DiscFiles &files) : _data(data), _files(files), _aiGlow(false), _kitOpen(false),
 	_evidenceRowShown(false), _inventorySeeded(false), _texts(nullptr), _font(nullptr), _rolloverText(false), _barClosed(false), _barOpen(false),
-	_mouseInBar(false), _enteredBar(false), _held(0) {
+	_mouseInBar(false), _enteredBar(false), _suspended(false), _held(0) {
 	static const uint32 kClasses[] = { kClassActionIcon, kClassInventory, kClassEmotionIcon };
 	for (uint i = 0; i < ARRAYSIZE(kClasses); i++) {
 		Common::Array<NeoEntry> entries;
@@ -547,6 +547,8 @@ void Interface::freeItems() {
 }
 
 bool Interface::isModal() const {
+	if (_suspended)
+		return true;
 	for (uint i = 0; i < _layouts.size(); i++) {
 		const uint32 *always = kAlwaysNonModalLayouts + ARRAYSIZE(kAlwaysNonModalLayouts);
 		if (Common::find(_modalExceptions.begin(), _modalExceptions.end(), _layouts[i]) == _modalExceptions.end() &&

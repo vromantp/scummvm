@@ -66,6 +66,12 @@ public:
 	int getLastCredit() const { return _rolling ? _lastShown : -1; }
 	/** Take the credit on screen away now; the next one still comes. */
 	void hide();
+	/**
+	 * TextOn(0) (0x46c970): stop the timers and take the credit on screen away; TextOn(1) (0x49fae0) restarts
+	 * the period from now. Nothing happens when the credits are not rolling.
+	 */
+	void pause();
+	void resume(uint32 now);
 	/** Stop rolling and forget what came (a new game). */
 	void reset();
 	/**
@@ -81,6 +87,7 @@ private:
 	Graphics::Font *_font;
 	bool _enabled;
 	bool _rolling;
+	bool _paused;              ///< TextOn(0) came and TextOn(1) has not
 	bool _shownAny;            ///< A credit came since the start, shown or not (exe: +0x68)
 	int _index;                ///< String of the last credit shown; -1 before the first
 	int _lastShown;            ///< The last credit shown, or the one a restored roll continues from; -1 if none

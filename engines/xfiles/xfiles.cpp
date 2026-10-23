@@ -573,6 +573,7 @@ bool XFilesEngine::teardownGame() {
 	_headCredits.reset();
 	_headCredits.setEnabled(false); // only a new game, or a restore with the credits rolling, allows them
 	_subliminal.stop();
+	_interface->setSuspended(false);
 	_lastClickTime = 0;
 	_dragIdea = 0;
 	_lastClickHit.kind = Interface::kHitNone;
@@ -708,6 +709,28 @@ void XFilesEngine::addHooks() {
 	});
 	t.add("ClearIFLExcept", [](XFilesEngine &e, const HookCall &c) {
 		e._interface->clearModalExceptions();
+		return true;
+	});
+	t.add("TextOn", [](XFilesEngine &e, const HookCall &c) {
+		// 0x5078f0: for the head credits and the subliminal object, 0 pauses (0x46c970: stop the timers, hide),
+		// else resumes (0x49fae0)
+		if (!c.has(1))
+			return false;
+		if (c.args[0]) {
+			e._headCredits.resume(e.gameMillis());
+			e._subliminal.resume(e.gameMillis());
+		} else {
+			e._headCredits.pause();
+			e._subliminal.pause();
+		}
+		return true;
+	});
+	t.add("FadeBack", [](XFilesEngine &e, const HookCall &c) {
+		// 0x48a9f0 is Scene_SuspendObjects (0x40be40): a suspend flag on the view, icons, interface items and
+		// inventory, which take no input meanwhile. The grey tint of a suspended object is not drawn (B-118)
+		if (!c.has(1))
+			return false;
+		e._interface->setSuspended(c.args[0] != 0);
 		return true;
 	});
 	t.add("FadeToBlack", [](XFilesEngine &e, const HookCall &c) {

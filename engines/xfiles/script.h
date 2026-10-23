@@ -843,6 +843,8 @@ private:
 	Common::Array<HeldSound> _heldSounds;      ///< Sounds waiting for the videos to end
 	uint32 _prefVariables[kPrefCount];         ///< The variable RegPreferences gave each preference, or 0
 	uint32 _prefArtificialIntuition;           ///< The variable RegPreferences gives Pref_bArtificialIntuition, or 0
+	uint32 _cookEmailCount;                    ///< The variable RegCookEmail gave iNumWillmoreEMailsToCook, or 0
+	uint32 _cookEmailFlag;                     ///< The variable it gave IFL_bPDAEmailedCookAboutNSA, or 0
 	uint32 _uberParanoia;                      ///< The variable RegUberVars gives iUberParanoia, or 0
 
 	// The Smolnikoff shootout: exe globals a save does not hold (0x6b1ef0..0x6b1f10, 0x6be8a4/7cc/834)

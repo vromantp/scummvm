@@ -117,7 +117,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintCursor(0), _hintGlow(0), _hintGlowOn(false), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _gunValue(0), _heldCursorItem(0), _binocularsHeld(false), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewGone(false), _viewStateVariable(0), _viewAssetHeld(false), _endGamePending(false), _endGameVar(0), _endGameValue(0), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintCursor(0), _hintGlow(0), _hintGlowOn(false), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _gunValue(0), _heldCursorItem(0), _binocularsHeld(false), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewGone(false), _viewStateVariable(0), _viewAssetHeld(false), _endGamePending(false), _endGameVar(0), _endGameValue(0), _prefArtificialIntuition(0), _cookEmailCount(0), _cookEmailFlag(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	memset(_shootVars, 0, sizeof(_shootVars));
 	memset(_shootIdx, 0, sizeof(_shootIdx));
@@ -1144,7 +1144,40 @@ void Script::addCoreHooks() {
 			else if (c.args[2] == 'D')
 				s._flashlight[2] = 2;
 		}
-		return false;
+		// FLight_SetProps (0x4d7d20) also re-selects the held item when it is the flashlight, so the held light
+		// takes the new look. That belongs to the flashlight tool mode, which is not ported
+		return true;
+	});
+	t.add("FixJumpCut", [](Script &s, const HookCall &c) {
+		// 0x48aa20 reads both variables and calls 0x48aa10, a bare ret 0xc: no effect in this build
+		return true;
+	});
+	t.add("RegDayNight", [](Script &s, const HookCall &c) {
+		// 0x49b5b0 is a bare ret 0xc: the handle is not kept; the scripts read iDayNight themselves
+		return true;
+	});
+	t.add("RegCookEmail", [](Script &s, const HookCall &c) {
+		// 0x48e830 keeps the two handles. The only reader is the notepad's send-to-address code (0x4e6b90, called
+		// by AddrSelPDA), which is not ported: sent to address 45290 it adds 1 to the count and, on notepad day 1,
+		// sets the flag
+		if (!c.isVariable(0) || !c.isVariable(1))
+			return false;
+		s._cookEmailCount = c.variableArg(0);
+		s._cookEmailFlag = c.variableArg(1);
+		return true;
+	});
+	t.add("StopAllTimers", [](Script &s, const HookCall &c) {
+		// 0x49fde0 queues a Timer Stop (type 2, command 1) for every timer of the list, paused ones included;
+		// they run right after the hook
+		Common::Array<uint> ids;
+		for (Common::HashMap<uint, Timer>::const_iterator it = s._timers.begin(); it != s._timers.end(); ++it)
+			ids.push_back(it->_key);
+		Common::sort(ids.begin(), ids.end());
+		for (uint i = 0; i < ids.size(); i++) {
+			s._timers.erase(ids[i]);
+			s.log(Common::String::format("      timer %u stopped (StopAllTimers)", ids[i]));
+		}
+		return true;
 	});
 	t.add("SetLBoxTint", [](Script &s, const HookCall &c) {
 		if (c.has(3)) {

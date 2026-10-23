@@ -98,6 +98,11 @@ public:
 	Hit hitTest(const Common::Point &pos) const;
 	/** A shown layout takes the input from the view and the icons (0x42b250). */
 	bool isModal() const;
+	/**
+	 * FadeBack(b) (Scene_SuspendObjects 0x40be40): a flag, not a count. While set the view, icons and bar take
+	 * no input, as under a modal layout. The grey tint of a suspended object is not drawn.
+	 */
+	void setSuspended(bool suspended) { _suspended = suspended; }
 	/** The mouse moved into the inventory bar during the last update(). */
 	bool hasEnteredBar() const { return _enteredBar; }
 	/** The bar was shown at the last update() (Obj_IsShown of the bar). */
@@ -249,6 +254,7 @@ private:
 	bool _barOpen;
 	bool _mouseInBar;
 	bool _enteredBar;
+	bool _suspended;                              ///< FadeBack(1) came and FadeBack(0) has not
 	uint32 _held;
 };
 

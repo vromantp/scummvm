@@ -53,7 +53,10 @@ public:
 
 	/** Start the period (Prefs_Apply 0x452b20 with the preference set); nothing if running. */
 	void start(uint32 now);
-	void stop() { _running = false; }
+	void stop() { _running = _paused = false; }
+	/** TextOn(0) stops the period (0x46c970); TextOn(1) starts it again from now, if it was running. */
+	void pause();
+	void resume(uint32 now);
 	bool isRunning() const { return _running; }
 	/**
 	 * Pick and flash the words; now in ms. The three values are those of
@@ -70,6 +73,7 @@ private:
 	Common::WinResources *_strings;
 	Graphics::Font *_font;
 	bool _running;
+	bool _paused;              ///< Running when TextOn(0) stopped it
 	uint32 _next;              ///< When the next word comes
 	Common::U32String _text;   ///< The word to flash this frame
 };

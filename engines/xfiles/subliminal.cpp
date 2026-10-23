@@ -59,7 +59,7 @@ enum {
 	kGrey = 0x32
 };
 
-Subliminal::Subliminal() : _dll(nullptr), _strings(nullptr), _font(nullptr), _running(false), _next(0) {
+Subliminal::Subliminal() : _dll(nullptr), _strings(nullptr), _font(nullptr), _running(false), _paused(false), _next(0) {
 }
 
 Subliminal::~Subliminal() {
@@ -80,6 +80,18 @@ bool Subliminal::load(const DiscFiles &files) {
 	if (!_strings || !_font)
 		warning("Subliminal: cannot load XFilesS.dll or the font");
 	return _strings && _font;
+}
+
+void Subliminal::pause() {
+	_paused = _running;
+	_running = false;
+}
+
+void Subliminal::resume(uint32 now) {
+	if (!_paused)
+		return;
+	_paused = false;
+	start(now);
 }
 
 void Subliminal::start(uint32 now) {
