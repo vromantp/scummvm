@@ -735,6 +735,7 @@ private:
 	void activateOrHoldView();
 	void activateViewObjects(bool before);
 	void deactivateView();
+	void enterLeavePath(); ///< Enters the Set View deferred while the view was left (B-205)
 	void deactivateViewAsset();
 	void deactivateViewObjects();
 	/** An enabled character view, nav or explorable of the current view gets activated. */
@@ -896,6 +897,11 @@ private:
 	bool _viewHeld;                            ///< The view is entered but not activated until the video ends
 	bool _viewActive;                          ///< The view's activation has run
 	bool _viewGone;                            ///< A gun click already deactivated the view (hotClick): enter() skips it
+	bool _enterDeactivating;                   ///< enter() runs the old path's deactivations (AlienBlast drops the queued travel)
+	bool _travelDropped;                       ///< AlienBlast ran in those deactivations: enter() activates nothing (B-204)
+	bool _viewLeaving;                         ///< deactivateView() runs: a Set View in it is deferred (B-205)
+	bool _leavePending;                        ///< A Set View ran while the view was left: its path waits in _leavePath
+	uint32 _leavePath[4];                      ///< Node, location, viewpoint and view of that Set View
 	uint32 _viewStateVariable;                 ///< The variable RegViewState registered; hotAction writes letters into it
 	bool _viewAssetHeld;                       ///< The view's new asset is activated when the video ends
 };

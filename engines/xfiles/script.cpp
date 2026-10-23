@@ -117,7 +117,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintCursor(0), _hintGlow(0), _hintGlowOn(false), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _gunValue(0), _heldCursorItem(0), _binocularsHeld(false), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewGone(false), _viewStateVariable(0), _viewAssetHeld(false), _endGamePending(false), _endGameVar(0), _endGameValue(0), _prefArtificialIntuition(0), _cookEmailCount(0), _cookEmailFlag(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintCursor(0), _hintGlow(0), _hintGlowOn(false), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _gunValue(0), _heldCursorItem(0), _binocularsHeld(false), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewGone(false), _enterDeactivating(false), _travelDropped(false), _viewLeaving(false), _leavePending(false), _viewStateVariable(0), _viewAssetHeld(false), _endGamePending(false), _endGameVar(0), _endGameValue(0), _prefArtificialIntuition(0), _cookEmailCount(0), _cookEmailFlag(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	memset(_shootVars, 0, sizeof(_shootVars));
 	memset(_shootIdx, 0, sizeof(_shootIdx));
@@ -491,7 +491,13 @@ void Script::execute(const VCAction &a, int event, const EventFields &fields, Lo
 	case kActionSetView:
 		// The exe activates and draws nothing for the view already shown
 		// (newgame-to-comityinn, action 61115); a held view counts as shown
-		if (a.path[1] != _node || a.path[2] != _location || a.path[3] != _viewPoint || a.path[0] != _view)
+		if (_viewLeaving) {
+			// The Set View of the leaving view's Deactivation (0x46a950 queues it): the last one wins, and it
+			// is entered once the view is gone (view 45822 sets 45857; entering at once would leave it again)
+			_leavePending = true;
+			for (int i = 0; i < 4; i++)
+				_leavePath[i] = a.path[i];
+		} else if (a.path[1] != _node || a.path[2] != _location || a.path[3] != _viewPoint || a.path[0] != _view)
 			enter(a.path[1], a.path[2], a.path[3], a.path[0]);
 		break;
 	case kActionInterface:
@@ -1035,6 +1041,51 @@ void Script::addCoreHooks() {
 		s._binocularsHeld = false;
 		if (s._hooks)
 			s._hooks->heldItemChanged(0);
+		return true;
+	});
+	t.add("AlienBlast", [](Script &s, const HookCall &) {
+		// 0x4b6220: drops the queued activations of nodes, locations, viewpoints and views (0x41a770), then flashes
+		// the screen (B-199). Only a travel queued behind the deactivation that ran it exists (B-204)
+		if (s._enterDeactivating) {
+			s._travelDropped = true;
+			s.log("      -- AlienBlast: queued travel dropped");
+		}
+		return true;
+	});
+	t.add("IsoChamberStat", [](Script &s, const HookCall &c) {
+		// 0x4fc970 -> 0x4b6120 (docs/data/addresses.tsv): the 11 arguments are variables, 4-11 are outputs
+		if (c.action.args.size() < 11)
+			return false;
+		for (int i = 0; i < 11; i++) {
+			if (!c.isVariable(i))
+				return false;
+		}
+		const bool east = s.getVariable(c.action.args[0].value) != 0;
+		const bool west = s.getVariable(c.action.args[1].value) != 0;
+		int32 out[8] = {0, 0, 0, 0, 0, 0, 0, 0}; // arguments 4-11
+		if (s.getVariable(c.action.args[2].value) == 1) {
+			if (east && west) {
+				out[2] = 1;
+				out[4] = 1;
+			} else if (east) {
+				out[1] = 1;
+				out[6] = 1;
+			} else if (west) {
+				out[2] = 1;
+				out[5] = 1;
+			} else {
+				out[1] = 1;
+				out[7] = 1;
+			}
+		} else {
+			out[0] = 1;
+			out[3] = 1;
+		}
+		for (int i = 0; i < 8; i++) {
+			uint32 var = c.action.args[3 + i].value;
+			if (s.getVariable(var) != out[i])
+				s.setVariable(var, out[i]);
+		}
 		return true;
 	});
 	t.add("StopEnvSounds", [](Script &s, const HookCall &c) {
@@ -1784,12 +1835,23 @@ void Script::stopAllForTravel() {
 
 void Script::deactivateView() {
 	// The shown asset's deactivation runs before the view's own triggers (0x458e10, B-112)
-	deactivateViewAsset();
-	// The view is being left: an asset enabled by the deactivations below is not started (0x46f210)
+	// The view is being left: an asset enabled by the deactivations (the shown asset's included) is not started
+	// (0x46f210)
 	_viewActive = false;
+	const bool wasLeaving = _viewLeaving;
+	_viewLeaving = true;
+	deactivateViewAsset();
 	if (_view && !_viewHeld)
 		fire(_view, kEventObjectDeactivation);
 	deactivateViewObjects();
+	_viewLeaving = wasLeaving;
+}
+
+void Script::enterLeavePath() {
+	if (!_leavePending)
+		return;
+	_leavePending = false;
+	enter(_leavePath[1], _leavePath[2], _leavePath[3], _leavePath[0]);
 }
 
 int Script::hotActionFor(uint32 kind, bool &gunAnimation) const {
@@ -2018,6 +2080,10 @@ void Script::hotAction(int n) {
 	// The current view's deactivation is queued
 	deactivateView();
 	_viewGone = true;
+	// A Set View in the view's Deactivation (45822 sets 45857): entered below unless the action has its own
+	const bool leaveSet = _leavePending;
+	uint32 leavePath[4] = {_leavePath[0], _leavePath[1], _leavePath[2], _leavePath[3]};
+	_leavePending = false;
 
 	if (act.stopSounds)
 		stopAllForTravel(); // 0x44d850(scene, 27): approximated by the travel sweep of the sounds
@@ -2063,6 +2129,8 @@ void Script::hotAction(int n) {
 		setViewByExe(8138);
 	else if (n > 2 && act.setView)
 		setViewByExe(act.setView);
+	else if (leaveSet && !(act.reshow && !success))
+		enter(leavePath[1], leavePath[2], leavePath[3], leavePath[0]);
 }
 
 void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, bool deactivateAll) {
@@ -2076,6 +2144,8 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, 
 	int first = 0;
 	while (!deactivateAll && first < 4 && oldPath[first] == newPath[first])
 		first++;
+	const bool wasDeactivating = _enterDeactivating;
+	_enterDeactivating = true;
 	for (int i = 3; i >= first; i--) {
 		// A view still held (below) was never activated: entering another
 		// one drops it, as Action_DoSetView (0x46a950) cancels its activation
@@ -2088,6 +2158,7 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, 
 		} else if (oldPath[i])
 			fire(oldPath[i], kEventObjectDeactivation);
 	}
+	_enterDeactivating = wasDeactivating;
 	if (first < 4) {
 		_viewHeld = false;
 		_viewActive = false;
@@ -2102,11 +2173,17 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, 
 		getObjectLabel(_data, viewPoint) + " / " + getObjectLabel(_data, view));
 	if (deactivateAll)
 		stopAllForTravel();
+	if (_travelDropped) {
+		// AlienBlast ran in the deactivations: the queued activations are dropped (0x41a770), the old picture stays
+		_travelDropped = false;
+		return;
+	}
 	for (int i = first; i < 3; i++)
 		fire(newPath[i], kEventObjectActivation);
 	if (first < 4)
 		activateOrHoldView();
 	showView();
+	enterLeavePath();
 }
 
 void Script::activateOrHoldView() {
