@@ -137,6 +137,8 @@ private:
 		Common::Point pos;
 		bool skip;
 		bool escape;
+		bool rightClick; ///< The right button went down
+		Common::Point rightPos;
 		bool release;       ///< The left button went up
 		Common::Point releasePos;
 	};
@@ -277,6 +279,7 @@ private:
 	uint32 _firingView = 0;   ///< The view that was current at the hit
 	/** The second click of a double-click: Mouse Double-Click instead of Mouse Click. */
 	void handleDoubleClick(const Interface::Hit &hit);
+	void handleRightClick(const Common::Point &pos);
 	/** The button went up: an idea icon held down is played on the character under the mouse (OnDrop_PlayItemTopic). */
 	void handleRelease(const Common::Point &pos);
 	void clickInventory(uint32 inventory);

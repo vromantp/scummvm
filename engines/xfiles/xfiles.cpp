@@ -208,6 +208,7 @@ XFilesEngine::Input XFilesEngine::pollInput() {
 	input.click = false;
 	input.skip = false;
 	input.escape = false;
+	input.rightClick = false;
 	input.release = false;
 	Common::Event event;
 	while (g_system->getEventManager()->pollEvent(event)) {
@@ -228,6 +229,8 @@ XFilesEngine::Input XFilesEngine::pollInput() {
 		} else if (event.type == Common::EVENT_RBUTTONDOWN) {
 			// The exe ends the playing video on a right-click as on a natural end
 			input.skip = true;
+			input.rightClick = _steps.empty();
+			input.rightPos = event.mouse;
 		} else if (event.type == Common::EVENT_KEYDOWN && event.kbd.keycode == Common::KEYCODE_ESCAPE) {
 			input.skip = true;
 			input.escape = true;
@@ -453,6 +456,8 @@ void XFilesEngine::runGame() {
 			updateDialogBox();
 			if (input.click)
 				handleClick(input.pos);
+			if (input.rightClick)
+				handleRightClick(input.rightPos);
 			if (input.release)
 				handleRelease(input.releasePos);
 			updateCursor();
@@ -1840,6 +1845,14 @@ void XFilesEngine::handleDoubleClick(const Interface::Hit &hit) {
 		_interface->closeKit();
 	}
 	_script->doubleClick(hit.id);
+}
+
+void XFilesEngine::handleRightClick(const Common::Point &pos) {
+	// A right button press on an inventory icon fires its Mouse Double-Click triggers, as the left double-click does
+	// (the close-up of the book, the photos; the run logs show trigger event=1 right after msg=rdown)
+	Interface::Hit hit = _interface->hitTest(pos);
+	if (hit.kind == Interface::kHitInventory)
+		handleDoubleClick(hit);
 }
 
 // -- Dialog box ---------------------------------------------------------------
