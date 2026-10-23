@@ -615,6 +615,8 @@ private:
 	void toolReaction(int32 item);
 	/** Tool_SpecialView 0x51bc70 for the binoculars: one of the views with a view change of its own. */
 	bool isSpecialView() const;
+	/** Tool_SpecialView 0x51bc70: the binoculars taken (on) or put back swap the view's asset; false in no special view. */
+	bool binocularsView(bool on);
 	/** The topics of a character view, in box order. */
 	void getBoxTopics(uint32 charViewId, Common::Array<uint32> &topics) const;
 	bool isBoxTopic(uint32 charViewId, uint32 conversationId) const;
@@ -810,6 +812,7 @@ private:
 	int32 _heldNone;                           ///< Its Inventory_None value
 	uint32 _gunValue;                          ///< The inventory value OnGunClick set (0 until the gun is taken)
 	uint32 _heldCursorItem;                    ///< Inv_Held() + 4 (0x6b8974): the VCInventory ID whose cursor is held
+	bool _binocularsHeld;                      ///< The binoculars' held object (0x51baf0) exists: putBack() runs its view change back
 	Common::Array<uint32> _pressed;            ///< See takePressedItems()
 	uint32 _held;                              ///< The interface item the mouse button is down on (press()), 0 for none
 	Common::HashMap<uint32, bool> _sounds;     ///< Sounds playing (asset objects active)

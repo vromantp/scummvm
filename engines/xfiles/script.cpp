@@ -117,7 +117,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintCursor(0), _hintGlow(0), _hintGlowOn(false), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _gunValue(0), _heldCursorItem(0), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewGone(false), _viewStateVariable(0), _viewAssetHeld(false), _endGamePending(false), _endGameVar(0), _endGameValue(0), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintCursor(0), _hintGlow(0), _hintGlowOn(false), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _gunValue(0), _heldCursorItem(0), _binocularsHeld(false), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewGone(false), _viewStateVariable(0), _viewAssetHeld(false), _endGamePending(false), _endGameVar(0), _endGameValue(0), _prefArtificialIntuition(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	memset(_shootVars, 0, sizeof(_shootVars));
 	memset(_shootIdx, 0, sizeof(_shootIdx));
@@ -935,9 +935,8 @@ void Script::addCoreHooks() {
 		// binoculars' own (not ported), a character reacts
 		if (s._heldVariable && s.getVariable(s._heldVariable) != c.args[0]) {
 			s._variables[s._heldVariable] = c.args[0];
-			if (s.isSpecialView())
-				s.log("  (binoculars' view change of this view not ported)");
-			else
+			s._binocularsHeld = s.isHolding(); // stands for the held object 0x51baf0
+			if (!s.binocularsView(true))
 				s.toolReaction(c.args[0]);
 		}
 		return true;
@@ -1033,6 +1032,7 @@ void Script::addCoreHooks() {
 			}
 		}
 		s._heldCursorItem = 0;
+		s._binocularsHeld = false;
 		if (s._hooks)
 			s._hooks->heldItemChanged(0);
 		return true;
@@ -1209,6 +1209,11 @@ void Script::putBack() {
 	_heldCursorItem = 0; // Inv_SetHeldCursor(0)
 	if (_hooks)
 		_hooks->heldItemChanged(0);
+	// The binoculars' held object deactivates (0x51c160): the base first, then the view change back
+	if (_binocularsHeld) {
+		_binocularsHeld = false;
+		binocularsView(false);
+	}
 }
 
 bool Script::hasInventoryIcon(uint32 id) const {
@@ -3512,6 +3517,48 @@ bool Script::hasHeldReactionSlot(uint32 charViewId) const {
 	default:
 		return false;
 	}
+}
+
+bool Script::binocularsView(bool on) {
+	// Tool_SpecialView 0x51bc70: the view change of the binoculars, by iCurrViewSpecial (conversation-reactions.md)
+	struct Change {
+		int32 value;
+		uint32 take;
+		uint32 putBack;
+	};
+	static const Change kChanges[] = {
+		{7879, 7878, 7879},
+		{7878, 7878, 7879},
+		{19688, 70710, 19688},
+		{70710, 70710, 19688},
+		{19684, 70712, 19684},
+		{70712, 70712, 19684},
+		{19692, 71914, 19692},
+		{71914, 71914, 19692},
+	};
+	if (!isSpecialView())
+		return false;
+	int32 value = getVariable(_viewSpecialVariable);
+	for (uint i = 0; i < ARRAYSIZE(kChanges); i++) {
+		if (kChanges[i].value != value)
+			continue;
+		// 0x51cf10: disable the shown asset, then enable the new one; the asset list then swaps them
+		uint32 from = 0;
+		for (uint j = 0; j < _viewObjects.size() && !from; j++) {
+			if (_data.getClassOf(_viewObjects[j]) == kClassAssetRef)
+				from = _viewObjects[j];
+		}
+		uint32 to = on ? kChanges[i].take : kChanges[i].putBack;
+		if (!from)
+			return true;
+		log(Common::String::format("  binoculars' view change: #%u -> #%u", from, to));
+		enableTarget(from, false); // 0x4083d0
+		enableTarget(to, true);
+		return true;
+	}
+	if (value == 23486 || value == 70706)
+		log("  (binoculars' view change of the video pair 23486 / 70706 not ported)");
+	return true;
 }
 
 bool Script::isSpecialView() const {
