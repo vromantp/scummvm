@@ -487,6 +487,19 @@ void PICTDecoder::unpackBitsRect(Common::SeekableReadStream &stream, bool withPa
 					// skip padding and/or clipped bytes
 					stream.seek(packBitsData.pixMap.rowBytes - width, SEEK_CUR);
 				}
+			} else if (packBitsData.pixMap.pixelSize == 32 && (bytesPerPixel == 3 || bytesPerPixel == 4)) {
+				// A pad or alpha byte, then R, G, B per pixel. QuickDraw stores a row narrower than 8 bytes
+				// (a picture one pixel wide) unpacked. The buffer gets the planes the packed rows decode to.
+				byte *row = buffer + i * width * bytesPerPixel;
+				byte skip = bytesPerPixel == 4 ? 0 : 1;
+				for (uint16 x = 0; x < width; x++) {
+					byte px[4];
+					stream.read(px, 4);
+					for (byte c = 0; c < bytesPerPixel; c++)
+						row[c * width + x] = px[skip + c];
+				}
+				if (width * 4 < packBitsData.pixMap.rowBytes)
+					stream.seek(packBitsData.pixMap.rowBytes - width * 4, SEEK_CUR);
 			} else {
 				// TODO: Finish this. Hasn't been needed (yet).
 				error("Unpacked DirectBitsRect data (padded) with bytes per pixel: %d and pixel size: %d", bytesPerPixel, packBitsData.pixMap.pixelSize);
