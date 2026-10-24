@@ -331,8 +331,9 @@ public:
 		endSound(id, "ended");
 		endClip(id, "ended");
 	}
-	/** Mouse Click on an object (icon, hotspot, explorable...), if it is enabled. */
-	void click(uint32 id);
+	/** Mouse Click on an object (icon, hotspot, explorable...), if it is enabled. A character view's click is at  at
+	 * (the middle of its rectangle for a scripted run); CharTeleport reads it. */
+	void click(uint32 id, const Common::Point *at = nullptr);
 	/** Mouse-down on an interface item: the click, and the item stays held (IsIItemHeld) until release(). */
 	void press(uint32 id);
 	/** The mouse button goes up. */

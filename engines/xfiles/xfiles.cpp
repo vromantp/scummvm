@@ -1646,7 +1646,7 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 		// The view's triggers handle inventory items held over the
 		// character; the exe opens the dialog box unless a reaction clip
 		// plays for the item in hand
-		_script->click(viewHit.id);
+		_script->click(viewHit.id, &_mouse);
 		VCCharView cv;
 		if (_script->opensBoxOnClick() && _data->getCharView(viewHit.id, cv))
 			openDialogBox(cv);

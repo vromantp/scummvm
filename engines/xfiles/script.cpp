@@ -1205,6 +1205,38 @@ void Script::addCoreHooks() {
 		// 0x48aa20 reads both variables and calls 0x48aa10, a bare ret 0xc: no effect in this build
 		return true;
 	});
+	t.add("CharTeleport", [](Script &s, const HookCall &c) {
+		// Hook_CharTeleport 0x4fb570 -> 0x4c56a0: Event::0/1 are the click. The character view under it (the current
+		// view's) gives the character; the target view must have an enabled character view of the same one, else
+		// nothing happens. Only within the same node, the player is cut to the target (0x4c5cd0)
+		if (!c.has(6))
+			return false;
+		VCView view, target;
+		if (!s._data.getView(s._view, view) || !s._data.getView(c.args[5], target))
+			return true;
+		const Common::Point click = s._clickPoint;
+		uint32 character = 0;
+		Common::Array<uint32> ids;
+		s._data.getMembers(view.characters, ids);
+		for (uint i = 0; i < ids.size() && !character; i++) {
+			VCCharView cv;
+			if (s._data.getCharView(ids[i], cv) && s.isEnabled(ids[i]) && click.x >= cv.rect.left && click.x < cv.rect.right &&
+				click.y >= cv.rect.top && click.y < cv.rect.bottom)
+				character = cv.character;
+		}
+		if (!character)
+			return true;
+		bool found = false;
+		ids.clear();
+		s._data.getMembers(target.characters, ids);
+		for (uint i = 0; i < ids.size() && !found; i++) {
+			VCCharView cv;
+			found = s._data.getCharView(ids[i], cv) && s.isEnabled(ids[i]) && cv.character == character;
+		}
+		if (found && s._node == (uint32)c.args[2])
+			s.enter(c.args[2], c.args[3], c.args[4], c.args[5]);
+		return true;
+	});
 	t.add("RegDayNight", [](Script &s, const HookCall &c) {
 		// 0x49b5b0 is a bare ret 0xc: the handle is not kept; the scripts read iDayNight themselves
 		return true;
@@ -2736,7 +2768,7 @@ void Script::applySaved(const SavedValues &values) {
 		_nextId = values.nextId;
 }
 
-void Script::click(uint32 id) {
+void Script::click(uint32 id, const Common::Point *at) {
 	// A click on an inventory item or the evidence kit closes the box before the item's triggers (dbox.close, dbox.show on=0
 	// in box-click-kinds and newgame-to-comityinn); one on an interface item, an emotion icon or an action icon leaves it open
 	// (the next topic click is still a box click, the box's topics are not activated again)
@@ -2748,6 +2780,9 @@ void Script::click(uint32 id) {
 		log("  " + getObjectLabel(_data, id) + " is disabled");
 		return;
 	}
+	VCCharView clicked;
+	if (clickClass == kClassCharView && _data.getCharView(id, clicked))
+		_clickPoint = at ? *at : Common::Point((clicked.rect.left + clicked.rect.right) / 2, (clicked.rect.top + clicked.rect.bottom) / 2);
 	fire(id, kEventMouseClick);
 	// A character view with an item in hand that no trigger took (0x436080): the slot's clip plays as a sound, with
 	// no trigger; none (slot 10 or empty) opens the box as with nothing in hand. With the gun the exe first plays
