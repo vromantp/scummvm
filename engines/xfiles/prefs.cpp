@@ -22,7 +22,173 @@
 #include "xfiles/prefs.h"
 #include "xfiles/script.h"
 
+#include "audio/mixer.h"
+#include "common/config-manager.h"
+#include "common/tokenizer.h"
+#include "common/util.h"
+
 namespace XFiles {
+
+// Preferences
+
+// The ScummVM setting that keeps each preference (the exe's registry value), by Preference. Shared with ScummVM's
+// own menu: subtitles and the dialog, effect and music volumes; the rest are the engine's game-only keys.
+static const char *const kPrefSettings[kPrefCount] = {
+	"xfiles_3d_sound", "xfiles_artificial_intuition", "xfiles_auto_rewind", "subtitles", "xfiles_rollover_text",
+	"xfiles_save_on_exit", "xfiles_skip_clips", "xfiles_skip_intro", "xfiles_smooth_text",
+	"xfiles_subliminal_messages", "xfiles_transitions", "xfiles_translucency", "xfiles_action_difficulty",
+	"xfiles_auto_depth", "xfiles_flashlight_beam", "xfiles_flashlight_brightness", "xfiles_inventory",
+	"speech_volume", "sfx_volume", "xfiles_game_volume", "music_volume", "xfiles_auto_resolution",
+	"xfiles_high_quality_video", "xfiles_live_environments"
+};
+
+static_assert(Preferences::kCount == kPrefCount, "Preferences::kCount must be Script's kPrefCount");
+
+/** The preferences ScummVM's menu changes too: kept as ScummVM's keys, synced when its menu closes. */
+static bool isShared(uint index) {
+	return index == kPrefClosedCaptioning || index == kPrefVolumeDialog || index == kPrefVolumeEffect ||
+		index == kPrefVolumeMusic;
+}
+
+/** The preferences kept as a mixer volume (0 to 256) instead of the game's 0 to 100. */
+static bool isMixerVolume(uint index) {
+	return index == kPrefVolumeDialog || index == kPrefVolumeEffect || index == kPrefVolumeMusic;
+}
+
+/** Rounded both ways, so a game volume comes back unchanged. */
+static int32 toMixerVolume(int32 volume) {
+	return (CLIP<int32>(volume, 0, 100) * Audio::Mixer::kMaxMixerVolume + 50) / 100;
+}
+
+static int32 fromMixerVolume(int32 volume) {
+	return CLIP<int32>((volume * 100 + Audio::Mixer::kMaxMixerVolume / 2) / Audio::Mixer::kMaxMixerVolume, 0, 100);
+}
+
+Preferences::Preferences() : _script(nullptr), _scripted(false) {
+	memset(_scriptedValues, 0, sizeof(_scriptedValues));
+	memset(_hasScripted, 0, sizeof(_hasScripted));
+	memset(_variables, 0, sizeof(_variables));
+	memset(_snapshot, 0, sizeof(_snapshot));
+	memset(_hasSnapshot, 0, sizeof(_hasSnapshot));
+}
+
+void Preferences::setScripted(const Common::String &spec) {
+	_scripted = true;
+	Common::StringTokenizer tokens(spec);
+	while (!tokens.empty()) {
+		Common::String token = tokens.nextToken();
+		const char *colon = strchr(token.c_str(), ':');
+		if (!colon)
+			continue;
+		int index = atoi(token.c_str());
+		if (index >= 0 && index < kCount) {
+			_scriptedValues[index] = atoi(colon + 1);
+			_hasScripted[index] = true;
+		}
+	}
+}
+
+void Preferences::registerVariables(const VCAction &action) {
+	// RegPreferences(24 variables), run by Script before a game starts or continues (Script::loadPreferences) and
+	// by the title. XFiles.exe keeps the preferences in the registry and writes them into these variables; Script
+	// does the writes, asking query() for the registry's value.
+	for (uint i = 0; i < kCount; i++)
+		_variables[i] = i < action.args.size() && action.args[i].kind == kOperandVariable ? action.args[i].value : 0;
+}
+
+bool Preferences::read(uint index, int32 &value) const {
+	const char *setting = kPrefSettings[index];
+	if (index == kPrefClosedCaptioning) {
+		value = ConfMan.getBool(setting);
+	} else if (!ConfMan.hasKey(setting)) {
+		return false;
+	} else if (isMixerVolume(index)) {
+		value = fromMixerVolume(ConfMan.getInt(setting));
+	} else {
+		value = ConfMan.getInt(setting);
+	}
+	return true;
+}
+
+void Preferences::write(uint index, int32 value) const {
+	const char *setting = kPrefSettings[index];
+	if (index == kPrefClosedCaptioning)
+		ConfMan.setBool(setting, value != 0);
+	else if (isMixerVolume(index))
+		ConfMan.setInt(setting, toMixerVolume(value));
+	else
+		ConfMan.setInt(setting, value);
+}
+
+bool Preferences::query(uint index, int32 &value) const {
+	// A scripted run sees only its own registry; a preference without a value keeps its .gam value, as on the
+	// exe's first start
+	if (_scripted) {
+		value = _scriptedValues[index];
+		return _hasScripted[index];
+	}
+	if (!read(index, value))
+		return false;
+	if (isShared(index)) {
+		_snapshot[index] = value;
+		_hasSnapshot[index] = true;
+	}
+	return true;
+}
+
+void Preferences::save() {
+	// A scripted run leaves the player's settings alone
+	if (!_script || _scripted)
+		return;
+	for (uint index = 0; index < kCount; index++) {
+		if (!_variables[index])
+			continue;
+		int32 value = _script->getPreferenceValue(index);
+		write(index, value);
+		if (isShared(index)) {
+			_snapshot[index] = value;
+			_hasSnapshot[index] = true;
+		}
+	}
+	ConfMan.flushToDisk();
+}
+
+void Preferences::syncFromScummVM() {
+	if (!_script || _scripted)
+		return;
+	for (uint index = 0; index < kCount; index++) {
+		int32 value;
+		if (!isShared(index) || !read(index, value))
+			continue;
+		// An unsaved in-game change (a slider moved, the menu opened before Return) stays: only a setting that
+		// differs from what the engine last read or wrote is ScummVM's menu change
+		if (_hasSnapshot[index] && _snapshot[index] == value)
+			continue;
+		_snapshot[index] = value;
+		_hasSnapshot[index] = true;
+		if (!_variables[index])
+			continue; // before RegPreferences: query() reads it
+		_script->setPreference(index, value);
+		_script->setVariable(_variables[index], value);
+	}
+}
+
+bool Preferences::isSet(uint index) const {
+	return _variables[index] && _script->getVariable(_variables[index]);
+}
+
+int32 Preferences::gameVolume() const {
+	int32 game = 100;
+	if (_script && _variables[kPrefVolumeGame])
+		game = _script->getPreferenceValue(kPrefVolumeGame);
+	else if (_scripted && _hasScripted[kPrefVolumeGame])
+		game = _scriptedValues[kPrefVolumeGame];
+	else if (!_scripted && ConfMan.hasKey(kPrefSettings[kPrefVolumeGame]))
+		game = ConfMan.getInt(kPrefSettings[kPrefVolumeGame]);
+	return CLIP<int32>(game, 0, 100);
+}
+
+// PrefHooks
 
 // The Game Preferences screens: PrefInit, AudioInit, PrefDialogVol, PrefMusicVol, PrefEffectVol, PrefVolume, the
 // cycles, the toggles and PrefDefaults. The values go into the preference store (Script::setPreference, which

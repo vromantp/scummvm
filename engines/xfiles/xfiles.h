@@ -47,6 +47,7 @@ class Font;
 #include "xfiles/headcredits.h"
 #include "xfiles/hot.h"
 #include "xfiles/interface.h"
+#include "xfiles/prefs.h"
 #include "xfiles/script.h"
 #include "xfiles/sound.h"
 #include "xfiles/subliminal.h"
@@ -68,7 +69,7 @@ public:
 
 	bool hasFeature(EngineFeature f) const override {
 		return f == kSupportsReturnToLauncher || f == kSupportsSubtitleOptions || f == kSupportsLoadingDuringRuntime ||
-			f == kSupportsSavingDuringRuntime;
+			f == kSupportsSavingDuringRuntime || f == kSupportsChangingOptionsDuringRuntime;
 	}
 
 	Common::Language getLanguage() const { return _gameDescription->language; }
@@ -124,6 +125,8 @@ public:
 	void suspendScene() override { pauseGame(true); }
 	/** ScummVM's volumes, scaled by the game volume preference (the exe's wave-out master volume). */
 	void syncSoundSettings() override;
+	/** ScummVM's menu closed: its captions and volumes into the game (the shared preferences). */
+	void applyGameSettings() override;
 
 protected:
 	Common::Error run() override;
@@ -352,7 +355,7 @@ private:
 	Graphics::ManagedSurface _menuShot;   ///< The screen when the menu opened (the saves' thumbnail)
 	uint32 _pauseStart;                   ///< getMillis() when the game was paused
 	uint32 _pausedTotal;                  ///< Milliseconds the game spent paused before
-	uint32 _prefVariables[kPrefCount];  ///< From RegPreferences
+	Preferences _preferences;           ///< The preferences' owner (prefs.h)
 	uint32 _uberVariables[3];           ///< iUberLoss, iUberParanoia, iUberXTrack, from RegUberVars
 
 	Movie *_video;                       ///< The play-once video on screen

@@ -76,7 +76,6 @@ XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : E
 	_gameEnded = false;
 	_stepAnswer = -1;
 	_pendingClipTime = -1;
-	memset(_prefVariables, 0, sizeof(_prefVariables));
 	memset(_uberVariables, 0, sizeof(_uberVariables));
 	_lastClickHit.kind = Interface::kHitNone;
 	_lastClickHit.id = 0;
@@ -139,7 +138,6 @@ bool XFilesEngine::loadDatabases(bool fromSave) {
 }
 
 Common::Error XFilesEngine::run() {
-	ConfMan.registerDefault("subliminal_messages", false);
 	_discFiles.init(Common::FSNode(ConfMan.getPath("path")));
 	if (!loadDatabases(true))
 		return Common::Error(Common::kReadingFailed, "XFiles.hdb / XFiles.gam");
@@ -167,12 +165,15 @@ Common::Error XFilesEngine::run() {
 	_interface->init(_texts);
 	_headCredits.load(_discFiles);
 	_subliminal.load(_discFiles);
-	syncSoundSettings();
 
 	_shotsDir = ConfMan.getPath("xfiles_shots");
 	_steps = Common::StringTokenizer(ConfMan.get("xfiles_steps")).split();
-	if (!_steps.empty())
+	if (!_steps.empty()) {
 		_mouse = Common::Point(320, 240); // tools/ref/run.ps1 Start-Game: move 320 240
+		// A scripted run's registry is fixed (B-207): the setting xfiles_prefs, not the player's settings
+		_preferences.setScripted(ConfMan.get("xfiles_prefs"));
+	}
+	syncSoundSettings();
 	_fastForward = Common::StringTokenizer(ConfMan.get("xfiles_fastforward")).split();
 
 	_video = new Movie();
@@ -353,6 +354,7 @@ void XFilesEngine::pauseEngineIntern(bool pause) {
 
 void XFilesEngine::createScript() {
 	_script = new Script(*_data);
+	_preferences.setScript(_script);
 	_script->setHooks(this);
 	_sound.attach(_data, _script);
 	_script->setTexts(_texts);
@@ -597,6 +599,7 @@ bool XFilesEngine::teardownGame() {
 	_sound.attach(nullptr, nullptr);
 	delete _script;
 	_script = nullptr;
+	_preferences.setScript(nullptr);
 	delete _interface;
 	_interface = nullptr;
 	delete _cursors;
@@ -682,7 +685,7 @@ void XFilesEngine::addHooks() {
 	t.add("EvKitIconClick", [](XFilesEngine &e, const HookCall &c) {
 		// 0x4efc90: the kit is taken in hand; the hidden bar closes
 		e._interface->closeKit();
-		if (e._prefVariables[kPrefInventory] && e._script->getVariable(e._prefVariables[kPrefInventory]) == 'H')
+		if (e._preferences.variable(kPrefInventory) && e._script->getVariable(e._preferences.variable(kPrefInventory)) == 'H')
 			e._interface->closeBar();
 		return true;
 	});
@@ -794,70 +797,15 @@ void XFilesEngine::fadeToBlack() {
 }
 
 void XFilesEngine::registerPreferences(const VCAction &action) {
-	// RegPreferences(24 variables), run by Script before a game starts or
-	// continues (Script::loadPreferences) and by the title. XFiles.exe keeps
-	// the preferences in the registry and writes them into these variables;
-	// Script does the writes, asking queryPreference for the registry's value.
-	for (uint i = 0; i < action.args.size() && i < kPrefCount; i++)
-		_prefVariables[i] = action.args[i].kind == kOperandVariable ? action.args[i].value : 0;
-}
-
-// The ScummVM setting that keeps each preference (the exe's registry value), by Preference: the toggles and
-// three volumes use ScummVM's own settings, the rest the engine's
-static const char *const kPrefSettings[kPrefCount] = {
-	"xfiles_3d_sound", "xfiles_artificial_intuition", "xfiles_auto_rewind", "subtitles", "xfiles_rollover_text",
-	"xfiles_save_on_exit", "xfiles_skip_clips", "xfiles_skip_intro", "xfiles_smooth_text", "subliminal_messages",
-	"xfiles_transitions", "xfiles_translucency", "xfiles_action_difficulty", "xfiles_auto_depth",
-	"xfiles_flashlight_beam", "xfiles_flashlight_brightness", "xfiles_inventory", "speech_volume", "sfx_volume",
-	"xfiles_game_volume", "music_volume", "xfiles_auto_resolution", "xfiles_high_quality_video",
-	"xfiles_live_environments"
-};
-
-/** The preferences kept as a mixer volume (0 to 256) instead of the game's 0 to 100. */
-static bool isMixerVolume(uint index) {
-	return index == kPrefVolumeDialog || index == kPrefVolumeEffect || index == kPrefVolumeMusic;
-}
-
-/** Rounded both ways, so a game volume comes back unchanged. */
-static int32 toMixerVolume(int32 volume) {
-	return (CLIP<int32>(volume, 0, 100) * Audio::Mixer::kMaxMixerVolume + 50) / 100;
-}
-
-static int32 fromMixerVolume(int32 volume) {
-	return CLIP<int32>((volume * 100 + Audio::Mixer::kMaxMixerVolume / 2) / Audio::Mixer::kMaxMixerVolume, 0, 100);
+	_preferences.registerVariables(action);
 }
 
 bool XFilesEngine::queryPreference(uint index, int32 &value) const {
-	// A preference without a setting keeps its .gam value, as on the exe's first start
-	const char *setting = kPrefSettings[index];
-	if (index == kPrefClosedCaptioning || index == kPrefSubliminalMessages)
-		value = ConfMan.getBool(setting);
-	else if (!ConfMan.hasKey(setting))
-		return false;
-	else if (isMixerVolume(index))
-		value = fromMixerVolume(ConfMan.getInt(setting));
-	else
-		value = ConfMan.getInt(setting);
-	return true;
+	return _preferences.query(index, value);
 }
 
 void XFilesEngine::savePreferences() {
-	// A scripted run (xfiles_steps) leaves the player's settings alone
-	if (!_script || !_steps.empty())
-		return;
-	for (uint index = 0; index < kPrefCount; index++) {
-		if (!_prefVariables[index])
-			continue;
-		int32 value = _script->getPreferenceValue(index);
-		const char *setting = kPrefSettings[index];
-		if (index == kPrefClosedCaptioning || index == kPrefSubliminalMessages)
-			ConfMan.setBool(setting, value != 0);
-		else if (isMixerVolume(index))
-			ConfMan.setInt(setting, toMixerVolume(value));
-		else
-			ConfMan.setInt(setting, value);
-	}
-	ConfMan.flushToDisk();
+	_preferences.save();
 }
 
 void XFilesEngine::applyPreferences(bool resume) {
@@ -880,15 +828,16 @@ void XFilesEngine::applyPreferences(bool resume) {
 		_subliminal.stop();
 }
 
+void XFilesEngine::applyGameSettings() {
+	// ScummVM's menu closed (kSupportsChangingOptionsDuringRuntime): its captions and volumes into the game
+	// (syncSoundSettings follows it)
+	_preferences.syncFromScummVM();
+}
+
 void XFilesEngine::syncSoundSettings() {
 	Engine::syncSoundSettings();
 	// 0x469f50 sets every wave-out device to the game volume (0 to 100)
-	int32 game = 100;
-	if (_script && _prefVariables[kPrefVolumeGame])
-		game = _script->getPreferenceValue(kPrefVolumeGame);
-	else if (ConfMan.hasKey(kPrefSettings[kPrefVolumeGame]))
-		game = ConfMan.getInt(kPrefSettings[kPrefVolumeGame]);
-	game = CLIP<int32>(game, 0, 100);
+	int32 game = _preferences.gameVolume();
 	static const Audio::Mixer::SoundType types[] = {
 		Audio::Mixer::kPlainSoundType, Audio::Mixer::kMusicSoundType, Audio::Mixer::kSFXSoundType,
 		Audio::Mixer::kSpeechSoundType
@@ -911,7 +860,7 @@ int32 XFilesEngine::getUberVariable(uint index) const {
 }
 
 bool XFilesEngine::getPreference(uint index) const {
-	return _prefVariables[index] && _script->getVariable(_prefVariables[index]);
+	return _preferences.isSet(index);
 }
 
 void XFilesEngine::startVideoText(const VCAction &action, const Common::Array<int32> &args) {
@@ -1319,7 +1268,7 @@ void XFilesEngine::closeView() {
 
 void XFilesEngine::updateInterface() {
 	// A new item's reveal shows the hidden bar (deferInventoryIcon)
-	bool hiddenBar = _prefVariables[kPrefInventory] && _script->getVariable(_prefVariables[kPrefInventory]) == 'H' && !_barRevealed;
+	bool hiddenBar = _preferences.variable(kPrefInventory) && _script->getVariable(_preferences.variable(kPrefInventory)) == 'H' && !_barRevealed;
 	_interface->setAIGlow(_script->isHintGlowing());
 	_interface->update(*_script, _mouse, getPreference(kPrefClosedCaptioning), hiddenBar, getPreference(kPrefRolloverText));
 	// Roll Into and Roll Out Of for the icons and layout items under the
@@ -1392,7 +1341,7 @@ bool XFilesEngine::deferInventoryIcon(uint32 id) {
 	// (append, steps.py's `icon:` steps reorder)
 	if (!_fastForward.empty())
 		return false;
-	bool hiddenBar = _prefVariables[kPrefInventory] && _script->getVariable(_prefVariables[kPrefInventory]) == 'H';
+	bool hiddenBar = _preferences.variable(kPrefInventory) && _script->getVariable(_preferences.variable(kPrefInventory)) == 'H';
 	if (!hiddenBar || _interface->isBarOpen())
 		return false;
 	uint32 now = gameMillis();

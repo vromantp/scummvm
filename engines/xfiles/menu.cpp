@@ -278,7 +278,7 @@ bool XFilesEngine::saveOnExit() {
 	if (!_script || !_steps.empty())
 		return true;
 	commitCheckpoint(); // Menu_AskSave snapshots, whatever the answer
-	int32 mode = _prefVariables[kPrefSaveGameOnExit] ? _script->getVariable(_prefVariables[kPrefSaveGameOnExit]) : 'A';
+	int32 mode = _preferences.variable(kPrefSaveGameOnExit) ? _script->getVariable(_preferences.variable(kPrefSaveGameOnExit)) : 'A';
 	if (mode == 'Y') {
 		// The original saves to the current save without asking; the autosave slot never overwrites a player's slot
 		if (canSaveGameStateCurrently() &&

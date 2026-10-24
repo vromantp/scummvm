@@ -34,8 +34,6 @@ public:
 
 	/** The game screen kept by the in-game menu while it is up, else the screen. */
 	void getSavegameThumbnail(Graphics::Surface &thumb) override;
-
-	const ADExtraGuiOptionsMap *getAdvancedExtraGuiOptions() const override;
 };
 
 #endif // XFILES_METAENGINE_H
