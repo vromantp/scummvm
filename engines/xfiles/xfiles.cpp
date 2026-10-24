@@ -1801,7 +1801,8 @@ uint32 XFilesEngine::getCursorAt(const Common::Point &pos) const {
 					 _script->isTestedOnClick(viewHit.id, _script->getHeldVariable(), kEventRollInto) ||
 					 _script->isTestedOnClick(viewHit.id, _script->getHeldVariable())))
 			return held;
-		return viewHit.cursor;
+		// The view's own cursor (lips) only with an enabled topic or idea, else the default
+		return _script->hasTopicOrIdea(viewHit.id) ? viewHit.cursor : 0;
 	case ViewHit::kNav:
 		return viewHit.cursor; // 0x446aa0: the hotspot's cursor
 	default:
@@ -1855,7 +1856,7 @@ void XFilesEngine::handleRightClick(const Common::Point &pos) {
 
 void XFilesEngine::openDialogBox(const VCCharView &charView, bool openScript) {
 	// DisplayDBox / XFiles.exe 0x481660: only for a character with topics or an enabled idea (0x436080)
-	if (!charView.conversations && !_script->hasEnabledIdea(charView.id))
+	if (!_script->hasTopicOrIdea(charView.id))
 		return;
 	_headCredits.hide(); // DBox_OnActivate 0x4767a0
 	_dialogBox.open(charView.id, Common::Rect(charView.rect.left, charView.rect.top, charView.rect.right, charView.rect.bottom));

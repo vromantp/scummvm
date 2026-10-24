@@ -376,6 +376,8 @@ public:
 	void getBoxIdeaIcons(Common::Array<uint32> &icons) const;
 	/** Whether the character view has an enabled idea icon in its map (0x49bce0). */
 	bool hasEnabledIdea(uint32 charViewId) const;
+	bool hasEnabledConversation(uint32 charViewId) const;
+	bool hasTopicOrIdea(uint32 charViewId) const;
 	/** Seed the random numbers of ask(); the same seed gives the same replies. */
 	void setRandomSeed(uint32 seed) { _random = seed; }
 	/**

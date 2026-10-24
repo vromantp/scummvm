@@ -1285,7 +1285,7 @@ void Script::addCoreHooks() {
 		VCCharView charView;
 		if (c.args[0] == 0)
 			s.closeBox();
-		else if (s._data.getCharView(c.args[0], charView) && (charView.conversations || s.hasEnabledIdea(charView.id)))
+		else if (s._data.getCharView(c.args[0], charView) && s.hasTopicOrIdea(charView.id))
 			s.openBox(charView.id);
 		return false;
 	});
@@ -3247,6 +3247,22 @@ bool Script::hasEnabledIdea(uint32 charViewId) const {
 	return findIdeaTopic(charViewId, 0, conversation);
 }
 
+bool Script::hasEnabledConversation(uint32 charViewId) const {
+	// 0x435a90: some conversation of the view's list is enabled (0x417eb0 with 6)
+	Common::Array<uint32> topics;
+	getBoxTopics(charViewId, topics);
+	for (uint i = 0; i < topics.size(); i++) {
+		if (isEnabled(topics[i]))
+			return true;
+	}
+	return false;
+}
+
+bool Script::hasTopicOrIdea(uint32 charViewId) const {
+	// What CharView_ShowCursor (0x418520) and CharView_OnMouseClick (0x436080) test: an enabled topic or idea icon
+	return hasEnabledConversation(charViewId) || hasEnabledIdea(charViewId);
+}
+
 void Script::idea(uint32 iconId, uint32 charView) {
 	// IdeaIcon_DragEnd 0x4d15f0 -> PlayItemTopic 0x4c5500: asked (History) or count + 1, the topic's Object
 	// Activation and its playlist with +0x144 clear; no Mouse Click and no Drop triggers. The box comes back
@@ -4000,7 +4016,7 @@ void Script::step(const Common::String &s) {
 		// XFilesEngine::openDialogBox does: the topics activate now, not
 		// at the first ask
 		VCCharView charView;
-		if (_clickOpensBox && _data.getCharView(id, charView) && (charView.conversations || hasEnabledIdea(id)))
+		if (_clickOpensBox && _data.getCharView(id, charView) && hasTopicOrIdea(id))
 			openBox(id);
 	} else if (kind == "answer") {
 		answerEndGame(true); // the question of EndGame answered (the engine reads yes or no from the step)
