@@ -473,6 +473,17 @@ public:
 	void clickAIIcon();
 	/** The click on a not glowing AI icon (0x5097e0): the next applicable action of the hint list, the cursor cycling. */
 	void clickAIHint();
+	/** 0x508c40: a hint is available when the glow flag is set or an action of the hint list has a condition that holds. */
+	bool isHintAvailable();
+	/** The AI icon is suspended (slot +0x20 with 1, 0x4a04f0): grey, no hit. */
+	bool isAISuspended() const { return _aiSuspended; }
+	/** 0x508e40 (SetAIList, ClearAIList, the travel re-show, the icon's making): suspended without a hint, else resumed. */
+	void recheckAIIcon() { _aiSuspended = !isHintAvailable(); }
+	/** 0x509520 (a modal layout closes): resumes the icon, only with a hint; never suspends. */
+	void resumeAIIcon() {
+		if (_aiSuspended && isHintAvailable())
+			_aiSuspended = false;
+	}
 	/** The click on an inventory icon (InvIcon_OnMouseClick 0x49c180): put back, take the item, run its Mouse Click triggers. */
 	void selectInventory(uint32 id);
 	/** Whether the item has an icon in the bar: asks the engine, else every enabled VCInventory has one (0x4201a0). */
@@ -792,6 +803,7 @@ private:
 	uint32 _hintList, _hintTrigger;            ///< The last SetAIList, 0 after ClearAIList
 	uint _hintCursor;                          ///< Next member of _hintList a click tries (0x5097e0); not saved
 	int32 _hintGlow;                           ///< AI_GlowLevel: the last SetAIGlow above 1, else 0 (the save keeps this)
+	bool _aiSuspended;                         ///< The AI icon's suspension (0x4a04f0), set by recheckAIIcon; not saved
 	bool _hintGlowOn;                          ///< The glow flag (0x6b2aa8): SetAIGlow(1) sets it with level 0
 	byte _flashlight[3];                       ///< SetFLightProps as the save keeps it (FLight_SetProps 0x4d7d20 via 0x44bda0)
 	byte _tint;                                ///< SetLBoxTint (1) or ClearLBoxTint (0)

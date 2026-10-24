@@ -820,8 +820,10 @@ void XFilesEngine::applyPreferences(bool resume) {
 	// no action icon exists yet: Game_BuildObjects (0x477940) makes them after Prefs_Apply, whatever the
 	// preference
 	bool intuition = _script->getPreferenceValue(kPrefArtificialIntuition) != 0;
-	if (_interface->showAIIcon(intuition))
+	if (_interface->showAIIcon(intuition)) {
 		_script->aiIconShown();
+		_script->recheckAIIcon();
+	}
 	if (!intuition && resume)
 		_script->removeActionIcons();
 	syncSoundSettings();
@@ -1299,6 +1301,12 @@ void XFilesEngine::updateInterface() {
 	// A new item's reveal shows the hidden bar (deferInventoryIcon)
 	bool hiddenBar = _preferences.variable(kPrefInventory) && _script->getVariable(_preferences.variable(kPrefInventory)) == 'H' && !_barRevealed;
 	_interface->setAIGlow(_script->isHintGlowing());
+	// A modal layout closing resumes the AI icon when a hint is available (0x509520); it never suspends it
+	bool modal = _interface->isModal();
+	if (_wasModal && !modal)
+		_script->resumeAIIcon();
+	_wasModal = modal;
+	_interface->setAISuspended(_script->isAISuspended());
 	_interface->update(*_script, _mouse, getPreference(kPrefClosedCaptioning), hiddenBar, getPreference(kPrefRolloverText));
 	// Roll Into and Roll Out Of for the icons and layout items under the
 	// mouse (the evidence kit icon opens the kit from these)
@@ -1710,9 +1718,11 @@ void XFilesEngine::updateCursor() {
 
 void XFilesEngine::reshowAIIcon() {
 	// 0x493090: the show handler (0x509280) re-applies the glow from the level; the icon exists while Artificial
-	// Intuition is on (Prefs_ApplyAIIcon). The suspension re-check that follows in the exe is B-118 step 6
-	if (_script->getPreferenceValue(kPrefArtificialIntuition) != 0)
+	// Intuition is on (Prefs_ApplyAIIcon); the suspension re-check (0x508e40) follows the show handler
+	if (_script->getPreferenceValue(kPrefArtificialIntuition) != 0) {
 		_script->aiIconShown();
+		_script->recheckAIIcon();
+	}
 }
 
 void XFilesEngine::showCursorAnimation(uint32 id) {

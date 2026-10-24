@@ -280,6 +280,7 @@ private:
 	void updateCursor();
 	/** The VCCursor to show for what is at a point; 0 for the default cursor. */
 	uint32 getCursorAt(const Common::Point &pos) const;
+	bool _wasModal = false;   ///< A layout had the input at the last frame (its closing resumes the AI icon, 0x509520)
 	uint32 _firingCursor = 0; ///< The VCCursor a gun hit shows (73520, the red sight), 0 for none
 	uint32 _firingView = 0;   ///< The view that was current at the hit
 	/** The second click of a double-click: Mouse Double-Click instead of Mouse Click. */

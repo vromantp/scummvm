@@ -626,7 +626,7 @@ Interface::Hit Interface::hitTest(const Common::Point &pos) const {
 			return hit;
 		}
 	}
-	if (!_aiIcon.empty() && _aiIcon[0].rect.contains(pos)) {
+	if (!_aiIcon.empty() && !_aiSuspended && _aiIcon[0].rect.contains(pos)) {
 		hit.kind = kHitAIIcon;
 		hit.id = _aiIcon[0].id;
 	}
@@ -671,7 +671,35 @@ void Interface::drawDragged(Graphics::Surface &dst, uint32 ideaId, const Common:
 void Interface::draw(Graphics::Surface &dst) const {
 	drawIcons(dst, _actions);
 	drawIcons(dst, _emotions);
-	drawIcons(dst, _aiIcon);
+	if (_aiSuspended && !_aiIcon.empty() && _aiIcon[0].graphic) {
+		// The suspend tint (colour RGB 60, 60, 60, 0x5086b0) multiplies the icon's pixels: in the reference screenshots a
+		// suspended icon is the lit one times about 60/255. Only the pixels the icon draws change
+		const Icon &icon = _aiIcon[0];
+		Common::Rect area = icon.rect;
+		area.clip(Common::Rect(dst.w, dst.h));
+		Graphics::Surface before;
+		before.copyFrom(dst);
+		icon.graphic->draw(dst, icon.rect.left, icon.rect.top);
+		const Graphics::PixelFormat &fmt = dst.format;
+		for (int y = area.top; y < area.bottom; y++) {
+			for (int x = area.left; x < area.right; x++) {
+				uint32 now = fmt.bytesPerPixel == 2 ? *(const uint16 *)dst.getBasePtr(x, y) : *(const uint32 *)dst.getBasePtr(x, y);
+				uint32 was = fmt.bytesPerPixel == 2 ? *(const uint16 *)before.getBasePtr(x, y) : *(const uint32 *)before.getBasePtr(x, y);
+				if (now == was)
+					continue;
+				uint8 r, g, b;
+				fmt.colorToRGB(now, r, g, b);
+				now = fmt.RGBToColor(r * 60 / 255, g * 60 / 255, b * 60 / 255);
+				if (fmt.bytesPerPixel == 2)
+					*(uint16 *)dst.getBasePtr(x, y) = now;
+				else
+					*(uint32 *)dst.getBasePtr(x, y) = now;
+			}
+		}
+		before.free();
+	} else {
+		drawIcons(dst, _aiIcon);
+	}
 	drawIcons(dst, _ideas);
 	if (_barOpen)
 		drawIcons(dst, _inventory);

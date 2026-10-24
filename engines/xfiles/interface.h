@@ -128,6 +128,8 @@ public:
 	bool showAIIcon(bool shown);
 	/** AI_SetGlow (0x480670) on the icon: Icon_SetRollover on the frame animation, so AI.pff loops while it glows. */
 	void setAIGlow(bool glow);
+	/** The AI icon's suspension (slot +0x20, 0x4a04f0): it is drawn under the grey tint and takes no hit. */
+	void setAISuspended(bool suspended) { _aiSuspended = suspended; }
 	/** Close the bar until the mouse leaves it (EvKitIconClick in hidden-bar mode). */
 	void closeBar() { _barClosed = true; }
 
@@ -235,6 +237,7 @@ private:
 	Common::Array<Icon> _inventory, _emotions, _actions;
 	Common::Array<Icon> _kit;                     ///< Evidence icons in the kit
 	Common::Array<Icon> _ideas;                   ///< The idea icons of the open dialog box
+	bool _aiSuspended = false;                    ///< The AI icon is suspended: tinted, no hit
 	bool _aiGlow;                                 ///< The glow the script asks for, kept while the icon is removed
 	Common::Array<Icon> _aiIcon;                  ///< The AI icon while it is shown, else empty
 	bool _kitOpen;
