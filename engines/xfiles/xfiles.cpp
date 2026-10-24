@@ -1661,7 +1661,7 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 	}
 }
 
-XFilesEngine::ViewHit XFilesEngine::hitView(const Common::Point &pos) const {
+XFilesEngine::ViewHit XFilesEngine::hitView(const Common::Point &pos, bool skipCharViews) const {
 	ViewHit hit;
 	hit.kind = ViewHit::kNone;
 	hit.id = 0;
@@ -1681,7 +1681,8 @@ XFilesEngine::ViewHit XFilesEngine::hitView(const Common::Point &pos) const {
 		}
 	}
 	ids.clear();
-	_data->getMembers(view.characters, ids);
+	if (!skipCharViews)
+		_data->getMembers(view.characters, ids);
 	for (uint i = 0; i < ids.size(); i++) {
 		VCCharView cv;
 		if (_script->isEnabled(ids[i]) && _data->getCharView(ids[i], cv) && containsPoint(cv.rect, pos)) {
@@ -1801,8 +1802,11 @@ uint32 XFilesEngine::getCursorAt(const Common::Point &pos) const {
 					 _script->isTestedOnClick(viewHit.id, _script->getHeldVariable(), kEventRollInto) ||
 					 _script->isTestedOnClick(viewHit.id, _script->getHeldVariable())))
 			return held;
-		// The view's own cursor (lips) only with an enabled topic or idea, else the default
-		return _script->hasTopicOrIdea(viewHit.id) ? viewHit.cursor : 0;
+		// The view's own cursor (lips) only with an enabled topic or idea; else it sets none and the object
+		// under it shows its cursor (the far Skinner shows the nav's hand, seen in the original)
+		if (_script->hasTopicOrIdea(viewHit.id))
+			return viewHit.cursor;
+		return hitView(pos, true).cursor;
 	case ViewHit::kNav:
 		return viewHit.cursor; // 0x446aa0: the hotspot's cursor
 	default:

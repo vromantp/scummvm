@@ -276,7 +276,7 @@ private:
 		uint32 cursor;    ///< Its VCCursor (a nav's: its hotspot's)
 	};
 
-	ViewHit hitView(const Common::Point &pos) const;
+	ViewHit hitView(const Common::Point &pos, bool skipCharViews = false) const;
 	void updateCursor();
 	/** The VCCursor to show for what is at a point; 0 for the default cursor. */
 	uint32 getCursorAt(const Common::Point &pos) const;
