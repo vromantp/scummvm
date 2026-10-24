@@ -1805,7 +1805,9 @@ uint32 XFilesEngine::getCursorAt(const Common::Point &pos) const {
 	case ViewHit::kNav:
 		return viewHit.cursor; // 0x446aa0: the hotspot's cursor
 	default:
-		return held;
+		// The held item's cursor is only set by an object that takes the item (Obj_TakesHeldItem); empty
+		// parts of the view show the default cursor
+		return 0;
 	}
 }
 
