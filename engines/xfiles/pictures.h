@@ -45,7 +45,7 @@ class VCData;
 class PictureAsset {
 public:
 	/** Takes the surface (screen format) and the alpha per pixel (w * h bytes, or nullptr for opaque). */
-	PictureAsset(Graphics::Surface *surface, byte *alpha);
+	PictureAsset(Graphics::Surface *surface, byte *alpha, byte *keyAlpha = nullptr);
 	~PictureAsset();
 
 	const Graphics::Surface &getSurface() const { return *_surface; }
@@ -54,9 +54,17 @@ public:
 	/** Draw at (x, y), clipped to dst: alpha 0 is skipped, 255 copied, between blended. */
 	void draw(Graphics::Surface &dst, int x, int y) const;
 
+	/**
+	 * Pref_bTranslucency (0x42d790): off, every picture is keyed on pure blue (alpha 0 on the pixels of pure blue,
+	 * else 255), whatever its alpha plane or corners say. Applies to the drawing of every picture, loaded or not.
+	 */
+	static void setTranslucency(bool on) { _translucency = on; }
+
 private:
+	static bool _translucency;
 	Graphics::Surface *_surface;
-	byte *_alpha;
+	byte *_alpha;     ///< the translucency rule, or nullptr: opaque
+	byte *_keyAlpha;  ///< the blue key, or nullptr: no pixel is pure blue (opaque); shares _alpha if equal
 };
 
 /**
