@@ -1306,6 +1306,7 @@ void XFilesEngine::updateInterface() {
 	if (_wasModal && !modal)
 		_script->resumeAIIcon();
 	_wasModal = modal;
+	_script->aiSoundEndCheck();
 	_interface->setAISuspended(_script->isAISuspended());
 	_interface->update(*_script, _mouse, getPreference(kPrefClosedCaptioning), hiddenBar, getPreference(kPrefRolloverText));
 	// Roll Into and Roll Out Of for the icons and layout items under the

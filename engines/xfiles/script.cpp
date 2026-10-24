@@ -117,7 +117,7 @@ static Common::String formatFile(const VCMediaFile &f) {
 	return text;
 }
 
-Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintCursor(0), _hintGlow(0), _hintGlowOn(false), _aiSuspended(false), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _gunValue(0), _heldCursorItem(0), _binocularsHeld(false), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewGone(false), _enterDeactivating(false), _travelDropped(false), _viewLeaving(false), _leavePending(false), _viewStateVariable(0), _viewAssetHeld(false), _endGamePending(false), _endGameVar(0), _endGameValue(0), _prefArtificialIntuition(0), _cookEmailCount(0), _cookEmailFlag(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
+Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this, data), _computer(*this), _pda(*this, data), _prefs(*this), _texts(nullptr), _timerSerial(0), _random(1), _soundEnds(false), _fixedSeeds(false), _seedBase(0), _box(0), _restoreMode(-1), _disc(1), _photosOnCamera(0), _cameraEnabled(false), _evidenceRowShown(false), _hintList(0), _hintTrigger(0), _hintCursor(0), _hintGlow(0), _hintGlowOn(false), _aiSoundEndPending(false), _aiSuspended(false), _tint(0), _restored(false), _restorePending(false), _focus(0), _held(0), _currNodeVariable(0), _boxShown(false), _ideaTopic(0), _viewSpecialVariable(0), _clickOpensBox(false), _heldVariable(0), _heldNone(0), _gunValue(0), _heldCursorItem(0), _binocularsHeld(false), _planning(false), _nextVideoEnd(0), _clipsActivated(false), _clipQueued(false), _fireSerial(0), _inEvent(false), _viewSerial(0), _videoNextPending(false), _fireDepth(0), _nextId(0), _navViewQueued(false), _travelPending(false), _viewHeld(false), _viewActive(false), _viewGone(false), _enterDeactivating(false), _travelDropped(false), _viewLeaving(false), _leavePending(false), _viewStateVariable(0), _viewAssetHeld(false), _endGamePending(false), _endGameVar(0), _endGameValue(0), _prefArtificialIntuition(0), _cookEmailCount(0), _cookEmailFlag(0), _uberParanoia(0), _node(0), _location(0), _viewPoint(0), _view(0) {
 	memset(_prefVariables, 0, sizeof(_prefVariables));
 	memset(_shootVars, 0, sizeof(_shootVars));
 	memset(_shootIdx, 0, sizeof(_shootIdx));
@@ -1586,6 +1586,7 @@ void Script::endSound(uint32 id, const char *how) {
 	_sounds.erase(id);
 	log(Common::String::format("  << sound #%u %s", id, how));
 	deactivateAsset(id);
+	_aiSoundEndPending = true;
 }
 
 bool Script::isPlaying(uint32 id) const {
@@ -1619,6 +1620,7 @@ void Script::endClip(uint32 id, const char *how) {
 	_clips.erase(id);
 	log(Common::String::format("  << clip #%u %s", id, how));
 	deactivateAsset(id);
+	_aiSoundEndPending = true;
 }
 
 void Script::stopEnvSounds() {
@@ -1745,8 +1747,10 @@ void Script::endVideo(const char *how) {
 	else if (_viewAssetHeld)
 		activateViewAsset();
 	_videoNextPending = next;
-	if (!viewLoop)
+	if (!viewLoop) {
 		deactivateAsset(id);
+		_aiSoundEndPending = true;
+	}
 	_videoNextPending = false;
 	if (next)
 		startVideo();
@@ -3943,7 +3947,17 @@ void Script::step(const Common::String &s) {
 		log(Common::String::format("  (video #%u loops)", _videoQueue[0]));
 	else if (kind == "wait")
 		finishVideo();
-	else if (kind == "click" && _data.getClassOf(id) == kClassInventory)
+	else if (kind == "aiclick") {
+		// Engine only: a click on the AI icon (a glowing one goes to its view, else the next hint); the
+		// frame's sound-end check has run by then
+		aiSoundEndCheck();
+		if (_aiSuspended)
+			log("   suspended: no hit");
+		else if (_hintGlowOn)
+			clickAIIcon();
+		else
+			clickAIHint();
+	} else if (kind == "click" && _data.getClassOf(id) == kClassInventory)
 		selectInventory(id); // an inventory icon takes its cursor (0x49c180)
 	else if (kind == "click") {
 		click(id);

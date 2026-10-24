@@ -484,6 +484,17 @@ public:
 		if (_aiSuspended && isHintAvailable())
 			_aiSuspended = false;
 	}
+	/**
+	 * The end or stop of a sound object (0x43a970) queues event 0x16 for the AI icon (slot +0x78, 0x509330): it
+	 * suspends the icon when no hint is available, never resumes it. Run after the frame's script work.
+	 */
+	void aiSoundEndCheck() {
+		if (!_aiSoundEndPending)
+			return;
+		_aiSoundEndPending = false;
+		if (!isHintAvailable())
+			_aiSuspended = true;
+	}
 	/** The click on an inventory icon (InvIcon_OnMouseClick 0x49c180): put back, take the item, run its Mouse Click triggers. */
 	void selectInventory(uint32 id);
 	/** Whether the item has an icon in the bar: asks the engine, else every enabled VCInventory has one (0x4201a0). */
@@ -803,6 +814,7 @@ private:
 	uint32 _hintList, _hintTrigger;            ///< The last SetAIList, 0 after ClearAIList
 	uint _hintCursor;                          ///< Next member of _hintList a click tries (0x5097e0); not saved
 	int32 _hintGlow;                           ///< AI_GlowLevel: the last SetAIGlow above 1, else 0 (the save keeps this)
+	bool _aiSoundEndPending;                   ///< A sound object ended since the last aiSoundEndCheck; not saved
 	bool _aiSuspended;                         ///< The AI icon's suspension (0x4a04f0), set by recheckAIIcon; not saved
 	bool _hintGlowOn;                          ///< The glow flag (0x6b2aa8): SetAIGlow(1) sets it with level 0
 	byte _flashlight[3];                       ///< SetFLightProps as the save keeps it (FLight_SetProps 0x4d7d20 via 0x44bda0)
