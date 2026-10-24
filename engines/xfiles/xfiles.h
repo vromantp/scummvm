@@ -246,6 +246,8 @@ private:
 	void pauseGame(bool pause);
 
 	void playQueuedVideo(const Input &input);
+	bool isStillVideo(uint32 id) const;
+	void updateQueuedStill();
 	void updateTimers();
 	void syncView();
 	bool canPlayTransition() const;

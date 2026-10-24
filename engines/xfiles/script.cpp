@@ -1506,7 +1506,9 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 	// play events (0x44f860), so these clips play one after another, and its
 	// end or stop deactivates the sound and its asset object (0x43a970).
 	// The .nmv clips (ranges of a view's navigation movie) are queued like
-	// the .xmv ones: the media layer plays the file entry's time range
+	// the .xmv ones: the media layer plays the file entry's time range. A still
+	// asset (flag 0x40) is queued the same way; the engine shows its frame for
+	// 3000 ms with the view live (asset-play.md "A still asset plays for 3 s")
 	if (video && (mode == kModePlayOnce || mode == kModePlayLoop)) {
 		queueVideo(id, 0, mode == kModePlayLoop);
 	} else if (mode == kModePlayOnce || mode == kModePlayLoop) {

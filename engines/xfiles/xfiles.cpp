@@ -448,10 +448,14 @@ void XFilesEngine::runGame() {
 		// not over a video alone
 		_subliminal.update(gameMillis(), *_script, getUberVariable(0), getUberVariable(1), getUberVariable(2),
 			_script->getVideoQueue().empty() || _captions.hasCard());
-		if (!_script->getVideoQueue().empty()) {
+		bool still = !_script->getVideoQueue().empty() && isStillVideo(_script->getVideoQueue()[0]);
+		if (!_script->getVideoQueue().empty() && !still) {
 			playQueuedVideo(input);
 		} else {
-			if (_video->isOpen())
+			// A queued still is shown over the view, which stays live (asset-play.md)
+			if (still)
+				updateQueuedStill();
+			else if (_video->isOpen())
 				_video->close(); // Stopped by the script
 			syncView();
 			updateInterface();
@@ -961,6 +965,31 @@ void XFilesEngine::drawCaptions(const Movie &movie, const Common::Point &pos) {
 	_captions.drawCaption(_screen, movie.getCaption(), pos.x, pos.y + movie.getHeight(), movie.getWidth());
 }
 
+bool XFilesEngine::isStillVideo(uint32 id) const {
+	VCAsset asset;
+	return _data->getAsset(id, asset) && (asset.flags & kAssetStill);
+}
+
+void XFilesEngine::updateQueuedStill() {
+	// A still asset (flag 0x40) is the sound object showing the player's frame
+	// until a one-shot 3000 ms timer hides it (SoundObj_OnShow 0x44f260); the
+	// view and its clicks go on meanwhile, skip does nothing
+	static const uint32 kStillMillis = 3000;
+	uint32 id = _script->getVideoQueue()[0];
+	if (!_video->isOpen() || _video->getAssetId() != id) {
+		if (!openMovie(*_video, id) || !_video->showStill()) {
+			_video->close();
+			_script->finishVideo();
+			return;
+		}
+		_videoStarted = gameMillis();
+	}
+	if (gameMillis() - _videoStarted >= kStillMillis) {
+		_video->close();
+		_script->finishVideo();
+	}
+}
+
 void XFilesEngine::playQueuedVideo(const Input &input) {
 	uint32 id = _script->getVideoQueue()[0];
 	if (!_video->isOpen() || _video->getAssetId() != id) {
@@ -1389,6 +1418,11 @@ void XFilesEngine::drawView() {
 	for (uint i = 0; i < _layers.size(); i++) {
 		Common::Point pos = getBandPosition(*_layers[i]);
 		blit(_layers[i]->getFrame(), pos.x, pos.y);
+	}
+	// A queued still covers the view band; the bar and the box stay over it
+	if (_video->isOpen() && !_script->getVideoQueue().empty() && isStillVideo(_script->getVideoQueue()[0])) {
+		Common::Point pos = getBandPosition(*_video);
+		blit(_video->getFrame(), pos.x, pos.y);
 	}
 	for (uint i = 0; i < _layers.size(); i++)
 		drawCaptions(*_layers[i], getBandPosition(*_layers[i]));
