@@ -378,6 +378,9 @@ public:
 	bool hasEnabledIdea(uint32 charViewId) const;
 	bool hasEnabledConversation(uint32 charViewId) const;
 	bool hasTopicOrIdea(uint32 charViewId) const;
+	/** The character view a CharTeleport trigger of the character view leads to (same character in the target view,
+	 * enabled) when it has a topic or idea, else 0 (0x407cd0). */
+	uint32 getTeleportTarget(uint32 charViewId) const;
 	/** Seed the random numbers of ask(); the same seed gives the same replies. */
 	void setRandomSeed(uint32 seed) { _random = seed; }
 	/**

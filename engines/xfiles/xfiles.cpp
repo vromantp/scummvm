@@ -1806,6 +1806,13 @@ uint32 XFilesEngine::getCursorAt(const Common::Point &pos) const {
 		// under it shows its cursor (the far Skinner shows the nav's hand, seen in the original)
 		if (_script->hasTopicOrIdea(viewHit.id))
 			return viewHit.cursor;
+		// CharView_ShowCursor's CharTeleport lookup (0x407cd0): the cursor of the character view the click would lead
+		// to, when it has a topic (the far Smolnikoff shows the lips, the far Skinner nothing)
+		if (uint32 target = _script->getTeleportTarget(viewHit.id)) {
+			VCCharView cv;
+			if (_data->getCharView(target, cv))
+				return cv.cursor;
+		}
 		return hitView(pos, true).cursor;
 	case ViewHit::kNav:
 		return viewHit.cursor; // 0x446aa0: the hotspot's cursor

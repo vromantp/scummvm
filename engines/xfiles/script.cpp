@@ -3263,6 +3263,37 @@ bool Script::hasTopicOrIdea(uint32 charViewId) const {
 	return hasEnabledConversation(charViewId) || hasEnabledIdea(charViewId);
 }
 
+uint32 Script::getTeleportTarget(uint32 charViewId) const {
+	// 0x407cd0 (from CharView_ShowCursor): the object's CharTeleport action gives the target view (argument 5); the
+	// same lookup as the click (0x4c61b0) finds the character view there, kept only with a topic or idea (0x435a90)
+	VCCharView here;
+	if (!_data.getCharView(charViewId, here))
+		return 0;
+	Common::Array<uint32> triggers;
+	_data.getMembers(getTriggers(charViewId), triggers);
+	for (uint i = 0; i < triggers.size(); i++) {
+		VCTrigger t;
+		if (!_data.getTrigger(triggers[i], t))
+			continue;
+		for (uint j = 0; j < t.actions.size(); j++) {
+			VCAction a;
+			VCView target;
+			if (!_data.getAction(t.actions[j], a) || a.type != kActionFunction || a.function != "CharTeleport" ||
+				a.args.size() < 6 || !_data.getView(a.args[5].value, target))
+				continue;
+			Common::Array<uint32> ids;
+			_data.getMembers(target.characters, ids);
+			for (uint k = 0; k < ids.size(); k++) {
+				VCCharView cv;
+				if (_data.getCharView(ids[k], cv) && isEnabled(ids[k]) && cv.character == here.character &&
+					hasTopicOrIdea(ids[k]))
+					return ids[k];
+			}
+		}
+	}
+	return 0;
+}
+
 void Script::idea(uint32 iconId, uint32 charView) {
 	// IdeaIcon_DragEnd 0x4d15f0 -> PlayItemTopic 0x4c5500: asked (History) or count + 1, the topic's Object
 	// Activation and its playlist with +0x144 clear; no Mouse Click and no Drop triggers. The box comes back
