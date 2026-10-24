@@ -169,6 +169,15 @@ void XFilesEngine::runSteps() {
 				warning("%s failed: %s", step.c_str(), error.getDesc().c_str());
 			return;
 		}
+		if (step == "aiclick") {
+			// Engine only: a click on the AI icon (a glowing one goes to its view, else the next hint)
+			debugC(1, kDebugScript, "-- click: AI icon (step)");
+			if (_script->isHintGlowing())
+				_script->clickAIIcon();
+			else
+				_script->clickAIHint();
+			return;
+		}
 		if (step == "escape") {
 			// Engine only: the Escape key
 			if (_menuLayout)
