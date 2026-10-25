@@ -182,10 +182,8 @@ void Script::snapshot(VCSave &save) const {
 	save.tint = _tint;
 	memcpy(save.tintColor, _tintColor, sizeof(_tintColor));
 	save.inventory = _inventory;
-	// The group 0 icons are shown together (DispEvIcons)
+	// Each group 0 icon keeps its own shown flag
 	save.evidence = _evidence;
-	for (uint i = 0; i + 2 <= save.evidence.size(); i += 2)
-		save.evidence[i + 1] = _evidenceRowShown;
 	save.kit = _kit;
 	save.dialogBox = _box;
 	// Only five full-screen layouts are kept, the last one shown

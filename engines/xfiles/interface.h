@@ -67,6 +67,7 @@ public:
 		kHitEmotion,     ///< VCEmotionIcon
 		kHitAction,      ///< VCActionIcon
 		kHitEvidence,    ///< VCEvidenceIcon in the open evidence kit
+		kHitEvidenceRow, ///< VCEvidenceIcon of the evidence row (group 0)
 		kHitItem,        ///< VCInterfaceItem of a shown layout
 		kHitAIIcon,      ///< The AI icon (its click is not ported, B-118)
 		kHitIdea         ///< VCIdeaIcon of the open dialog box
@@ -118,8 +119,6 @@ public:
 	bool isKitOpen() const { return _kitOpen; }
 	/** The mouse is over the open kit or the icon it was opened from. */
 	bool isMouseInKit() const;
-	/** DispEvIcons: while the evidence row is shown, the kit shows no icons. */
-	void setEvidenceRowShown(bool shown);
 	/**
 	 * The AI icon (AIIconObj, kind 34): Prefs_ApplyAIIcon (0x452780) makes it with Artificial Intuition on and
 	 * removes it with Artificial Intuition off.
@@ -187,6 +186,7 @@ private:
 		kPaneEmotion,
 		kPaneAIIcon,
 		kPaneIdea,
+		kPaneEvidence,
 		kPaneCount
 	};
 
@@ -214,6 +214,7 @@ private:
 	Graphic *loadAsset(uint32 assetId) const;
 	void syncIcons(const Script &script, uint32 classId, Common::Array<Icon> &icons);
 	void syncKit(const Script &script);
+	void syncEvidence(const Script &script);
 	Icon makeIcon(uint32 id) const;
 	void placeKit();
 	Common::Rect getKitArea() const;
@@ -236,6 +237,7 @@ private:
 	Common::Array<uint32> _classOrder[3];         ///< Every icon of a class, in database order
 	Common::Array<Icon> _inventory, _emotions, _actions;
 	Common::Array<Icon> _kit;                     ///< Evidence icons in the kit
+	Common::Array<Icon> _evidence;                ///< The shown evidence icons of the row (group 0)
 	Common::Array<Icon> _ideas;                   ///< The idea icons of the open dialog box
 	bool _aiSuspended = false;                    ///< The AI icon is suspended: tinted, no hit
 	bool _aiGlow;                                 ///< The glow the script asks for, kept while the icon is removed

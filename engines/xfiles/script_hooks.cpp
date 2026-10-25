@@ -579,9 +579,12 @@ void Script::addStateHooks() {
 		return false;
 	});
 	t.add("DispEvIcons", [](Script &s, const HookCall &c) {
-		// The engine shows or hides the row (XFilesEngine)
-		if (c.has(1))
+		// 0x4efb20: every group 0 icon is shown or hidden; the interface draws the row from the pairs
+		if (c.has(1)) {
 			s._evidenceRowShown = c.args[0] != 0;
+			for (uint i = 0; i + 2 <= s._evidence.size(); i += 2)
+				s._evidence[i + 1] = s._evidenceRowShown;
+		}
 		return false;
 	});
 

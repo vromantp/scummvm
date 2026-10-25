@@ -525,11 +525,11 @@ public:
 	/** Whether restore() ran, and the save it continued from (parts the engine applies or only logs). */
 	bool isRestored() const { return _restored; }
 	const VCSave &getRestoredSave() const { return _restoredSave; }
-	/** Whether the row of collected evidence is shown (a restore sets it; the engine does not draw it). */
+	/** Whether the row of collected evidence is shown (DispEvIcons or a restore with a shown icon). */
 	bool isEvidenceRowShown() const { return _evidenceRowShown; }
 	/** The inventory in the order of the bar: the save's after a restore, a new game's class order, then as items are enabled and disabled. */
 	const Common::Array<uint32> &getInventory() const { return _inventory; }
-	/** Evidence icons outside the kit: (VCEvidenceIcon, shown) pairs as restored from a save, and the icons enabled since (shown 0). */
+	/** Evidence icons outside the kit: (VCEvidenceIcon, shown) pairs: as restored from a save, DispEvIcons sets all, an icon enabled later is hidden (0). */
 	const Common::Array<uint32> &getEvidence() const { return _evidence; }
 	/** Conversations recorded as asked (see recordTopic()), sorted, as restored from a save and asked since. */
 	const Common::Array<uint32> &getHistory() const { return _history; }

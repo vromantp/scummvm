@@ -729,12 +729,6 @@ void XFilesEngine::addHooks() {
 		e.openDialogBox(charView, false);
 		return true;
 	});
-	t.add("DispEvIcons", [](XFilesEngine &e, const HookCall &c) {
-		if (!c.has(1))
-			return false;
-		e._interface->setEvidenceRowShown(c.args[0] != 0);
-		return true;
-	});
 	t.add("AddIFLExcept", [](XFilesEngine &e, const HookCall &c) {
 		if (!c.has(1))
 			return false;
@@ -1618,6 +1612,10 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 		return;
 	case Interface::kHitEvidence:
 		debugC(1, kDebugScript, "-- click:%u (evidence kit)", hit.id);
+		_script->click(hit.id);
+		return;
+	case Interface::kHitEvidenceRow:
+		debugC(1, kDebugScript, "-- click:%u (evidence row)", hit.id);
 		_script->click(hit.id);
 		return;
 	case Interface::kHitIdea:

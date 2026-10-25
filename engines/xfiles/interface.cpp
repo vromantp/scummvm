@@ -72,7 +72,8 @@ static const struct {
 	{ 10, 420, 425, 5, 1 },     // Inventory
 	{ 180, 340, 351, 20, 1 },   // Emotion icons
 	{ 530, 48, 48, 5, 1 },      // AI icon
-	{ 20, 80, 74, 5, 1 }        // Idea icons: the icon's bottom edge is on y; 74 with the rollover text on
+	{ 20, 80, 74, 5, 1 },       // Idea icons: the icon's bottom edge is on y; 74 with the rollover text on
+	{ 20, 390, 390, 5, 1 }      // Evidence row (group 0): the icon's bottom edge is on y
 };
 
 // The AI icon's VCEvidenceIcon: RegAIIcon(0xdb79) at start (0x41b060)
@@ -199,6 +200,7 @@ Interface::~Interface() {
 	freeIcons(_emotions);
 	freeIcons(_actions);
 	freeIcons(_kit);
+	freeIcons(_evidence);
 	freeIcons(_aiIcon);
 	freeIcons(_ideas);
 	freeItems();
@@ -244,6 +246,8 @@ void Interface::update(const Script &script, const Common::Point &mouse, bool ca
 	syncIcons(script, kClassInventory, _inventory);
 	syncIdeas(script);
 	syncKit(script);
+	syncEvidence(script);
+	_evidenceRowShown = script.isEvidenceRowShown();
 	placeIcons(_actions, kPaneAction, captions);
 	placeIcons(_emotions, kPaneEmotion, captions);
 	placeIcons(_inventory, kPaneInventory, captions);
@@ -251,6 +255,7 @@ void Interface::update(const Script &script, const Common::Point &mouse, bool ca
 	if (!_aiIcon.empty() && _aiIcon[0].graphic)
 		_aiIcon[0].graphic->update();
 	placeIcons(_ideas, kPaneIdea, _rolloverText);
+	placeIcons(_evidence, kPaneEvidence, false);
 	placeKit();
 
 	// The kit closes when the mouse leaves it and the icon it opened from
@@ -385,11 +390,29 @@ bool Interface::isMouseInKit() const {
 	return _kitOpen && (getKitArea().contains(_mouse) || _kitFrom.contains(_mouse));
 }
 
-void Interface::setEvidenceRowShown(bool shown) {
-	// DispEvIcons (0x4efb20): the row of collected evidence (pane 4) and the
-	// kit exclude each other. The engine does not show the row: in a new game
-	// nothing shows it (the data only calls DispEvIcons(0)).
-	_evidenceRowShown = shown;
+void Interface::syncEvidence(const Script &script) {
+	// The row (group 0) is the script's pairs whose flag is 1 and whose icon is
+	// enabled, in order; the icons close up when one goes (0x4a1940)
+	const Common::Array<uint32> &pairs = script.getEvidence();
+	Common::Array<uint32> ids;
+	for (uint i = 0; i + 2 <= pairs.size(); i += 2) {
+		if (pairs[i + 1] && script.isEnabled(pairs[i]))
+			ids.push_back(pairs[i]);
+	}
+	bool same = ids.size() == _evidence.size();
+	for (uint i = 0; same && i < ids.size(); i++)
+		same = ids[i] == _evidence[i].id;
+	if (!same) {
+		freeIcons(_evidence);
+		for (uint i = 0; i < ids.size(); i++) {
+			debugC(1, kDebugScript, "-- evidence row icon #%u", ids[i]);
+			_evidence.push_back(makeIcon(ids[i]));
+		}
+	}
+	for (uint i = 0; i < _evidence.size(); i++) {
+		if (_evidence[i].graphic)
+			_evidence[i].graphic->update();
+	}
 }
 
 void Interface::syncIcons(const Script &script, uint32 classId, Common::Array<Icon> &icons) {
@@ -453,7 +476,7 @@ void Interface::placeIcons(Common::Array<Icon> &icons, Pane pane, bool captions)
 	for (uint i = 0; i < icons.size(); i++) {
 		const Graphics::Surface *surface = icons[i].graphic ? icons[i].graphic->getSurface() : nullptr;
 		int w = surface ? surface->w : 0, h = surface ? surface->h : 0;
-		int top = pane == kPaneIdea ? y - h : y;
+		int top = pane == kPaneIdea || pane == kPaneEvidence ? y - h : y;
 		icons[i].rect = Common::Rect(x, top, x + w, top + h);
 		x += (w + kPanes[pane].spacing) * kPanes[pane].direction;
 	}
@@ -596,6 +619,13 @@ Interface::Hit Interface::hitTest(const Common::Point &pos) const {
 			}
 		}
 	}
+	for (uint i = 0; i < _evidence.size(); i++) {
+		if (_evidence[i].rect.contains(pos)) {
+			hit.kind = kHitEvidenceRow;
+			hit.id = _evidence[i].id;
+			return hit;
+		}
+	}
 	if (_barOpen) {
 		for (uint i = 0; i < _inventory.size(); i++) {
 			if (_inventory[i].rect.contains(pos)) {
@@ -701,6 +731,7 @@ void Interface::draw(Graphics::Surface &dst) const {
 		drawIcons(dst, _aiIcon);
 	}
 	drawIcons(dst, _ideas);
+	drawIcons(dst, _evidence);
 	if (_barOpen)
 		drawIcons(dst, _inventory);
 	bool kitShown = _kitOpen && !_evidenceRowShown;
@@ -710,6 +741,7 @@ void Interface::draw(Graphics::Surface &dst) const {
 	drawRolloverText(dst, _actions);
 	drawRolloverText(dst, _emotions);
 	drawRolloverText(dst, _ideas);
+	drawRolloverText(dst, _evidence);
 	if (_barOpen)
 		drawRolloverText(dst, _inventory);
 	for (uint i = 0; i < _items.size(); i++) {
