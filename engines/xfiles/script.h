@@ -609,6 +609,11 @@ private:
 	/** Fill _hookTable: the Script's own hooks, then those of each area file. */
 	void addHooks();
 	void addCoreHooks();
+	void addGameHooks();
+	void addNodeHooks();
+	void addToolHooks();
+	void addInterfaceHooks();
+	void addStateHooks();
 	/** SetStartView of a restore: enter the saved position and rebuild the objects (Game_BuildObjects). */
 	void restoreView();
 	void addEvidence(uint32 id);

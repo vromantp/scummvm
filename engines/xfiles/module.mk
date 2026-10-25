@@ -22,6 +22,11 @@ MODULE_OBJS = \
 	refrun.o \
 	saveload.o \
 	script.o \
+	script_dialog.o \
+	script_hooks.o \
+	script_media.o \
+	script_save.o \
+	script_view.o \
 	sound.o \
 	subliminal.o \
 	vcdata.o \
