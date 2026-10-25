@@ -1236,10 +1236,8 @@ void Script::availableSteps(Common::Array<Common::String> &steps) {
 	for (Common::HashMap<uint32, bool>::const_iterator it = _clips.begin(); it != _clips.end(); ++it)
 		ends.push_back(it->_key);
 	Common::sort(ends.begin(), ends.end());
-	for (uint i = 0; i < ends.size(); i++) {
-		if (hasEvent(ends[i], kEventObjectDeactivation))
-			add(Common::String::format("end:%u", ends[i]));
-	}
+	for (uint i = 0; i < ends.size(); i++)
+		add(Common::String::format("end:%u", ends[i])); // every playing sound: its end also deactivates the asset object
 
 	if (_endGamePending) {
 		add("answer:yes");
