@@ -563,9 +563,12 @@ bool QuickTimeDecoder::VideoTrackHandler::seek(const Audio::Timestamp &requested
 		setReverse(true);
 	} else {
 		// Handle the keyframe here
+		// A time at the end of the samples shows the last one
+		if (_curFrame + 1 >= (int32)_parent->frameCount)
+			_curFrame = (int32)_parent->frameCount - 2;
+
 		int32 destinationFrame = _curFrame + 1;
 
-		assert(destinationFrame < (int32)_parent->frameCount);
 		_curFrame = findKeyFrame(destinationFrame) - 1;
 		while (_curFrame < destinationFrame - 1)
 			bufferNextFrame();
