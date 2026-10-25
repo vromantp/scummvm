@@ -841,6 +841,35 @@ int Script::binocularsMode() const {
 	return (value == 1228 || value == 1236 || value == 84307) ? 1 : 2;
 }
 
+int Script::heldToolType() const {
+	if (!isHolding())
+		return 8;
+	switch (getVariable(_heldVariable)) {
+	case 2:
+		return 1;
+	case 3:
+		return 2;
+	case 8:
+		return 3;
+	case 13:
+		return 4;
+	case 9:
+		return 7;
+	default:
+		return 0;
+	}
+}
+
+void Script::toolPause(int32 from, int32 to) {
+	// 0x5078f0(1) after the old tool object's deactivation, then (0) in the new one's activation
+	if (!_hooks)
+		return;
+	if (isPausingTool(from))
+		_hooks->pauseTimedText(false);
+	if (isPausingTool(to))
+		_hooks->pauseTimedText(true);
+}
+
 bool Script::isSpecialView() const {
 	static const int32 kViews[] = { 1, 1228, 1236, 7878, 7879, 19684, 19688, 19692, 23486, 70706, 70710, 70712, 71914, 84307 };
 	if (!_viewSpecialVariable)

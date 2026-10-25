@@ -222,11 +222,11 @@ void Script::addToolHooks() {
 		// 0x4e1b30: the item goes into the variable if it is not in hand; then, unless the view has a view change of the
 		// binoculars' own (not ported), a character reacts
 		if (s._heldVariable && s.getVariable(s._heldVariable) != c.args[0]) {
+			int32 prior = s.getVariable(s._heldVariable);
 			s._variables[s._heldVariable] = c.args[0];
 			s._binocularsHeld = s.isHolding(); // stands for the held object 0x51baf0
 			s._binocularsMode = s.binocularsMode();
-			if (s._hooks)
-				s._hooks->pauseTimedText(true); // its activation, 0x51c130
+			s.toolPause(prior, c.args[0]); // its activation, 0x51c130
 			if (!s.binocularsView(true))
 				s.toolReaction(c.args[0]);
 		}
@@ -237,6 +237,7 @@ void Script::addToolHooks() {
 			return false;
 		// 0x4e1d80
 		if (s._heldVariable && s.getVariable(s._heldVariable) != c.args[0]) {
+			s.toolPause(s.getVariable(s._heldVariable), c.args[0]);
 			s._variables[s._heldVariable] = c.args[0];
 			s.toolReaction(c.args[0]);
 		}
@@ -247,6 +248,7 @@ void Script::addToolHooks() {
 			return false;
 		// 0x4e1f80
 		if (s._heldVariable && s.getVariable(s._heldVariable) != c.args[0]) {
+			s.toolPause(s.getVariable(s._heldVariable), c.args[0]);
 			s._variables[s._heldVariable] = c.args[0];
 			s.toolReaction(c.args[0]);
 		}
@@ -258,6 +260,7 @@ void Script::addToolHooks() {
 		// 0x4e1c50: no character reaction for the camera (it passes 3 to Tool_CharReaction). The camera object is
 		// enabled unless the view is a special one (iCurrViewSpecial 1)
 		if (s._heldVariable && s.getVariable(s._heldVariable) != c.args[0]) {
+			s.toolPause(s.getVariable(s._heldVariable), c.args[0]);
 			s._variables[s._heldVariable] = c.args[0];
 			s._cameraEnabled = !s._viewSpecialVariable || s.getVariable(s._viewSpecialVariable) != 1;
 		}
@@ -637,6 +640,7 @@ void Script::putBack() {
 	if (!isHolding())
 		return;
 	debugC(1, kDebugScript, "-- #%u put back", _heldCursorItem);
+	int32 held = getVariable(_heldVariable);
 	clearHeldItem();
 	_heldCursorItem = 0; // Inv_SetHeldCursor(0)
 	if (_hooks)
@@ -646,9 +650,8 @@ void Script::putBack() {
 		_binocularsHeld = false;
 		binocularsView(false);
 		_binocularsMode = 0;
-		if (_hooks)
-			_hooks->pauseTimedText(false); // 0x5078f0(1) after the view change back
 	}
+	toolPause(held, _heldNone); // 0x5078f0(1) after the tool object's deactivation (after the view change back)
 }
 
 bool Script::hasInventoryIcon(uint32 id) const {

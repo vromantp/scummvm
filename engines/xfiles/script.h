@@ -676,6 +676,15 @@ private:
 	bool binocularsView(bool on);
 	/** Tool_SpecialView's mode out (conversation-reactions.md "Mode out"): 2 for the pairs and 1, 1 for 1228, 1236, 84307, else 0. */
 	int binocularsMode() const;
+	/**
+	 * The held tool type (0x5194a0, the five slots at +0x88): binoculars (item 2) 1, camera (3) 2, flashlight (8) 3,
+	 * night vision (13) 4, gun (9) 7, any other held item 0, nothing in hand 8 (tool-objects.md "Tool types").
+	 */
+	int heldToolType() const;
+	/** A tool object (binoculars, camera, flashlight, night vision) pauses the timed text while held; the gun and plain items do not. */
+	static bool isPausingTool(int32 item) { return item == 2 || item == 3 || item == 8 || item == 13; }
+	/** The held variable goes from `from` to `to` (the click hooks): the old tool object deactivates (resume), the new one activates (pause). */
+	void toolPause(int32 from, int32 to);
 	/** The topics of a character view, in box order. */
 	void getBoxTopics(uint32 charViewId, Common::Array<uint32> &topics) const;
 	bool isBoxTopic(uint32 charViewId, uint32 conversationId) const;
