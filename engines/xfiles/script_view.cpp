@@ -1194,4 +1194,122 @@ void Script::step(const Common::String &s) {
 		_soundEnds = true; // the step list has the sound ends (steps.py `end:`): later plays of a playing asset are dropped
 }
 
+void Script::availableSteps(Common::Array<Common::String> &steps) {
+	steps.clear();
+	// Whether the object has a trigger for the event
+	auto hasEvent = [this](uint32 id, int event) {
+		Common::Array<uint32> triggers;
+		if (!_data.getMembers(getTriggers(id), triggers))
+			return false;
+		for (uint i = 0; i < triggers.size(); i++) {
+			VCTrigger t;
+			if (_data.getTrigger(triggers[i], t) && t.event == event)
+				return true;
+		}
+		return false;
+	};
+	Common::HashMap<Common::String, bool> seen;
+	struct Adder {
+		Common::Array<Common::String> &steps;
+		Common::HashMap<Common::String, bool> &seen;
+		void operator()(const Common::String &s) {
+			if (seen.contains(s))
+				return;
+			seen[s] = true;
+			steps.push_back(s);
+		}
+	} add = {steps, seen};
+
+	if (!_videoQueue.empty())
+		add("wait");
+
+	Common::Array<uint> timers;
+	for (Common::HashMap<uint, Timer>::const_iterator it = _timers.begin(); it != _timers.end(); ++it)
+		timers.push_back(it->_key);
+	Common::sort(timers.begin(), timers.end());
+	for (uint i = 0; i < timers.size(); i++)
+		add(Common::String::format("timer:%u", timers[i]));
+
+	Common::Array<uint32> ends;
+	for (Common::HashMap<uint32, bool>::const_iterator it = _sounds.begin(); it != _sounds.end(); ++it)
+		ends.push_back(it->_key);
+	for (Common::HashMap<uint32, bool>::const_iterator it = _clips.begin(); it != _clips.end(); ++it)
+		ends.push_back(it->_key);
+	Common::sort(ends.begin(), ends.end());
+	for (uint i = 0; i < ends.size(); i++) {
+		if (hasEvent(ends[i], kEventObjectDeactivation))
+			add(Common::String::format("end:%u", ends[i]));
+	}
+
+	if (_endGamePending) {
+		add("answer:yes");
+		add("answer:no");
+	}
+
+	if (_box) {
+		Common::Array<uint32> topics, icons;
+		getBoxTopics(_box, topics);
+		for (uint i = 0; i < topics.size(); i++)
+			add(Common::String::format("ask:%u", topics[i]));
+		getBoxIdeaIcons(icons);
+		for (uint i = 0; i < icons.size(); i++)
+			add(Common::String::format("idea:%u:%u", icons[i], _box));
+	}
+
+	// Mouse steps on one object; `always` is the click that needs no trigger
+	Common::Array<uint32> objects = _viewObjects;
+	for (uint i = 0; i < _layouts.size(); i++) {
+		for (uint j = 0; j < _layouts[i].items.size(); j++)
+			objects.push_back(_layouts[i].items[j]);
+	}
+	for (uint i = 0; i < objects.size(); i++) {
+		uint32 id = objects[i];
+		if (!isEnabled(id))
+			continue;
+		uint32 classId = _data.getClassOf(id);
+		bool isLayoutItem = i >= _viewObjects.size();
+		if (!isLayoutItem && classId == kClassNav)
+			add(Common::String::format("nav:%u", id));
+		else if (!isLayoutItem && classId == kClassCharView)
+			add(Common::String::format("click:%u", id));
+		else if (hasEvent(id, kEventMouseClick))
+			add(Common::String::format("click:%u", id));
+		if (hasEvent(id, kEventMouseDoubleClick))
+			add(Common::String::format("dclick:%u", id));
+		if (hasEvent(id, kEventRollInto))
+			add(Common::String::format("rollin:%u", id));
+		if (hasEvent(id, kEventRollOutOf))
+			add(Common::String::format("rollout:%u", id));
+	}
+
+	// Icons: the enabled action and emotion icons
+	static const uint32 iconClasses[2] = {kClassActionIcon, kClassEmotionIcon};
+	for (uint c = 0; c < 2; c++) {
+		Common::Array<NeoEntry> entries;
+		_data.getHdb().getObjects(iconClasses[c], entries);
+		for (uint i = 0; i < entries.size(); i++) {
+			if (isEnabled(entries[i].key))
+				add(Common::String::format("click:%u", entries[i].key));
+		}
+	}
+
+	if (isHolding())
+		add("putback");
+	else {
+		for (uint i = 0; i < _inventory.size(); i++) {
+			add(Common::String::format("click:%u", _inventory[i]));
+			if (hasEvent(_inventory[i], kEventMouseDoubleClick))
+				add(Common::String::format("dclick:%u", _inventory[i]));
+		}
+	}
+
+	if (!_aiSuspended && (_hintGlowOn || isHintAvailable()))
+		add("aiclick");
+
+	if (_focus) {
+		add("key:13");
+		add("key:27");
+	}
+}
+
 } // End of namespace XFiles

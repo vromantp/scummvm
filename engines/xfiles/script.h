@@ -341,6 +341,15 @@ public:
 	 * ask:ID, idea:ICON, icon:ID... (tools/ref/steps.py lists them).
 	 */
 	void step(const Common::String &step);
+	/**
+	 * The player actions that make sense in the current state, as step()
+	 * tokens, in a fixed order without duplicates (wait, timer, end, answer,
+	 * box asks and ideas, view objects, layout items, icons, inventory,
+	 * aiclick, key). The explorer (tools/explore.py, vcdump probe) picks from
+	 * it; whoever adds a step kind updates both. Not const: it reads trigger
+	 * lists and the hint list as isHintAvailable() does.
+	 */
+	void availableSteps(Common::Array<Common::String> &steps);
 	/** Display a layout from exe code, as the main menu's Options and Help do (the `layout:` step). */
 	void displayLayout(uint32 layoutId) { showLayout(layoutId); }
 
