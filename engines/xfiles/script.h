@@ -612,6 +612,12 @@ public:
 protected:
 	/** One line of the log; the default writes it to the Script debug channel. */
 	virtual void log(const Common::String &line);
+	/**
+	 * A branch the script took, for vcdump's coverage (docs/engine/debugging.md): kind 'A' an action ran, 'F' a
+	 * conditional action's condition was false, 'T' a trigger's action list started, 'O' an object's Object
+	 * Activation fired, 'S' an asset was played; id is the object's ID. The default does nothing.
+	 */
+	virtual void cover(char kind, uint32 id) {}
 
 private:
 	typedef Common::Array<int32> EventFields;

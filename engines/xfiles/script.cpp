@@ -252,6 +252,8 @@ bool Script::firesOnRestore(uint32 id) const {
 void Script::fire(uint32 id, int event, const EventFields &fields) {
 	if (_restoreMode >= 0 && event == kEventObjectActivation && !firesOnRestore(id))
 		return;
+	if (event == kEventObjectActivation)
+		cover('O', id);
 	if (_fireDepth == 0 && !_inEvent)
 		_fireSerial++;
 	_fireDepth++;
@@ -283,8 +285,10 @@ void Script::fireTriggers(uint32 id, int event, const EventFields &fields) {
 	_data.getMembers(getTriggers(id), triggers);
 	for (uint i = 0; i < triggers.size(); i++) {
 		VCTrigger t;
-		if (_data.getTrigger(triggers[i], t) && t.event == event)
+		if (_data.getTrigger(triggers[i], t) && t.event == event) {
+			cover('T', t.id);
 			runActions(t.actions, event, fields);
+		}
 	}
 }
 
@@ -322,8 +326,11 @@ void Script::runActions(const Common::Array<uint32> &actions, int event, const E
 			warning("Script: bad action #%u", actions[i]);
 			continue;
 		}
-		if (a.conditional && !test(a.condition, fields, locals))
+		if (a.conditional && !test(a.condition, fields, locals)) {
+			cover('F', a.id);
 			continue;
+		}
+		cover('A', a.id);
 		execute(a, event, fields, locals);
 	}
 	_actionFrames.pop_back();

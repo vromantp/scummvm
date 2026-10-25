@@ -39,6 +39,8 @@ void Script::playAsset(uint32 id, byte mode, const VCAction *sound3D) {
 		warning("Script: #%u is not an asset", id);
 		return;
 	}
+	if (mode == kModePlayOnce || mode == kModePlayLoop)
+		cover('S', id);
 	// Action_DoAsset 0x47a4e0 drops a play (once or loop) of an asset that still has a sound object (0x491380),
 	// until a stop or the next main-loop pass after its end removes it. Only where sound ends are known
 	if (_soundEnds && (mode == kModePlayOnce || mode == kModePlayLoop) && isPlaying(id))
