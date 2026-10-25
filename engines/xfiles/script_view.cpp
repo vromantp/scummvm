@@ -391,7 +391,7 @@ void Script::hotAction(int n) {
 		if (n == 27) {
 			// Suicide Note White or Yellow (table 0x6549a0); no cursor, asset or re-show
 			static const uint32 kLayouts[2] = {62847, 62849};
-			Dice dice = newDice(0x4b4a20);
+			Dice dice = newDice(0x4b4ffe);
 			showLayout(kLayouts[roll(dice, 0, 1)]);
 			return;
 		}
@@ -399,7 +399,7 @@ void Script::hotAction(int n) {
 	if (n == 3) {
 		// Easter candy: Mel shot 1-5 (table 0x6549a8)
 		static const uint32 kLayouts[5] = {84686, 84695, 84704, 84713, 84722};
-		Dice dice = newDice(0x4b4a20);
+		Dice dice = newDice(0x4b4c7f);
 		uint32 layout = kLayouts[roll(dice, 0, 4)];
 		if (_hooks)
 			_hooks->showCursorAnimation(73520);

@@ -790,7 +790,7 @@ uint32 Script::getHeldReaction(uint32 charViewId) {
 		break;
 	case 5: // the cattle prod
 		if (slots[3] && slots[5]) {
-			Dice dice = newDice(0x490d50);
+			Dice dice = newDice(0x490de2);
 			slot = roll(dice, 1, 2) == 1 ? 3 : 5;
 		} else {
 			slot = slots[5] ? 5 : 3;
