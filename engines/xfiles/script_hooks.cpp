@@ -224,6 +224,9 @@ void Script::addToolHooks() {
 		if (s._heldVariable && s.getVariable(s._heldVariable) != c.args[0]) {
 			s._variables[s._heldVariable] = c.args[0];
 			s._binocularsHeld = s.isHolding(); // stands for the held object 0x51baf0
+			s._binocularsMode = s.binocularsMode();
+			if (s._hooks)
+				s._hooks->pauseTimedText(true); // its activation, 0x51c130
 			if (!s.binocularsView(true))
 				s.toolReaction(c.args[0]);
 		}
@@ -642,6 +645,9 @@ void Script::putBack() {
 	if (_binocularsHeld) {
 		_binocularsHeld = false;
 		binocularsView(false);
+		_binocularsMode = 0;
+		if (_hooks)
+			_hooks->pauseTimedText(false); // 0x5078f0(1) after the view change back
 	}
 }
 

@@ -135,6 +135,11 @@ public:
 		ms = 0;
 		return true;
 	}
+	/**
+	 * TimedText_Pause 0x5078f0 (what TextOn does): true pauses the head credits and the subliminal object (0x46c970),
+	 * false resumes them (0x49fae0). The held tool objects call it when they activate and after they deactivate.
+	 */
+	virtual void pauseTimedText(bool pause) {}
 	/** The view's clip time (+0x170) for the next view play: the first non-background clip of it starts at ms. */
 	virtual void setViewClipStart(uint32 ms) {}
 	/** PlayAssetAt: draw the graphic clip once with its top-left at (x, y) over the screen; Script::finishSound ends it. */
@@ -669,6 +674,8 @@ private:
 	bool isSpecialView() const;
 	/** Tool_SpecialView 0x51bc70: the binoculars taken (on) or put back swap the view's asset; false in no special view. */
 	bool binocularsView(bool on);
+	/** Tool_SpecialView's mode out (conversation-reactions.md "Mode out"): 2 for the pairs and 1, 1 for 1228, 1236, 84307, else 0. */
+	int binocularsMode() const;
 	/** The topics of a character view, in box order. */
 	void getBoxTopics(uint32 charViewId, Common::Array<uint32> &topics) const;
 	bool isBoxTopic(uint32 charViewId, uint32 conversationId) const;
@@ -867,6 +874,7 @@ private:
 	int32 _heldNone;                           ///< Its Inventory_None value
 	uint32 _gunValue;                          ///< The inventory value OnGunClick set (0 until the gun is taken)
 	uint32 _heldCursorItem;                    ///< Inv_Held() + 4 (0x6b8974): the VCInventory ID whose cursor is held
+	int _binocularsMode;                       ///< Mode out of the held binoculars object (+0x10C); the drawing is B-005
 	bool _binocularsHeld;                      ///< The binoculars' held object (0x51baf0) exists: putBack() runs its view change back
 	Common::Array<uint32> _pressed;            ///< See takePressedItems()
 	uint32 _held;                              ///< The interface item the mouse button is down on (press()), 0 for none

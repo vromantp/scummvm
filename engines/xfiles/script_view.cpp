@@ -834,6 +834,13 @@ bool Script::binocularsView(bool on) {
 	return true;
 }
 
+int Script::binocularsMode() const {
+	if (!isSpecialView())
+		return 0;
+	int32 value = getVariable(_viewSpecialVariable);
+	return (value == 1228 || value == 1236 || value == 84307) ? 1 : 2;
+}
+
 bool Script::isSpecialView() const {
 	static const int32 kViews[] = { 1, 1228, 1236, 7878, 7879, 19684, 19688, 19692, 23486, 70706, 70710, 70712, 71914, 84307 };
 	if (!_viewSpecialVariable)

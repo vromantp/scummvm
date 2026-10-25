@@ -744,13 +744,7 @@ void XFilesEngine::addHooks() {
 		// else resumes (0x49fae0)
 		if (!c.has(1))
 			return false;
-		if (c.args[0]) {
-			e._headCredits.resume(e.gameMillis());
-			e._subliminal.resume(e.gameMillis());
-		} else {
-			e._headCredits.pause();
-			e._subliminal.pause();
-		}
+		e.pauseTimedText(!c.args[0]);
 		return true;
 	});
 	t.add("FadeBack", [](XFilesEngine &e, const HookCall &c) {
@@ -946,6 +940,17 @@ uint32 XFilesEngine::getPhotoTime() const {
 	if (_video && _video->isOpen())
 		return _video->getTime();
 	return !_layers.empty() ? _layers[0]->getTime() : 0;
+}
+
+void XFilesEngine::pauseTimedText(bool pause) {
+	// 0x5078f0: 0 pauses the head credits and the subliminal object (0x46c970: stop the timers, hide), else resumes (0x49fae0)
+	if (pause) {
+		_headCredits.pause();
+		_subliminal.pause();
+	} else {
+		_headCredits.resume(gameMillis());
+		_subliminal.resume(gameMillis());
+	}
 }
 
 bool XFilesEngine::getViewClipTime(uint32 &ms) const {
