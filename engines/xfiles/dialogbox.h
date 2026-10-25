@@ -76,7 +76,8 @@ public:
 	Hit click(const Common::Point &pos, uint32 &topic);
 	/** Whether a point is on the open box. */
 	bool contains(const Common::Point &pos) const;
-	void draw(Graphics::Surface &dst, const Common::Point &mouse) const;
+	/** The folder is keyed on pure blue instead of drawn through its alpha plane with blueFolder (Pref_bTranslucency off). */
+	void draw(Graphics::Surface &dst, const Common::Point &mouse, bool blueFolder) const;
 
 private:
 	enum Picture {

@@ -95,9 +95,6 @@ bool DialogBox::load(const VCData &data, const DiscFiles &files, const Graphics:
 		if (!_pictures[i])
 			return false;
 	}
-	// The folders are the dialog-box pictures that follow Pref_bTranslucency (Prefs_Apply 0x452d70)
-	_pictures[kPicTalk]->setPrefKeyed(true);
-	_pictures[kPicHistory]->setPrefKeyed(true);
 #ifdef USE_FREETYPE2
 	// Courier New's metrics
 	_font = Graphics::loadTTFFontFromArchive("LiberationMono-Regular.ttf", kFontSize, Graphics::kTTFSizeModeCharacter);
@@ -253,10 +250,10 @@ DialogBox::Hit DialogBox::click(const Common::Point &pos, uint32 &topic) {
 	return kHitInside;
 }
 
-void DialogBox::draw(Graphics::Surface &dst, const Common::Point &mouse) const {
+void DialogBox::draw(Graphics::Surface &dst, const Common::Point &mouse, bool blueFolder) const {
 	if (!isOpen())
 		return;
-	_pictures[_historyTab ? kPicHistory : kPicTalk]->draw(dst, _pos.x, _pos.y);
+	_pictures[_historyTab ? kPicHistory : kPicTalk]->draw(dst, _pos.x, _pos.y, blueFolder);
 	if (_history.empty())
 		drawBlended(dst, _pictures[kPicNoHistory]->getSurface(), _pos.x + kHistoryTabX, _pos.y + kTabY);
 

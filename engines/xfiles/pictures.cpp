@@ -69,7 +69,7 @@ static bool isBlue(const Graphics::Surface &surface, const Graphics::Palette &pa
 // With alpha, the decoder keeps the alpha plane of 32-bit pictures and the
 // surface is ARGB32
 static Graphics::Surface *decodeEntry(Common::SeekableReadStream &stream, uint32 count, uint32 index, const Graphics::PixelFormat &format,
-		byte **alphaOut = nullptr, byte **keyOut = nullptr) {
+		byte **alphaOut = nullptr) {
 	if (index >= count)
 		return nullptr;
 	stream.seek(8 + index * 4);
@@ -86,10 +86,7 @@ static Graphics::Surface *decodeEntry(Common::SeekableReadStream &stream, uint32
 	const Graphics::Palette &palette = decoder.getPalette();
 	if (alphaOut) {
 		*alphaOut = nullptr;
-		if (keyOut)
-			*keyOut = nullptr;
 		byte *alpha = nullptr;
-		byte *key = nullptr;
 		if (src.format.aBits()) {
 			alpha = new byte[src.w * src.h];
 			for (int y = 0; y < src.h; y++) {
@@ -100,6 +97,7 @@ static Graphics::Surface *decodeEntry(Common::SeekableReadStream &stream, uint32
 				}
 			}
 		} else if (src.w && src.h) {
+			// Keyed on pure blue if one of the corners is
 			const int xs[2] = { 0, src.w - 1 }, ys[2] = { 0, src.h - 1 };
 			bool keyed = false;
 			for (int i = 0; i < 4 && !keyed; i++)
@@ -112,44 +110,17 @@ static Graphics::Surface *decodeEntry(Common::SeekableReadStream &stream, uint32
 				}
 			}
 		}
-		// The blue key (translucency off): pure blue pixels are transparent. Where the rule already is that key
-		// (no alpha plane, a blue corner) the two arrays are the same
-		if (keyOut && src.w && src.h) {
-			bool any = false;
-			byte *k = new byte[src.w * src.h];
-			for (int y = 0; y < src.h; y++) {
-				for (int x = 0; x < src.w; x++) {
-					bool blue = isBlue(src, palette, x, y);
-					any |= blue;
-					k[y * src.w + x] = blue ? 0 : 255;
-				}
-			}
-			if (!any)
-				delete[] k;
-			else if (alpha && !src.format.aBits()) {
-				delete[] k;
-				key = alpha;
-			} else
-				key = k;
-		}
 		*alphaOut = alpha;
-		if (keyOut)
-			*keyOut = key;
 	}
 	return src.convertTo(format, palette.data(), palette.size());
 }
 
-bool PictureAsset::_translucency = true;
-
-PictureAsset::PictureAsset(Graphics::Surface *surface, byte *alpha, byte *keyAlpha)
-		: _surface(surface), _alpha(alpha), _keyAlpha(keyAlpha), _prefKeyed(false) {
+PictureAsset::PictureAsset(Graphics::Surface *surface, byte *alpha) : _surface(surface), _alpha(alpha) {
 }
 
 PictureAsset::~PictureAsset() {
 	_surface->free();
 	delete _surface;
-	if (_keyAlpha != _alpha)
-		delete[] _keyAlpha;
 	delete[] _alpha;
 }
 
@@ -161,8 +132,8 @@ int PictureAsset::getHeight() const {
 	return _surface->h;
 }
 
-void PictureAsset::draw(Graphics::Surface &dst, int x, int y) const {
-	const byte *alpha = (_prefKeyed && !_translucency) ? _keyAlpha : _alpha;
+void PictureAsset::draw(Graphics::Surface &dst, int x, int y, bool blueKey) const {
+	const uint32 blue = _surface->format.RGBToColor(0, 0, 255);
 	for (int sy = 0; sy < _surface->h; sy++) {
 		int dy = y + sy;
 		if (dy < 0 || dy >= dst.h)
@@ -172,7 +143,9 @@ void PictureAsset::draw(Graphics::Surface &dst, int x, int y) const {
 			if (dx < 0 || dx >= dst.w)
 				continue;
 			uint32 color = _surface->getPixel(sx, sy);
-			byte a = alpha ? alpha[sy * _surface->w + sx] : 255;
+			byte a = _alpha ? _alpha[sy * _surface->w + sx] : 255;
+			if (blueKey)
+				a = color == blue ? 0 : 255;
 			if (a == 255) {
 				dst.setPixel(dx, dy, color);
 			} else if (a) {
@@ -192,13 +165,13 @@ PictureAsset *loadPicture(const VCData &data, const DiscFiles &files, uint32 ass
 	Common::ScopedPtr<Common::SeekableReadStream> stream(openArchive(data, files, assetId, file, count));
 	if (!stream)
 		return nullptr;
-	byte *alpha, *key;
-	Graphics::Surface *surface = decodeEntry(*stream, count, file.start, format, &alpha, &key);
+	byte *alpha;
+	Graphics::Surface *surface = decodeEntry(*stream, count, file.start, format, &alpha);
 	if (!surface) {
 		warning("Pictures: cannot decode entry %u of %s for #%u", file.start, file.file.c_str(), assetId);
 		return nullptr;
 	}
-	return new PictureAsset(surface, alpha, key);
+	return new PictureAsset(surface, alpha);
 }
 
 bool loadFrames(const VCData &data, const DiscFiles &files, uint32 assetId, const Graphics::PixelFormat &format,
@@ -229,13 +202,13 @@ bool loadPictureFrames(const VCData &data, const DiscFiles &files, uint32 assetI
 	if (!stream)
 		return false;
 	for (uint32 i = file.start; i <= file.end && i < count; i++) {
-		byte *alpha, *key;
-		Graphics::Surface *surface = decodeEntry(*stream, count, i, format, &alpha, &key);
+		byte *alpha;
+		Graphics::Surface *surface = decodeEntry(*stream, count, i, format, &alpha);
 		if (!surface) {
 			warning("Pictures: cannot decode entry %u of %s for #%u", i, file.file.c_str(), assetId);
 			break;
 		}
-		frames.push_back(new PictureAsset(surface, alpha, key));
+		frames.push_back(new PictureAsset(surface, alpha));
 		stream->seek(12 + count * 4 + i * 4);
 		durations.push_back(stream->readUint32LE());
 	}

@@ -45,30 +45,22 @@ class VCData;
 class PictureAsset {
 public:
 	/** Takes the surface (screen format) and the alpha per pixel (w * h bytes, or nullptr for opaque). */
-	PictureAsset(Graphics::Surface *surface, byte *alpha, byte *keyAlpha = nullptr);
+	PictureAsset(Graphics::Surface *surface, byte *alpha);
 	~PictureAsset();
 
 	const Graphics::Surface &getSurface() const { return *_surface; }
 	int getWidth() const;
 	int getHeight() const;
-	/** Draw at (x, y), clipped to dst: alpha 0 is skipped, 255 copied, between blended. */
-	void draw(Graphics::Surface &dst, int x, int y) const;
-
 	/**
-	 * Pref_bTranslucency (0x42d790, 0x452d70): off, the pictures flagged with setPrefKeyed are keyed on pure blue
-	 * (alpha 0 on the pixels of pure blue, else 255) instead of the alpha plane. Every other picture keeps the
-	 * rule whatever the preference.
+	 * Draw at (x, y), clipped to dst: alpha 0 is skipped, 255 copied, between blended. With blueKey the alpha is
+	 * ignored and the pixels of pure blue are skipped (the dialog-box folders with Pref_bTranslucency off,
+	 * Prefs_Apply 0x452d70; every other picture keeps its rule whatever the preference).
 	 */
-	static void setTranslucency(bool on) { _translucency = on; }
-	/** Flag a picture whose keying depends on the preference: the two dialog-box folders (34761, 34760). */
-	void setPrefKeyed(bool on) { _prefKeyed = on; }
+	void draw(Graphics::Surface &dst, int x, int y, bool blueKey = false) const;
 
 private:
-	static bool _translucency;
 	Graphics::Surface *_surface;
-	byte *_alpha;     ///< the translucency rule, or nullptr: opaque
-	byte *_keyAlpha;  ///< the blue key, or nullptr: no pixel is pure blue (opaque); shares _alpha if equal
-	bool _prefKeyed;  ///< drawn with _keyAlpha while the preference is off
+	byte *_alpha;
 };
 
 /**

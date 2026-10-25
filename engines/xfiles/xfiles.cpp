@@ -418,8 +418,6 @@ void XFilesEngine::runGame() {
 				return;
 			continue;
 		}
-		// Pref_bTranslucency (Prefs_Apply 0x452d70): off, the dialog-box folders are keyed on pure blue
-		PictureAsset::setTranslucency(getPreference(kPrefTranslucency));
 		Input input = pollInput();
 		if (_menuReopen)
 			reopenMenu();
@@ -470,7 +468,8 @@ void XFilesEngine::runGame() {
 				handleRelease(input.releasePos);
 			updateCursor();
 			drawView();
-			_dialogBox.draw(_screen, _mouse);
+			// The folders follow Pref_bTranslucency (Prefs_Apply 0x452d70)
+			_dialogBox.draw(_screen, _mouse, !getPreference(kPrefTranslucency));
 			_sound.drawClips(_screen);
 		}
 		// The location card is a timed overlay on the suspended scene: it would sit over Options and Help
