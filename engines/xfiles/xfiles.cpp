@@ -24,6 +24,8 @@
 #include "common/debug-channels.h"
 #include "common/events.h"
 #include "common/file.h"
+#include "common/algorithm.h"
+#include "common/list.h"
 #include "common/formats/winexe.h"
 #include "common/system.h"
 #include "common/tokenizer.h"
@@ -142,7 +144,28 @@ Common::Error XFilesEngine::run() {
 	if (!loadDatabases(true))
 		return Common::Error(Common::kReadingFailed, "XFiles.hdb / XFiles.gam");
 
-	Graphics::PixelFormat format(2, 5, 6, 5, 0, 11, 5, 0, 0);
+	// A scripted run's registry is fixed (B-207): the setting xfiles_prefs, not the player's settings. It is read
+	// here because Auto Set Depth picks the screen format
+	if (!ConfMan.get("xfiles_steps").empty())
+		_preferences.setScripted(ConfMan.get("xfiles_prefs"));
+	// The exe draws at the screen depth: 32 bits in its Quality configuration, 16 with Auto Set Depth L. ScummVM has
+	// no desktop depth to keep, so H, N and A take the best depth the backend offers (B-217). The list overload of
+	// initGraphics takes the backend's first format that the list holds, so the order here would not count: the
+	// preferred format the backend lists is picked here. The OpenGL backend lists ARGB8888 but no XRGB8888
+	Common::List<Graphics::PixelFormat> wanted;
+	if (!_preferences.wantsReducedDepth()) {
+		wanted.push_back(Graphics::PixelFormat(4, 8, 8, 8, 0, 16, 8, 0, 0));
+		wanted.push_back(Graphics::PixelFormat::createFormatARGB32());
+	}
+	wanted.push_back(Graphics::PixelFormat(2, 5, 6, 5, 0, 11, 5, 0, 0));
+	const Common::List<Graphics::PixelFormat> supported = g_system->getSupportedFormats();
+	Graphics::PixelFormat format = wanted.back();
+	for (const auto &candidate : wanted) {
+		if (Common::find(supported.begin(), supported.end(), candidate) != supported.end()) {
+			format = candidate;
+			break;
+		}
+	}
 	initGraphics(kScreenWidth, kScreenHeight, &format);
 	_screen.create(kScreenWidth, kScreenHeight, g_system->getScreenFormat());
 	setDebugger(new Console());
@@ -170,8 +193,6 @@ Common::Error XFilesEngine::run() {
 	_steps = Common::StringTokenizer(ConfMan.get("xfiles_steps")).split();
 	if (!_steps.empty()) {
 		_mouse = Common::Point(320, 240); // tools/ref/run.ps1 Start-Game: move 320 240
-		// A scripted run's registry is fixed (B-207): the setting xfiles_prefs, not the player's settings
-		_preferences.setScripted(ConfMan.get("xfiles_prefs"));
 	}
 	syncSoundSettings();
 	_fastForward = Common::StringTokenizer(ConfMan.get("xfiles_fastforward")).split();
@@ -784,15 +805,12 @@ void XFilesEngine::fadeToBlack() {
 		if (step != lastStep || elapsed == 0) {
 			lastStep = step;
 			uint32 scale = kFadeSteps - step;
+			const Graphics::PixelFormat &fmt = _screen.format;
 			for (int y = 0; y < shot.h; y++) {
-				const uint16 *src = (const uint16 *)shot.getBasePtr(0, y);
-				uint16 *dst = (uint16 *)_screen.getBasePtr(0, y);
 				for (int x = 0; x < shot.w; x++) {
-					uint32 p = src[x];
-					uint32 r = (p >> 11) * scale / kFadeSteps;
-					uint32 g = ((p >> 5) & 0x3f) * scale / kFadeSteps;
-					uint32 b = (p & 0x1f) * scale / kFadeSteps;
-					dst[x] = (r << 11) | (g << 5) | b;
+					byte r, g, b;
+					fmt.colorToRGB(shot.getPixel(x, y), r, g, b);
+					_screen.setPixel(x, y, fmt.RGBToColor(r * scale / kFadeSteps, g * scale / kFadeSteps, b * scale / kFadeSteps));
 				}
 			}
 		}
@@ -1217,9 +1235,6 @@ void XFilesEngine::playTransition(int mode, const Graphics::Surface &oldBand, co
 			debugC(1, kDebugScript, "-- transition slide tick %d S=%d%s", tick, slidePos, done ? " done" : "");
 		}
 		for (int y = 0; y < kBandHeight; y++) {
-			const uint16 *newRow = (const uint16 *)newBand.getBasePtr(0, y);
-			const uint16 *oldRow = (const uint16 *)oldBand.getBasePtr(0, y);
-			uint16 *dst = (uint16 *)_screen.getBasePtr(kBandLeft, kBandTop + y);
 			for (int x = 0; x < kBandWidth; x++) {
 				// the pixel is old[oi], new[ni], or the blend of both with the new share a (1 to 254 of 255)
 				int oi = x, ni = x, a = 0;
@@ -1257,18 +1272,18 @@ void XFilesEngine::playTransition(int mode, const Graphics::Surface &oldBand, co
 					oi = ox;
 					ni = nx;
 				}
-				uint16 p;
+				uint32 p;
 				if (a == 0) {
-					p = oldRow[CLIP(oi, 0, kBandWidth - 1)];
+					p = oldBand.getPixel(CLIP(oi, 0, kBandWidth - 1), y);
 				} else if (a == 255) {
-					p = newRow[CLIP(ni, 0, kBandWidth - 1)];
+					p = newBand.getPixel(CLIP(ni, 0, kBandWidth - 1), y);
 				} else {
 					byte r1, g1, b1, r2, g2, b2;
-					fmt.colorToRGB(oldRow[CLIP(oi, 0, kBandWidth - 1)], r1, g1, b1);
-					fmt.colorToRGB(newRow[CLIP(ni, 0, kBandWidth - 1)], r2, g2, b2);
+					fmt.colorToRGB(oldBand.getPixel(CLIP(oi, 0, kBandWidth - 1), y), r1, g1, b1);
+					fmt.colorToRGB(newBand.getPixel(CLIP(ni, 0, kBandWidth - 1), y), r2, g2, b2);
 					p = fmt.RGBToColor((r2 * a + r1 * (255 - a)) / 255, (g2 * a + g1 * (255 - a)) / 255, (b2 * a + b1 * (255 - a)) / 255);
 				}
-				dst[x] = p;
+				_screen.setPixel(kBandLeft + x, kBandTop + y, p);
 			}
 		}
 		present();

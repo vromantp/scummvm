@@ -61,6 +61,8 @@ public:
 	void syncFromScummVM();
 	/** A preference's variable, 0 before RegPreferences. */
 	uint32 variable(uint index) const { return _variables[index]; }
+	/** Auto Set Depth is L (B-217): the screen is asked for 16 bits, else for the best depth. Valid before RegPreferences. */
+	bool wantsReducedDepth() const;
 	/** A preference as a switch, false before RegPreferences. */
 	bool isSet(uint index) const;
 	/** The game volume, 0 to 100 (the exe's wave-out master volume). */

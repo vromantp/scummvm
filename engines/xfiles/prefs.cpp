@@ -136,6 +136,11 @@ bool Preferences::query(uint index, int32 &value) const {
 	return true;
 }
 
+bool Preferences::wantsReducedDepth() const {
+	int32 value;
+	return query(kPrefAutoSetDepth, value) && value == 'L';
+}
+
 void Preferences::save() {
 	// A scripted run leaves the player's settings alone
 	if (!_script || _scripted)
