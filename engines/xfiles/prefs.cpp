@@ -50,9 +50,35 @@ static bool isShared(uint index) {
 		index == kPrefVolumeMusic;
 }
 
+/** The preferences whose value is a letter (the exe's registry keeps its ASCII code), kept in the settings as the letter. */
+static bool isLetter(uint index) {
+	return index == kPrefSaveGameOnExit || index == kPrefActionSceneDifficulty || index == kPrefAutoSetDepth ||
+		index == kPrefFlashlightBeam || index == kPrefFlashlightBrightness || index == kPrefInventory ||
+		index == kPrefAutoSetResolution;
+}
+
+/** A letter preference's setting: one letter (any case) or the legacy ASCII code. False for anything else. */
+static bool parseLetter(const Common::String &text, int32 &value) {
+	if (text.size() == 1 && Common::isAlpha(text[0])) {
+		value = toupper((unsigned char)text[0]);
+		return true;
+	}
+	int32 number;
+	if (!text.empty() && sscanf(text.c_str(), "%d", &number) == 1) {
+		value = number;
+		return true;
+	}
+	return false;
+}
+
 /** The preferences kept as a mixer volume (0 to 256) instead of the game's 0 to 100. */
 static bool isMixerVolume(uint index) {
 	return index == kPrefVolumeDialog || index == kPrefVolumeEffect || index == kPrefVolumeMusic;
+}
+
+/** The on/off preferences, kept as true and false. */
+static bool isBoolean(uint index) {
+	return !isLetter(index) && !isMixerVolume(index) && index != kPrefVolumeGame;
 }
 
 /** Rounded both ways, so a game volume comes back unchanged. */
@@ -102,6 +128,11 @@ bool Preferences::read(uint index, int32 &value) const {
 		value = ConfMan.getBool(setting);
 	} else if (!ConfMan.hasKey(setting)) {
 		return false;
+	} else if (isBoolean(index)) {
+		// getBool also takes the legacy 0 and 1
+		value = ConfMan.getBool(setting);
+	} else if (isLetter(index)) {
+		return parseLetter(ConfMan.get(setting), value);
 	} else if (isMixerVolume(index)) {
 		value = fromMixerVolume(ConfMan.getInt(setting));
 	} else {
@@ -112,8 +143,10 @@ bool Preferences::read(uint index, int32 &value) const {
 
 void Preferences::write(uint index, int32 value) const {
 	const char *setting = kPrefSettings[index];
-	if (index == kPrefClosedCaptioning)
+	if (index == kPrefClosedCaptioning || isBoolean(index))
 		ConfMan.setBool(setting, value != 0);
+	else if (isLetter(index) && value >= 'A' && value <= 'Z')
+		ConfMan.set(setting, Common::String((char)value));
 	else if (isMixerVolume(index))
 		ConfMan.setInt(setting, toMixerVolume(value));
 	else
