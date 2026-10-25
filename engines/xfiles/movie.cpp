@@ -95,12 +95,15 @@ void Movie::play(bool loop, int32 fromMs) {
 		return;
 	_loop = loop;
 	_ended = false;
-	if (fromMs >= 0)
-		_decoder->seek(Audio::Timestamp(fromMs, 1000));
-	else if (_startMs)
-		_decoder->seek(Audio::Timestamp(_startMs, 1000));
-	if (_endMs > _startMs)
-		_decoder->setEndTime(Audio::Timestamp(_endMs, 1000));
+	// Both times are clamped to the movie (SetSegment 0x4566d0), so a seek never
+	// goes past the last sample; an out-point past the end plays to the end
+	uint32 duration = _decoder->getDuration().msecs();
+	uint32 start = MIN<uint32>(fromMs >= 0 ? (uint32)fromMs : _startMs, duration);
+	uint32 end = MIN<uint32>(_endMs, duration);
+	if (start)
+		_decoder->seek(Audio::Timestamp(start, 1000));
+	if (end > start)
+		_decoder->setEndTime(Audio::Timestamp(end, 1000));
 	_decoder->start();
 }
 
@@ -118,11 +121,12 @@ bool Movie::showStillAtEnd() {
 bool Movie::showStillAt(uint32 ms) {
 	if (!_decoder)
 		return false;
+	ms = MIN<uint32>(ms, _decoder->getDuration().msecs());
 	if (ms)
 		_decoder->seek(Audio::Timestamp(ms, 1000));
 	const Graphics::Surface *frame = _decoder->decodeNextFrame();
 	if (!frame) {
-		warning("Movie: no frame at %u ms in asset #%u", _startMs, _assetId);
+		warning("Movie: no frame at %u ms in asset #%u", ms, _assetId);
 		return false;
 	}
 	copyFrame(frame);
