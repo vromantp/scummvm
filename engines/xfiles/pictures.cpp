@@ -133,7 +133,6 @@ int PictureAsset::getHeight() const {
 }
 
 void PictureAsset::draw(Graphics::Surface &dst, int x, int y, bool blueKey) const {
-	const uint32 blue = _surface->format.RGBToColor(0, 0, 255);
 	for (int sy = 0; sy < _surface->h; sy++) {
 		int dy = y + sy;
 		if (dy < 0 || dy >= dst.h)
@@ -144,8 +143,12 @@ void PictureAsset::draw(Graphics::Surface &dst, int x, int y, bool blueKey) cons
 				continue;
 			uint32 color = _surface->getPixel(sx, sy);
 			byte a = _alpha ? _alpha[sy * _surface->w + sx] : 255;
-			if (blueKey)
-				a = color == blue ? 0 : 255;
+			if (blueKey) {
+				// Compare r, g, b only: an ARGB surface keeps the picture's alpha in the pixel
+				byte kr, kg, kb;
+				_surface->format.colorToRGB(color, kr, kg, kb);
+				a = (kr == 0 && kg == 0 && kb == 255) ? 0 : 255;
+			}
 			if (a == 255) {
 				dst.setPixel(dx, dy, color);
 			} else if (a) {

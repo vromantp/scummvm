@@ -59,18 +59,19 @@ enum {
 // draws the black History patch this way: in a reference run the tab's text
 // shows at 40% of its brightness until a topic has been asked.
 static void drawBlended(Graphics::Surface &dst, const Graphics::Surface &src, int x, int y) {
-	uint32 key = src.format.RGBToColor(0, 0, 255);
 	for (int sy = 0; sy < src.h; sy++) {
 		int dy = y + sy;
 		if (dy < 0 || dy >= dst.h)
 			continue;
 		for (int sx = 0; sx < src.w; sx++) {
 			int dx = x + sx;
-			uint32 color = src.getPixel(sx, sy);
-			if (dx < 0 || dx >= dst.w || color == key)
+			if (dx < 0 || dx >= dst.w)
 				continue;
 			byte sr, sg, sb, dr, dg, db;
-			src.format.colorToRGB(color, sr, sg, sb);
+			// r, g, b only: at 32 bit the pixel carries the picture's alpha, so it never equals RGBToColor(0, 0, 255)
+			src.format.colorToRGB(src.getPixel(sx, sy), sr, sg, sb);
+			if (sr == 0 && sg == 0 && sb == 255)
+				continue;
 			dst.format.colorToRGB(dst.getPixel(dx, dy), dr, dg, db);
 			dst.setPixel(dx, dy, dst.format.RGBToColor((dr * 2 + sr * 3) / 5, (dg * 2 + sg * 3) / 5, (db * 2 + sb * 3) / 5));
 		}
