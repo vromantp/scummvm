@@ -19,7 +19,6 @@
  *
  */
 
-#include "common/algorithm.h"
 #include "common/debug.h"
 #include "common/textconsole.h"
 

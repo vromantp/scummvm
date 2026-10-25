@@ -20,7 +20,6 @@
  */
 
 #include "common/algorithm.h"
-#include "common/debug.h"
 #include "common/textconsole.h"
 
 #include "xfiles/detection.h"
