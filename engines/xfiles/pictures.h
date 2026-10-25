@@ -49,6 +49,8 @@ public:
 	~PictureAsset();
 
 	const Graphics::Surface &getSurface() const { return *_surface; }
+	/** The alpha per pixel (w * h bytes), or nullptr: opaque. */
+	const byte *getAlpha() const { return _alpha; }
 	int getWidth() const;
 	int getHeight() const;
 	/**
@@ -69,15 +71,6 @@ private:
  * Returns nullptr if it cannot be read; the caller deletes the picture.
  */
 PictureAsset *loadPicture(const VCData &data, const DiscFiles &files, uint32 assetId, const Graphics::PixelFormat &format);
-
-/**
- * Load the frames of a picture asset that spans several entries of its
- * .pff archive (an animation, such as the Eye cursor), with the durations
- * the archive gives each frame in ms (0 if it gives none). The caller
- * frees the surfaces. Returns false if no frame can be read.
- */
-bool loadFrames(const VCData &data, const DiscFiles &files, uint32 assetId, const Graphics::PixelFormat &format,
-	Common::Array<Graphics::Surface *> &frames, Common::Array<uint32> &durations);
 
 /**
  * Load every entry of a picture asset as a PictureAsset (the transparency rule applies to each), with the archive's

@@ -432,7 +432,7 @@ void XFilesEngine::runGame() {
 				menuChoice(clickMenu(input.pos));
 			if (_menuOpen) {
 				_cursors->show(0);
-				_cursors->update();
+				_cursors->update(getPreference(kPrefTranslucency));
 				drawMenu();
 			}
 			present();
@@ -1716,7 +1716,7 @@ void XFilesEngine::updateCursor() {
 	if (_firingCursor && _script->getView() != _firingView)
 		_firingCursor = 0;
 	_cursors->show(getCursorAt(_mouse));
-	_cursors->update();
+	_cursors->update(getPreference(kPrefTranslucency));
 }
 
 void XFilesEngine::reshowAIIcon() {

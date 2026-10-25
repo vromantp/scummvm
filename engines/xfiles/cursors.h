@@ -34,6 +34,7 @@ struct WinCursorGroup;
 namespace XFiles {
 
 class DiscFiles;
+class PictureAsset;
 class VCData;
 
 /**
@@ -54,20 +55,26 @@ public:
 	static const uint32 kToolCursorId = 0x7fffff84;
 	/** Show a VCCursor; 0 shows the default cursor. */
 	void show(uint32 cursorId);
-	/** Step the frames of an animated cursor. */
-	void update();
+	/**
+	 * Step the frames of an animated cursor. Pref_bTranslucency (translucent): on, a cursor picture is drawn through its
+	 * alpha plane; off, keyed on pure blue (Prefs_Apply 0x452d70). A change shows the cursor again.
+	 */
+	void update(bool translucent);
 
 private:
 	struct Cursor {
 		int16 hotX, hotY;
-		Common::Array<Graphics::Surface *> frames;
+		Common::Array<PictureAsset *> frames;
+		Common::Array<Graphics::Surface *> argb; ///< Per frame, made when first shown with translucency
 		Common::Array<uint32> durations;   ///< ms per frame
 	};
 
 	/** Load a VCCursor (once); nullptr if it has no picture. */
-	const Cursor *getCursor(uint32 cursorId);
+	Cursor *getCursor(uint32 cursorId);
 	void showDefault();
 	void showFrame();
+	/** The frame with its alpha plane in an ARGB surface (made once). */
+	const Graphics::Surface &getArgbFrame(Cursor &cursor, uint frame);
 
 	const VCData &_data;
 	const DiscFiles &_files;
@@ -76,7 +83,8 @@ private:
 	Graphics::WinCursorGroup *_tool;
 	Common::HashMap<uint32, Cursor *> _cursors;   ///< Loaded cursors; nullptr for those without a picture
 	uint32 _shown;                ///< The VCCursor shown; 0: the default
-	const Cursor *_cursor;        ///< Its pictures; nullptr: the default
+	Cursor *_cursor;              ///< Its pictures; nullptr: the default
+	bool _translucent;            ///< The preference the shown frame was made for
 	uint _frame;
 	uint32 _frameStart;           ///< getMillis() when the frame was shown
 };

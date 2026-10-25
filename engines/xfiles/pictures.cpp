@@ -174,26 +174,6 @@ PictureAsset *loadPicture(const VCData &data, const DiscFiles &files, uint32 ass
 	return new PictureAsset(surface, alpha);
 }
 
-bool loadFrames(const VCData &data, const DiscFiles &files, uint32 assetId, const Graphics::PixelFormat &format,
-		Common::Array<Graphics::Surface *> &frames, Common::Array<uint32> &durations) {
-	VCMediaFile file;
-	uint32 count;
-	Common::ScopedPtr<Common::SeekableReadStream> stream(openArchive(data, files, assetId, file, count));
-	if (!stream)
-		return false;
-	for (uint32 i = file.start; i <= file.end && i < count; i++) {
-		Graphics::Surface *frame = decodeEntry(*stream, count, i, format);
-		if (!frame) {
-			warning("Pictures: cannot decode entry %u of %s for #%u", i, file.file.c_str(), assetId);
-			break;
-		}
-		stream->seek(12 + count * 4 + i * 4);
-		frames.push_back(frame);
-		durations.push_back(stream->readUint32LE());
-	}
-	return !frames.empty();
-}
-
 bool loadPictureFrames(const VCData &data, const DiscFiles &files, uint32 assetId, const Graphics::PixelFormat &format,
 		Common::Array<PictureAsset *> &frames, Common::Array<uint32> &durations) {
 	VCMediaFile file;

@@ -40,16 +40,19 @@ static const uint16 kDefaultCursorId = 129;
 static const uint16 kToolCursorGroup = 132;
 
 Cursors::Cursors(const VCData &data, const DiscFiles &files) : _data(data), _files(files), _default(nullptr), _tool(nullptr),
-	_shown(0), _cursor(nullptr), _frame(0), _frameStart(0) {
+	_shown(0), _cursor(nullptr), _translucent(true), _frame(0), _frameStart(0) {
 }
 
 Cursors::~Cursors() {
 	for (Common::HashMap<uint32, Cursor *>::iterator it = _cursors.begin(); it != _cursors.end(); ++it) {
 		if (!it->_value)
 			continue;
-		for (uint i = 0; i < it->_value->frames.size(); i++) {
-			it->_value->frames[i]->free();
+		for (uint i = 0; i < it->_value->frames.size(); i++)
 			delete it->_value->frames[i];
+		for (uint i = 0; i < it->_value->argb.size(); i++) {
+			if (it->_value->argb[i])
+				it->_value->argb[i]->free();
+			delete it->_value->argb[i];
 		}
 		delete it->_value;
 	}
@@ -92,7 +95,12 @@ void Cursors::show(uint32 cursorId) {
 	showFrame();
 }
 
-void Cursors::update() {
+void Cursors::update(bool translucent) {
+	if (translucent != _translucent) {
+		_translucent = translucent;
+		if (_cursor)
+			showFrame();
+	}
 	if (!_cursor || _cursor->frames.size() < 2)
 		return;
 	uint32 now = g_system->getMillis();
@@ -108,7 +116,7 @@ void Cursors::update() {
 	}
 }
 
-const Cursors::Cursor *Cursors::getCursor(uint32 cursorId) {
+Cursors::Cursor *Cursors::getCursor(uint32 cursorId) {
 	if (_cursors.contains(cursorId))
 		return _cursors[cursorId];
 	Cursor *cursor = nullptr;
@@ -118,9 +126,11 @@ const Cursors::Cursor *Cursors::getCursor(uint32 cursorId) {
 		cursor = new Cursor();
 		cursor->hotX = vc.hotX;
 		cursor->hotY = vc.hotY;
-		if (!loadFrames(_data, _files, assets[0], _format, cursor->frames, cursor->durations)) {
+		if (!loadPictureFrames(_data, _files, assets[0], _format, cursor->frames, cursor->durations)) {
 			delete cursor;
 			cursor = nullptr;
+		} else {
+			cursor->argb.resize(cursor->frames.size());
 		}
 	}
 	if (!cursor)
@@ -139,9 +149,32 @@ void Cursors::showDefault() {
 	delete cursor;
 }
 
+const Graphics::Surface &Cursors::getArgbFrame(Cursor &cursor, uint frame) {
+	Graphics::Surface *&argb = cursor.argb[frame];
+	if (!argb) {
+		const PictureAsset &picture = *cursor.frames[frame];
+		const Graphics::Surface &src = picture.getSurface();
+		const byte *alpha = picture.getAlpha();
+		argb = new Graphics::Surface();
+		argb->create(src.w, src.h, Graphics::PixelFormat::createFormatARGB32());
+		for (int y = 0; y < src.h; y++) {
+			for (int x = 0; x < src.w; x++) {
+				byte r, g, b;
+				src.format.colorToRGB(src.getPixel(x, y), r, g, b);
+				argb->setPixel(x, y, argb->format.ARGBToColor(alpha ? alpha[y * src.w + x] : 255, r, g, b));
+			}
+		}
+	}
+	return *argb;
+}
+
 void Cursors::showFrame() {
-	// Pure blue is transparent, as in the interface pictures
-	CursorMan.replaceCursor(*_cursor->frames[_frame], _cursor->hotX, _cursor->hotY, _format.RGBToColor(0, 0, 255));
+	// With translucency a cursor picture follows the picture rule (its alpha plane, else a blue corner keys, else
+	// opaque); without it, or if the backend has no cursor alpha, pure blue is transparent
+	if (_translucent && g_system->hasFeature(OSystem::kFeatureCursorAlpha))
+		CursorMan.replaceCursor(getArgbFrame(*_cursor, _frame), _cursor->hotX, _cursor->hotY, 0);
+	else
+		CursorMan.replaceCursor(_cursor->frames[_frame]->getSurface(), _cursor->hotX, _cursor->hotY, _format.RGBToColor(0, 0, 255));
 }
 
 } // End of namespace XFiles
