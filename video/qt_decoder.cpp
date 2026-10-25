@@ -540,7 +540,8 @@ bool QuickTimeDecoder::VideoTrackHandler::seek(const Audio::Timestamp &requested
 
 	// Now we're in the edit and need to figure out what frame we need
 	Audio::Timestamp time = requestedTime.convertToFramerate(_parent->timeScale);
-	while (getRateAdjustedFrameTime() < (uint32)time.totalNumberOfFrames()) {
+	// Stop on the last frame when the requested time lies past the end of the samples
+	while (getRateAdjustedFrameTime() < (uint32)time.totalNumberOfFrames() && _curFrame < (int32)_parent->frameCount - 1) {
 		_curFrame++;
 		if (_durationOverride >= 0) {
 			_nextFrameStartTime += _durationOverride;
@@ -665,6 +666,12 @@ const Graphics::Surface *QuickTimeDecoder::VideoTrackHandler::decodeNextFrame() 
 
 		if (isEmptyEdit())
 			return 0;
+	}
+
+	// An edit can run past the last sample: the track is over then
+	if (!_reversed && _curFrame + 1 >= (int32)_parent->frameCount) {
+		_curEdit = _parent->editList.size();
+		return 0;
 	}
 
 	const Graphics::Surface *frame = bufferNextFrame();
@@ -824,8 +831,11 @@ Common::SeekableReadStream *QuickTimeDecoder::VideoTrackHandler::getNextFramePac
 		}
 	}
 
-	if (actualChunk < 0)
-		error("Could not find data for frame %d", _curFrame);
+	if (actualChunk < 0) {
+		// An edit list can run past the last sample (or the file is truncated)
+		warning("Could not find data for frame %d", _curFrame);
+		return nullptr;
+	}
 
 	// Next seek to that frame
 	Common::SeekableReadStream *stream = _decoder->_fd;
