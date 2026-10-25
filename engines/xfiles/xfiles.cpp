@@ -937,6 +937,11 @@ void XFilesEngine::playShutter(uint32 id) {
 	_sound.playTone(id);
 }
 
+void XFilesEngine::playGunShot(uint32 id, uint32 remark) {
+	// A bare movie of the gun's asset, restarted by the next click (0x4cb63c stop, 0x4cb649 start); a remark follows its end
+	_sound.playTone(id, remark);
+}
+
 uint32 XFilesEngine::getPhotoTime() const {
 	if (_video && _video->isOpen())
 		return _video->getTime();
@@ -1671,6 +1676,9 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 		_script->step(Common::String::format("nav:%u", viewHit.id));
 		break;
 	default:
+		// The gun in hand takes a click nothing else took (its object is the top one, 0x4cb520)
+		if (_script->isGunHeld())
+			_script->gunClick();
 		break;
 	}
 }

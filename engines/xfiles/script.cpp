@@ -126,6 +126,40 @@ void Script::playPhoneTone(uint32 id) {
 		_hooks->playPhoneTone(id);
 }
 
+void Script::gunClick() {
+	// 0x4cb520: the location picks a remark (docs/exe/tool-objects.md "The gun's own click"); the warehouse ones
+	// need iCurrNode 12, or 11 with cViewState 'd'
+	const uint32 kGunShot = 34743;
+	uint32 remark = 0;
+	switch (_location) {
+	case 303:
+	case 4535:
+	case 6523:
+	case 10611:
+	case 10785:
+	case 23807:
+		remark = 19654;
+		break;
+	case 3825:
+		remark = 19656;
+		break;
+	case 1713:
+	case 2572:
+	case 2735:
+	case 3059: {
+		int32 node = getCurrentNode();
+		if (node == 12 || (node == 11 && _viewStateVariable && getVariable(_viewStateVariable) == 'd'))
+			remark = 43070;
+		break;
+	}
+	default:
+		break;
+	}
+	log(Common::String::format("      gun: miss #%u, shot #%u, remark #%u", _location, kGunShot, remark));
+	if (_hooks)
+		_hooks->playGunShot(kGunShot, remark);
+}
+
 bool Script::isEnabled(uint32 id) const {
 	return !_enabled.contains(id) || _enabled[id];
 }

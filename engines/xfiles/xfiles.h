@@ -103,6 +103,7 @@ public:
 	// ScriptHooks
 	bool callFunction(const HookCall &call) override;
 	void playAsset(uint32 id, byte mode, bool positional, int16 x, int16 y) override;
+	void playGunShot(uint32 id, uint32 remark) override;
 	void restoreSound(uint32 id, bool loop, uint32 startMs) override;
 	void playPhoneTone(uint32 id) override;
 	void playShutter(uint32 id) override;

@@ -112,6 +112,11 @@ public:
 	 */
 	virtual void playShutter(uint32 id) {}
 	/**
+	 * The gun's own click (0x4cb520): the shot (34743) plays as a movie of its own from its beginning, restarted by
+	 * the next click; with a remark (nonzero) the remark plays as a sound once the shot has ended.
+	 */
+	virtual void playGunShot(uint32 id, uint32 remark) {}
+	/**
 	 * A SwapDisc travel is about to run (0x5068b0 snapshots the game first): the checkpoint "Try again" restarts
 	 * from (B-176).
 	 */
@@ -469,6 +474,10 @@ public:
 	int32 getHeldValue() const { return isHolding() ? getVariable(_heldVariable) : 0; }
 	/** The gun (OnGunClick's inventory value) is in hand: .HOT hotspots of the shootout take clicks and show the tool cursor. */
 	bool isGunHeld() const { return _gunValue && isHolding() && getVariable(_heldVariable) == (int32)_gunValue; }
+	/** The gun in hand and a click no object took (0x4cb520): the shot, and in some locations a remark after it. */
+	void gunClick();
+	/** A sound that follows a movie of its own (the gun's remark): played as a Do Asset action would. */
+	void playFollowUp(uint32 id) { playAsset(id, kModePlayOnce, nullptr); }
 	/** The AI icon glows (flag 0x6b2aa8, apart from the level). */
 	bool isHintGlowing() const { return _hintGlowOn; }
 	/** AI_GlowLevel: the view a click on the glowing icon goes to, 0 for none. */

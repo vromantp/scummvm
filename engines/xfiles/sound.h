@@ -53,7 +53,7 @@ public:
 	/** A restored save's sound; startMs is its in point (where a loop goes back to). */
 	void restore(uint32 id, bool loop, uint32 startMs);
 	/** A phone key tone: stops the previous one and plays the digit's from its start; 0 only stops. It is no sound object. */
-	void playTone(uint32 id);
+	void playTone(uint32 id, uint32 followUp = 0);
 	/** PlayAssetAt: a graphic clip played once, drawn over the screen at (x, y). */
 	void playClip(uint32 id, int16 x, int16 y);
 	/** StopEnvSounds: the sounds go; Script ends their objects afterwards. */
@@ -105,6 +105,7 @@ private:
 	Script *_script;
 	Common::HashMap<uint32, Sound> _sounds;
 	Common::HashMap<uint32, Clip> _clips;
+	uint32 _toneFollowUp;              ///< A sound that starts when the tone has ended (the gun's remark), or 0
 	Movie *_tone;                      ///< The phone key tone playing (a movie of its own in the exe), or nullptr
 	Common::Array<uint32> _soundOrder; ///< The playing sounds in the order they started (a save lists them so)
 	uint32 _soundView;                 ///< The view the 3D sounds were placed for

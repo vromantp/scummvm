@@ -31,7 +31,7 @@
 
 namespace XFiles {
 
-SoundPlayer::SoundPlayer(const DiscFiles &files) : _files(files), _data(nullptr), _script(nullptr), _tone(nullptr), _soundView(0) {
+SoundPlayer::SoundPlayer(const DiscFiles &files) : _files(files), _data(nullptr), _script(nullptr), _toneFollowUp(0), _tone(nullptr), _soundView(0) {
 }
 
 SoundPlayer::~SoundPlayer() {
@@ -52,8 +52,9 @@ void SoundPlayer::play(uint32 id, byte mode, bool positional, int16 x, int16 y, 
 	startSound(id, mode == kModePlayLoop, positional, x, y, 0, sound3D);
 }
 
-void SoundPlayer::playTone(uint32 id) {
+void SoundPlayer::playTone(uint32 id, uint32 followUp) {
 	stopTone();
+	_toneFollowUp = 0;
 	VCAsset asset;
 	if (!id || !_data->getAsset(id, asset))
 		return;
@@ -65,6 +66,7 @@ void SoundPlayer::playTone(uint32 id) {
 	debugC(1, kDebugScript, "-- tone #%u %s", id, asset.files.empty() ? "" : asset.files[0].file.c_str());
 	tone->play(false);
 	_tone = tone;
+	_toneFollowUp = followUp;
 }
 
 void SoundPlayer::stopTone() {
@@ -194,8 +196,13 @@ void SoundPlayer::update(bool sound3D) {
 	updateClips();
 	if (_tone) {
 		_tone->update();
-		if (_tone->hasEnded())
+		if (_tone->hasEnded()) {
 			stopTone();
+			if (uint32 followUp = _toneFollowUp) {
+				_toneFollowUp = 0;
+				_script->playFollowUp(followUp);
+			}
+		}
 	}
 }
 
@@ -337,6 +344,7 @@ void SoundPlayer::placeSound(Sound &sound, bool sound3D) {
 void SoundPlayer::clear() {
 	stopAll();
 	stopTone();
+	_toneFollowUp = 0;
 	clearClips();
 	_soundView = 0;
 }
