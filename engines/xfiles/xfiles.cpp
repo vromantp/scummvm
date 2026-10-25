@@ -948,6 +948,22 @@ uint32 XFilesEngine::getPhotoTime() const {
 	return !_layers.empty() ? _layers[0]->getTime() : 0;
 }
 
+bool XFilesEngine::getViewClipTime(uint32 &ms) const {
+	// 0x51cf10: the view's clip, the first layer that is not a still; an ended one: no swap
+	for (uint i = 0; i < _layers.size(); i++) {
+		VCAsset asset;
+		if (!_layers[i]->isOpen() || !_data->getAsset(_layers[i]->getAssetId(), asset) || (asset.flags & kAssetStill))
+			continue;
+		if (_layers[i]->hasEnded())
+			return false;
+		ms = _layers[i]->getTime();
+		return true;
+	}
+	// No clip layer: the special views always have one in the exe, so this is a clip that did not open (no media)
+	ms = 0;
+	return true;
+}
+
 void XFilesEngine::restoreSound(uint32 id, bool loop, uint32 startMs) {
 	_sound.restore(id, loop, startMs);
 }

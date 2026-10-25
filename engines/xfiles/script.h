@@ -127,6 +127,16 @@ public:
 	virtual void reshowAIIcon() {}
 	/** The player's current time in the clip shown in the band (0x41cdd0), for the photo the camera takes. */
 	virtual uint32 getPhotoTime() const { return 0; }
+	/**
+	 * The binoculars' view change (0x51cf10): the playing time in ms of the clip the view shows. False if the view has
+	 * no playing clip or its clip has ended (no swap then). The default answers like a clip at 0.
+	 */
+	virtual bool getViewClipTime(uint32 &ms) const {
+		ms = 0;
+		return true;
+	}
+	/** The view's clip time (+0x170) for the next view play: the first non-background clip of it starts at ms. */
+	virtual void setViewClipStart(uint32 ms) {}
 	/** PlayAssetAt: draw the graphic clip once with its top-left at (x, y) over the screen; Script::finishSound ends it. */
 	virtual void playClip(uint32 id, int16 x, int16 y) {}
 	/** A Stop action on an asset without a sound object (0x504c90): a shown view asset runs to its end and holds. */

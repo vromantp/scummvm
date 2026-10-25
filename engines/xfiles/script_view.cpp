@@ -816,9 +816,17 @@ bool Script::binocularsView(bool on) {
 		uint32 to = on ? kChanges[i].take : kChanges[i].putBack;
 		if (!from)
 			return true;
+		// 0x51cf10 does nothing if the view's one-shot clip has ended (or there is no clip): no swap, no reaction
+		uint32 ms = 0;
+		if (_hooks && !_hooks->getViewClipTime(ms))
+			return true;
 		log(Common::String::format("  binoculars' view change: #%u -> #%u", from, to));
 		enableTarget(from, false); // 0x4083d0
 		enableTarget(to, true);
+		// The new asset starts at the old one's time (view clip time +0x170); a still gets none
+		VCAsset next;
+		if (_hooks && ms && _data.getAsset(to, next) && !(next.flags & kAssetStill))
+			_hooks->setViewClipStart(ms);
 		return true;
 	}
 	if (value == 23486 || value == 70706)
