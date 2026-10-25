@@ -421,6 +421,25 @@ void Script::addInterfaceHooks() {
 		s.setItemText(c.args[0], text, c.args[4], false, color, align, c.args[5] == 'y', width, c.args[3] == 'H');
 		return true;
 	});
+	t.add("SuicideNote", [](Script &s, const HookCall &c) {
+		// (Event::1) 0x4f9fc0: one of three note texts (table 0x659a00) on the activated item. The face is
+		// ZonkersHand (Jrn.ttr), which the fonts do not have: the sans face stands in. 14 high, black, left,
+		// wrapped at the item's own width (+0x194 is 1)
+		if (!c.has(1) || !c.args[0])
+			return false;
+		static const uint32 kNotes[3] = {62868, 62870, 62872};
+		Script::Dice dice = s.newDice(0x4fa005);
+		uint32 asset = kNotes[s.roll(dice, 0, 2)];
+		Common::U32String text;
+		if (!s.readTextFile(asset, text) && !s.getTextAsset(asset, text))
+			return false;
+		VCInterfaceItem item;
+		int width = 0;
+		if (s._data.getInterfaceItem(c.args[0], item))
+			width = item.rect.right - item.rect.left;
+		s.setItemText(c.args[0], text, 14, false, 0x000000, Script::kAlignLeft, false, width, true);
+		return true;
+	});
 	t.add("SetIItemFocus", [](Script &s, const HookCall &c) {
 		if (!c.has(1))
 			return false;
