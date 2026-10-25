@@ -418,7 +418,7 @@ void XFilesEngine::runGame() {
 				return;
 			continue;
 		}
-		// Pref_bTranslucency (0x42d790): off, pictures are keyed on pure blue
+		// Pref_bTranslucency (Prefs_Apply 0x452d70): off, the dialog-box folders are keyed on pure blue
 		PictureAsset::setTranslucency(getPreference(kPrefTranslucency));
 		Input input = pollInput();
 		if (_menuReopen)

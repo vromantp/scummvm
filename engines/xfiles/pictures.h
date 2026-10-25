@@ -55,16 +55,20 @@ public:
 	void draw(Graphics::Surface &dst, int x, int y) const;
 
 	/**
-	 * Pref_bTranslucency (0x42d790): off, every picture is keyed on pure blue (alpha 0 on the pixels of pure blue,
-	 * else 255), whatever its alpha plane or corners say. Applies to the drawing of every picture, loaded or not.
+	 * Pref_bTranslucency (0x42d790, 0x452d70): off, the pictures flagged with setPrefKeyed are keyed on pure blue
+	 * (alpha 0 on the pixels of pure blue, else 255) instead of the alpha plane. Every other picture keeps the
+	 * rule whatever the preference.
 	 */
 	static void setTranslucency(bool on) { _translucency = on; }
+	/** Flag a picture whose keying depends on the preference: the two dialog-box folders (34761, 34760). */
+	void setPrefKeyed(bool on) { _prefKeyed = on; }
 
 private:
 	static bool _translucency;
 	Graphics::Surface *_surface;
 	byte *_alpha;     ///< the translucency rule, or nullptr: opaque
 	byte *_keyAlpha;  ///< the blue key, or nullptr: no pixel is pure blue (opaque); shares _alpha if equal
+	bool _prefKeyed;  ///< drawn with _keyAlpha while the preference is off
 };
 
 /**

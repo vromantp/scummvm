@@ -142,7 +142,7 @@ static Graphics::Surface *decodeEntry(Common::SeekableReadStream &stream, uint32
 bool PictureAsset::_translucency = true;
 
 PictureAsset::PictureAsset(Graphics::Surface *surface, byte *alpha, byte *keyAlpha)
-		: _surface(surface), _alpha(alpha), _keyAlpha(keyAlpha) {
+		: _surface(surface), _alpha(alpha), _keyAlpha(keyAlpha), _prefKeyed(false) {
 }
 
 PictureAsset::~PictureAsset() {
@@ -162,7 +162,7 @@ int PictureAsset::getHeight() const {
 }
 
 void PictureAsset::draw(Graphics::Surface &dst, int x, int y) const {
-	const byte *alpha = _translucency ? _alpha : _keyAlpha;
+	const byte *alpha = (_prefKeyed && !_translucency) ? _keyAlpha : _alpha;
 	for (int sy = 0; sy < _surface->h; sy++) {
 		int dy = y + sy;
 		if (dy < 0 || dy >= dst.h)
