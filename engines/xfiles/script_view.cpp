@@ -1140,6 +1140,10 @@ void Script::step(const Common::String &s) {
 		if (_clickOpensBox && _data.getCharView(id, charView) && hasTopicOrIdea(id))
 			openBox(id);
 	} else if (kind == "answer") {
+		// The save screen's box (overwrite question, run by 0x516ae0): Yes saves and the commit hides the screen,
+		// so its items' Object Deactivation runs (trigger 82818 of 82787; No leaves the screen up, B-237)
+		if (!_endGamePending && arg == "yes")
+			hideLayout(kSaveLayout);
 		answerEndGame(true); // the question of EndGame answered (the engine reads yes or no from the step)
 	} else if (kind == "hot") {
 		hotClick(id);

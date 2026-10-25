@@ -44,6 +44,8 @@ namespace XFiles {
 
 /** The phone's VCIFaceLayout, "Phone (On)". */
 static const uint32 kPhoneLayout = 15297;
+/** The save screen (VCIFaceLayout 82537), shown by the menu's Save (0x515b50). */
+static const uint32 kSaveLayout = 82537;
 
 /** The arguments of RegPreferences, in order: each is a preference variable. */
 enum Preference {
