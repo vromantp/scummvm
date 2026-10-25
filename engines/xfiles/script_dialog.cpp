@@ -225,8 +225,7 @@ void Script::enableTarget(uint32 target, bool value) {
 			_inventory.push_back(target);
 			// The icon object's activation runs the item's Object Activation (0x440f80)
 			fire(target, kEventObjectActivation);
-		}
-		else if (!value && it != _inventory.end())
+		} else if (!value && it != _inventory.end())
 			_inventory.erase(it);
 	}
 	// An idea icon enabled while the box is shown, with the icon in its character's map, gets an object (0x4a1420)

@@ -51,7 +51,6 @@ enum StatementOp {
 	kStatModulo = 7
 };
 
-
 /** Offset of the VCTriggerList field in each class that owns triggers (VCAssetRef: see VCAsset::triggers). */
 static uint32 getTriggerOffset(uint32 classId) {
 	switch (classId) {

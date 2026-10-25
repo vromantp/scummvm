@@ -40,7 +40,6 @@ static const int kBandTop = 90;
 static const int kBandWidth = 600;
 static const int kBandHeight = 240;
 
-
 static Common::String formatRect(const VCRect &r) {
 	return Common::String::format("(%d, %d, %d, %d)", r.left, r.top, r.right, r.bottom);
 }
