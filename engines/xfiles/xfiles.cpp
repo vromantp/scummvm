@@ -1377,7 +1377,7 @@ void XFilesEngine::updateInterface() {
 	// Roll Into and Roll Out Of for the character view under the mouse (CharView_OnRoll 0x443010: the gun,
 	// handcuffs or stiletto in hand make a character with stock replies say "Don't do that")
 	uint32 charHover = 0;
-	if (hover.kind == Interface::kHitNone && !_interface->isModal()) {
+	if (hover.kind == Interface::kHitNone && !_interface->isModal() && !_script->binocularsBlock(_mouse)) {
 		ViewHit viewHit = hitView(_mouse);
 		if (viewHit.kind == ViewHit::kCharView)
 			charHover = viewHit.id;
@@ -1797,6 +1797,12 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 		return;
 	}
 
+	// The binoculars in hand take every click in their rect (before the X corner, the dialog box, .HOT and the view)
+	if (hit.kind == Interface::kHitNone && !_interface->isModal() && _script->binocularsBlock(pos)) {
+		debugC(1, kDebugScript, "-- click: binoculars take it");
+		return;
+	}
+
 	// The X corner (kind 26) comes after the interface items, before the
 	// dialog box and the modal layouts
 	if (hit.kind == Interface::kHitNone && !_dialogBox.contains(pos) && inMenuCorner(pos)) {
@@ -1999,6 +2005,9 @@ uint32 XFilesEngine::getCursorAt(const Common::Point &pos) const {
 		return kXCursor; // The X corner object (slot +0x68 looks up the VCCursor "X")
 	if (_interface->isModal())
 		return held;
+	// The binoculars in hand take the hover in their rect: no nav or object cursor (the exe's small crosshair is not drawn)
+	if (_script->binocularsBlock(pos))
+		return 0;
 	// With the camera in hand the viewfinder is the pointer: no object's hand over the band (seen in a window)
 	if (_script->isCameraEnabled() && pos.x >= kBandLeft && pos.x < kBandLeft + kBandWidth && pos.y >= kBandTop &&
 		pos.y < kBandTop + kBandHeight)

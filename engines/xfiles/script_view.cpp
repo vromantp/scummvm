@@ -868,6 +868,12 @@ int Script::binocularsMode() const {
 	return (value == 1228 || value == 1236 || value == 84307) ? 1 : 2;
 }
 
+bool Script::binocularsBlock(const Common::Point &pos) const {
+	if (heldToolType() != 1 || pos.x < 0 || pos.x >= 640 || pos.y < 90 || pos.y >= 330)
+		return false;
+	return !_viewSpecialVariable || getVariable(_viewSpecialVariable) != 7878;
+}
+
 int Script::heldToolType() const {
 	if (!isHolding())
 		return 8;

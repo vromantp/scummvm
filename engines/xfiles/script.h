@@ -713,6 +713,12 @@ public:
 	 * night vision (13) 4, gun (9) 7, any other held item 0, nothing in hand 8 (tool-objects.md "Tool types").
 	 */
 	int heldToolType() const;
+	/**
+	 * The binoculars in hand take a click and the hover in the fixed rect (0, 90, 640, 330) (HitTestObject 0x519e40,
+	 * rect 0x6c1380), empty while iCurrViewSpecial is 7878 (0x51c0b0): no nav, explorable or character view there
+	 * (tool-objects.md "Binoculars block the view").
+	 */
+	bool binocularsBlock(const Common::Point &pos) const;
 
 private:
 	/** A tool object (binoculars, camera, flashlight, night vision) pauses the timed text while held; the gun and plain items do not. */
