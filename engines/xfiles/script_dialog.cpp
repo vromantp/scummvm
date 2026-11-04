@@ -220,7 +220,10 @@ void Script::enableTarget(uint32 target, bool value) {
 	// hidden it joins later (0x4a1fb0), when the engine says
 	if (_data.getClassOf(target) == kClassInventory) {
 		Common::Array<uint32>::iterator it = Common::find(_inventory.begin(), _inventory.end(), target);
-		if (value && it == _inventory.end() && !(_hooks && _hooks->deferInventoryIcon(target))) {
+		if (value && it == _inventory.end() && target == kPdaInventory) {
+			// The PDA coming back rebuilds the whole bar (0x4a1fb0 -> 0x4a1c70)
+			rebuildInventory();
+		} else if (value && it == _inventory.end() && !(_hooks && _hooks->deferInventoryIcon(target))) {
 			_inventory.push_back(target);
 			// The icon object's activation runs the item's Object Activation (0x440f80)
 			fire(target, kEventObjectActivation);
@@ -242,6 +245,25 @@ void Script::enableTarget(uint32 target, bool value) {
 	if ((value) != was && _data.getClassOf(target) == kClassAssetRef)
 		updateViewAsset(target);
 	updateLayoutItem(target, value);
+}
+
+void Script::rebuildInventory() {
+	// Inv_RebuildForPda (0x4a1c70): every icon goes, the PDA is appended
+	// first, then an object for every other enabled VCInventory in ID
+	// order; each activation runs the item's Object Activation again
+	putBack();
+	_inventory.clear();
+	_inventory.push_back(kPdaInventory);
+	fire(kPdaInventory, kEventObjectActivation);
+	Common::Array<NeoEntry> icons;
+	_data.getHdb().getObjects(kClassInventory, icons);
+	for (uint i = 0; i < icons.size(); i++) {
+		uint32 id = icons[i].key;
+		if (id == kPdaInventory || !isEnabled(id))
+			continue;
+		_inventory.push_back(id);
+		fire(id, kEventObjectActivation);
+	}
 }
 
 void Script::addInventoryIcon(uint32 id) {

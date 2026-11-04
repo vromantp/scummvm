@@ -44,6 +44,8 @@ namespace XFiles {
 
 /** The phone's VCIFaceLayout, "Phone (On)". */
 static const uint32 kPhoneLayout = 15297;
+/** The PDA's VCInventory (0x442b); enabling it rebuilds the bar. */
+static const uint32 kPdaInventory = 17451;
 
 /** The arguments of RegPreferences, in order: each is a preference variable. */
 enum Preference {
@@ -492,6 +494,8 @@ public:
 	void clearHeldItem();
 	/** Inv_PutBack (0x429f00): acts only while something is in hand; tells the engine. */
 	void putBack();
+	/** Enabling the PDA rebuilds the inventory bar (Inv_RebuildForPda 0x4a1c70). */
+	void rebuildInventory();
 	/** A gun click on a .HOT hotspot of the given kind (HotSpotObj_OnMouseClick 0x4b4470). */
 	void hotClick(uint32 kind);
 	/** The value of the held inventory item (Inv_CurrentValue), or 0 when nothing is held. */
