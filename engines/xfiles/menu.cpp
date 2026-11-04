@@ -277,6 +277,9 @@ bool XFilesEngine::saveOnExit() {
 	// A scripted run (xfiles_steps) has nobody to answer
 	if (!_script || !_steps.empty())
 		return true;
+	// As the X-corner menu does, put the held item back before it saves
+	if (isHolding())
+		putBack();
 	commitCheckpoint(); // Menu_AskSave snapshots, whatever the answer
 	int32 mode = _preferences.variable(kPrefSaveGameOnExit) ? _script->getVariable(_preferences.variable(kPrefSaveGameOnExit)) : 'A';
 	if (mode == 'Y') {

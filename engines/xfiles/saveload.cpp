@@ -25,6 +25,7 @@
 #include "common/serializer.h"
 #include "common/stream.h"
 #include "common/textconsole.h"
+#include "common/translation.h"
 
 #include "xfiles/xfiles.h"
 #include "xfiles/movie.h"
@@ -166,7 +167,13 @@ Common::Error XFilesEngine::loadGameStream(Common::SeekableReadStream *stream) {
 bool XFilesEngine::canSaveGameStateCurrently(Common::U32String *msg) {
 	// The moment of the original's save: the view is active (no travel, no
 	// held view), no video plays or waits, no phone button is down. The
-	// menu being open does not matter, it is where the original saves.
+	// menu being open does not matter, it is where the original saves, after
+	// its put back: nothing is in hand (the ScummVM menu opens without it).
+	if (_script && _script->isHolding()) {
+		if (msg)
+			*msg = _("Put the item back first");
+		return false;
+	}
 	return _script && !_pendingLoad.valid && _script->isViewActive() && _script->getVideoQueue().empty() && !_video->isOpen() &&
 		_pressedItems.empty();
 }

@@ -310,25 +310,34 @@ void Script::addToolHooks() {
 		return true;
 	});
 	t.add("OnIntInvClick", [](Script &s, const HookCall &c) {
-		// 0x467fb0: the PDA and phone icons never set iCurrInventory; this
-		// clears the held cursor (Inv_SetHeldCursor(0)). For the PDA, while a
-		// sound object plays an asset with a picture (a video, a clip), it sets
-		// bDisablePDA, which the icon's trigger tests before it shows the PDA,
-		// and plays the alert; else the timers pause until no layout is shown
+		// 0x467fb0: the PDA and phone icons never set iCurrInventory. For the
+		// PDA, while a sound object plays an asset with a picture (a video, a
+		// clip), it sets bDisablePDA, which the icon's trigger tests before it
+		// shows the PDA, plays the alert and clears only the cursor (a tool in
+		// hand stays active). Else the timers pause, the held object goes back
+		// as Inv_PutBack does (the variable to none, a tool's view change back,
+		// the timed text resumes) and the cursor clears
 		if (c.has(1) && c.args[0] == kInventoryPDA) {
 			if (!s._videoQueue.empty() || !s._clips.empty()) {
 				s._variables[kDisablePDAVariable] = 1;
 				s.log(Common::String::format("      PDA refused: bDisablePDA = 1, alert #%u", kPDAAlertSound));
 				if (s._hooks)
 					s._hooks->playAsset(kPDAAlertSound, kModePlayOnce, false, 0, 0);
-			} else if (s._hooks) {
-				s._hooks->pauseTimers();
+				s._heldCursorItem = 0;
+				if (s._hooks)
+					s._hooks->heldItemChanged(0);
+				return true;
 			}
+			if (s._hooks)
+				s._hooks->pauseTimers();
 		}
-		s._heldCursorItem = 0;
-		s._binocularsHeld = false;
-		if (s._hooks)
-			s._hooks->heldItemChanged(0);
+		if (s.isHolding()) {
+			s.putBack();
+		} else {
+			s._heldCursorItem = 0;
+			if (s._hooks)
+				s._hooks->heldItemChanged(0);
+		}
 		return true;
 	});
 }
