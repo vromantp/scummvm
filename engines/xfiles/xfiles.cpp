@@ -69,7 +69,7 @@ static const int kMenuCornerLeft = 501, kMenuCornerBottom = 34;
 static const uint32 kXCursor = 25541;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
-	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _nightVisionMask(nullptr), _viewfinder(nullptr), _counterFont(nullptr), _counterFontOwned(false), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuOpen(false), _menuLayout(false), _menuReopen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _hotMovie(nullptr), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
+	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _nightVisionMask(nullptr), _binocularMask(nullptr), _binocularScaled(nullptr), _binocularScaledBeam(0), _viewfinder(nullptr), _counterFont(nullptr), _counterFontOwned(false), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuOpen(false), _menuLayout(false), _menuReopen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _hotMovie(nullptr), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
 	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _dragIdea(0), _charHover(0), _dragMoved(false), _timersPaused(false), _barRevealed(false), _barRevealEnd(0), _sound(_discFiles) {
 	g_engine = this;
 	addHooks();
@@ -93,6 +93,11 @@ XFilesEngine::~XFilesEngine() {
 	delete _video;
 	delete _viewfinder;
 	delete _nightVisionMask;
+	delete _binocularMask;
+	if (_binocularScaled) {
+		_binocularScaled->free();
+		delete _binocularScaled;
+	}
 	for (uint i = 0; i < _photoPictures.size(); i++) {
 		if (_photoPictures[i].surface) {
 			_photoPictures[i].surface->free();
@@ -1557,33 +1562,42 @@ void XFilesEngine::drawViewfinder() {
 	}
 }
 
+static void readPixel(const Graphics::Surface &s, int x, int y, byte &r, byte &g, byte &b) {
+	const byte *p = (const byte *)s.getBasePtr(x, y);
+	s.format.colorToRGB(s.format.bytesPerPixel == 2 ? *(const uint16 *)p : *(const uint32 *)p, r, g, b);
+}
+
+static void writePixel(Graphics::Surface &s, int x, int y, byte r, byte g, byte b) {
+	byte *p = (byte *)s.getBasePtr(x, y);
+	uint32 value = s.format.RGBToColor(r, g, b);
+	if (s.format.bytesPerPixel == 2)
+		*(uint16 *)p = value;
+	else
+		*(uint32 *)p = value;
+}
+
 void XFilesEngine::drawToolOverlay() {
 	if (!_script)
 		return;
 	int type = _script->heldToolType();
-	if (type != 4)
+	if (type != 1 && type != 4)
 		return;
 	// The overlays work on the band (20, 90)-(620, 330)
 	Graphics::Surface band = _screen.getSubArea(Common::Rect(kBandLeft, kBandTop, kBandLeft + kBandWidth, kBandTop + kBandHeight));
-	drawNightVision(band);
+	if (type == 4)
+		drawNightVision(band);
+	else if (_script->binocularsMode() == 0)
+		drawBinoculars(band);
 }
 
 void XFilesEngine::drawNightVision(Graphics::Surface &band) {
 	static const uint32 kNightVisionAsset = 34751;
 	// The band blend colour 0x6c09dc = RGB(0, 150, 100): each pixel (r, g, b) becomes (0, g * 150 / 255, b * 100 / 255)
-	const Graphics::PixelFormat &format = band.format;
 	for (int y = 0; y < band.h; y++) {
-		byte *row = (byte *)band.getBasePtr(0, y);
 		for (int x = 0; x < band.w; x++) {
-			byte *p = row + x * format.bytesPerPixel;
-			uint32 value = format.bytesPerPixel == 2 ? *(uint16 *)p : *(uint32 *)p;
 			byte r, g, b;
-			format.colorToRGB(value, r, g, b);
-			value = format.RGBToColor(0, g * 150 / 255, b * 100 / 255);
-			if (format.bytesPerPixel == 2)
-				*(uint16 *)p = value;
-			else
-				*(uint32 *)p = value;
+			readPixel(band, x, y, r, g, b);
+			writePixel(band, x, y, 0, g * 150 / 255, b * 100 / 255);
 		}
 	}
 	// The frame at the band's top-left, the blue key transparent; it does not follow the mouse
@@ -1591,6 +1605,77 @@ void XFilesEngine::drawNightVision(Graphics::Surface &band) {
 		_nightVisionMask = loadPicture(*_data, _discFiles, kNightVisionAsset, _screen.format);
 	if (_nightVisionMask)
 		_nightVisionMask->draw(band, 0, 0);
+}
+
+void XFilesEngine::drawBinoculars(Graphics::Surface &band) {
+	static const uint32 kBinocularMaskAsset = 34753;
+	if (!_binocularMask)
+		_binocularMask = loadPicture(*_data, _discFiles, kBinocularMaskAsset, _screen.format);
+	if (!_binocularMask)
+		return;
+	// The beam size (PrefFlashBeam) stretches the mask, width and height truncated, both + 1 if the width is odd (0x51c5d0)
+	int32 beam = _script->getPreferenceValue(kPrefFlashlightBeam);
+	const Graphics::Surface *mask = &_binocularMask->getSurface();
+	double factor = beam == 'M' ? 0.75 : beam == 'S' ? 0.53 : 1.0;
+	if (factor != 1.0) {
+		if (!_binocularScaled || _binocularScaledBeam != beam) {
+			if (_binocularScaled) {
+				_binocularScaled->free();
+				delete _binocularScaled;
+			}
+			int w = (int)(mask->w * factor), h = (int)(mask->h * factor);
+			if (w & 1) {
+				w++;
+				h++;
+			}
+			_binocularScaled = mask->scale(w, h, false);
+			_binocularScaledBeam = beam;
+		}
+		mask = _binocularScaled;
+	}
+	int w = mask->w, h = mask->h;
+
+	// The mask is centred on the mouse and clipped to the band, not clamped. The zoom rect is that rect with each clipped
+	// edge pushed back out by the mask size, and its centre is the zoom centre (0x567ac0)
+	int ml = _mouse.x - kBandLeft - (w >> 1), mt = _mouse.y - kBandTop - (h >> 1);
+	Common::Rect clip(MAX(ml, 0), MAX(mt, 0), MIN(ml + w, (int)band.w), MIN(mt + h, (int)band.h));
+	if (clip.isEmpty()) {
+		band.fillRect(Common::Rect(band.w, band.h), 0);
+		return;
+	}
+	int l = clip.left, t = clip.top, r = clip.right, b = clip.bottom;
+	if (l == 0)
+		l = r - w;
+	if (r == band.w)
+		r = l + w;
+	if (t == 0)
+		t = b - h;
+	if (b == band.h)
+		b = t + h;
+	int cx = l + (r - l) / 2, cy = t + (b - t) / 2;
+	// With both opposite edges clipped (the W beam's 275 against 240) the mask is drawn from the clip's own edge, measured
+	// from the exe's shot (B-228)
+	if (clip.top == 0 && clip.bottom == band.h)
+		mt = 0;
+	if (clip.left == 0 && clip.right == band.w)
+		ml = 0;
+
+	Graphics::Surface copy;
+	copy.copyFrom(band);
+	band.fillRect(Common::Rect(band.w, band.h), 0);
+	for (int y = clip.top; y < clip.bottom; y++) {
+		for (int x = clip.left; x < clip.right; x++) {
+			byte m, mg, mb;
+			readPixel(*mask, x - ml, y - mt, m, mg, mb);
+			if (!m)
+				continue;
+			int sx = CLIP(cx + (x - cx) / 2, 0, (int)band.w - 1), sy = CLIP(cy + (y - cy) / 2, 0, (int)band.h - 1);
+			byte red, green, blue;
+			readPixel(copy, sx, sy, red, green, blue);
+			writePixel(band, x, y, red * m / 255, green * m / 255, blue * m / 255);
+		}
+	}
+	copy.free();
 }
 
 static bool inMenuCorner(const Common::Point &pos) {
