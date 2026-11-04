@@ -138,6 +138,15 @@ void XFilesEngine::runSteps() {
 			_stepAnswer = step == "answer:yes" ? 1 : 0;
 			return;
 		}
+		if (step.hasPrefix("mouse:")) {
+			// Engine only (B-228): move the mouse to a screen position, no click (the sim ignores it)
+			int x = 0, y = 0;
+			if (sscanf(step.c_str() + 6, "%d,%d", &x, &y) == 2) {
+				_mouse = Common::Point(x, y);
+				g_system->warpMouse(x, y);
+			}
+			continue;
+		}
 		if (step.hasPrefix("xclick:")) {
 			// Engine only: a click at a screen position (the menu's while it is up)
 			int x = 0, y = 0;
