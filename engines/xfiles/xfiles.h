@@ -268,6 +268,8 @@ private:
 	void drawNightVision(Graphics::Surface &band);
 	/** Binoculars in mode 0 (0x51c3c0): the band black, the view zoomed 2x through the soft mask 34753 at the mouse. */
 	void drawBinoculars(Graphics::Surface &band);
+	/** The flashlight (0x4d7e80): a grey disc of the mask 34745 blended over the band at the mouse. */
+	void drawFlashlight(Graphics::Surface &band);
 	/** The photo viewer's thumbnails and enlarged picture, over the layout (0x4afb80 pictures). */
 	void drawPhotos();
 	/** The picture of a photo scaled to w x h (a frame of its asset at its time, cropped), cached; null without a frame. */
@@ -353,6 +355,9 @@ private:
 	PictureAsset *_binocularMask;         ///< 34753 binocularmask.pic
 	Graphics::Surface *_binocularScaled;  ///< the mask scaled for the beam size in _binocularScaledBeam
 	int32 _binocularScaledBeam;
+	PictureAsset *_flashlightMask;        ///< 34745 flashlightmask.pic
+	Graphics::Surface *_flashlightScaled; ///< the mask scaled for the beam size and c1 in _flashlightScaledKey
+	int32 _flashlightScaledKey;
 	PictureAsset *_viewfinder;            ///< 34749 moveableviewfinder.pic, loaded when the camera first shows
 	const Graphics::Font *_counterFont;   ///< the camera counter: Liberation Sans Bold 13, else the GUI font
 	struct PhotoPicture {

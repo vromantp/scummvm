@@ -330,6 +330,8 @@ public:
 	 * .gam value. Set it before start() or restore().
 	 */
 	void setPreference(uint index, int32 value) { _preferences[index] = value; }
+	/** SetFLightProps as the save keeps it: n (2 -> 1), c1 ('O' -> 1), c2 ('B' 0, 'D' 2, else 1). */
+	const byte *getFlashlight() const { return _flashlight; }
 	/**
 	 * A preference's value as the exe's prefs object holds it: what a Preferences screen hook or
 	 * setPreference() stored, else its variable's value (RegPreferences wrote it), 0 before RegPreferences.

@@ -69,7 +69,7 @@ static const int kMenuCornerLeft = 501, kMenuCornerBottom = 34;
 static const uint32 kXCursor = 25541;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
-	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _nightVisionMask(nullptr), _binocularMask(nullptr), _binocularScaled(nullptr), _binocularScaledBeam(0), _viewfinder(nullptr), _counterFont(nullptr), _counterFontOwned(false), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuOpen(false), _menuLayout(false), _menuReopen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _hotMovie(nullptr), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
+	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _nightVisionMask(nullptr), _binocularMask(nullptr), _binocularScaled(nullptr), _binocularScaledBeam(0), _flashlightMask(nullptr), _flashlightScaled(nullptr), _flashlightScaledKey(0), _viewfinder(nullptr), _counterFont(nullptr), _counterFontOwned(false), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuOpen(false), _menuLayout(false), _menuReopen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _hotMovie(nullptr), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
 	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _dragIdea(0), _charHover(0), _dragMoved(false), _timersPaused(false), _barRevealed(false), _barRevealEnd(0), _sound(_discFiles) {
 	g_engine = this;
 	addHooks();
@@ -94,6 +94,11 @@ XFilesEngine::~XFilesEngine() {
 	delete _viewfinder;
 	delete _nightVisionMask;
 	delete _binocularMask;
+	delete _flashlightMask;
+	if (_flashlightScaled) {
+		_flashlightScaled->free();
+		delete _flashlightScaled;
+	}
 	if (_binocularScaled) {
 		_binocularScaled->free();
 		delete _binocularScaled;
@@ -1580,12 +1585,14 @@ void XFilesEngine::drawToolOverlay() {
 	if (!_script)
 		return;
 	int type = _script->heldToolType();
-	if (type != 1 && type != 4)
+	if (type != 1 && type != 3 && type != 4)
 		return;
 	// The overlays work on the band (20, 90)-(620, 330)
 	Graphics::Surface band = _screen.getSubArea(Common::Rect(kBandLeft, kBandTop, kBandLeft + kBandWidth, kBandTop + kBandHeight));
 	if (type == 4)
 		drawNightVision(band);
+	else if (type == 3)
+		drawFlashlight(band);
 	else if (_script->binocularsMode() == 0)
 		drawBinoculars(band);
 }
@@ -1605,6 +1612,70 @@ void XFilesEngine::drawNightVision(Graphics::Surface &band) {
 		_nightVisionMask = loadPicture(*_data, _discFiles, kNightVisionAsset, _screen.format);
 	if (_nightVisionMask)
 		_nightVisionMask->draw(band, 0, 0);
+}
+
+void XFilesEngine::drawFlashlight(Graphics::Surface &band) {
+	static const uint32 kFlashlightMaskAsset = 34745;
+	if (!_flashlightMask)
+		_flashlightMask = loadPicture(*_data, _discFiles, kFlashlightMaskAsset, _screen.format);
+	if (!_flashlightMask)
+		return;
+	const byte *props = _script->getFlashlight();
+	if (props[0]) {
+		static bool logged = false;
+		if (!logged)
+			debugC(1, kDebugScript, "flashlight: n=2 look not ported");
+		logged = true;
+	}
+	bool outer = props[1] != 0;
+	int32 beam = _script->getPreferenceValue(kPrefFlashlightBeam);
+	int32 brightness = _script->getPreferenceValue(kPrefFlashlightBrightness);
+
+	// The grey level from c2 and the brightness preference (0x4eb1e0)
+	static const byte kLevels[3][3] = {{0x50, 0x80, 0xa0}, {0xa0, 0xc8, 0xdc}, {0x80, 0xa0, 0xc8}}; // [B, D, other][c2]
+	int row = brightness == 'B' ? 0 : brightness == 'D' ? 1 : 2;
+	int g = props[2] <= 2 ? kLevels[row][props[2]] : 0xa0;
+
+	// The beam size stretches the mask (0x4d8300)
+	const Graphics::Surface *mask = &_flashlightMask->getSurface();
+	double factor = 1.0;
+	if (outer)
+		factor = beam == 'S' ? 0.45 : 0.6;
+	else
+		factor = beam == 'M' ? 0.72 : beam == 'S' ? 0.45 : 1.0;
+	if (factor != 1.0) {
+		int32 key = beam * 2 + (outer ? 1 : 0);
+		if (!_flashlightScaled || _flashlightScaledKey != key) {
+			if (_flashlightScaled) {
+				_flashlightScaled->free();
+				delete _flashlightScaled;
+			}
+			int w = (int)(mask->w * factor), h = (int)(mask->h * factor);
+			if (w & 1) {
+				w++;
+				h++;
+			}
+			_flashlightScaled = mask->scale(w, h, false);
+			_flashlightScaledKey = key;
+		}
+		mask = _flashlightScaled;
+	}
+
+	// Centred on the mouse, clipped to the band, not clamped. The mask is darkened to 55 / 255 (0x4d8790 with 200)
+	int ml = _mouse.x - kBandLeft - (mask->w >> 1), mt = _mouse.y - kBandTop - (mask->h >> 1);
+	Common::Rect clip(MAX(ml, 0), MAX(mt, 0), MIN(ml + mask->w, (int)band.w), MIN(mt + mask->h, (int)band.h));
+	for (int y = clip.top; y < clip.bottom; y++) {
+		for (int x = clip.left; x < clip.right; x++) {
+			byte m, mg, mb;
+			readPixel(*mask, x - ml, y - mt, m, mg, mb);
+			int weight = m * 55 / 255;
+			if (!weight)
+				continue;
+			byte r, gr, b;
+			readPixel(band, x, y, r, gr, b);
+			writePixel(band, x, y, r + (g - r) * weight / 255, gr + (g - gr) * weight / 255, b + (g - b) * weight / 255);
+		}
+	}
 }
 
 void XFilesEngine::drawBinoculars(Graphics::Surface &band) {
