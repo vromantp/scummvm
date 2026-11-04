@@ -980,6 +980,13 @@ bool XFilesEngine::getViewClipTime(uint32 &ms) const {
 	return true;
 }
 
+bool XFilesEngine::getVideoTime(uint32 id, uint32 &ms) const {
+	if (!_video || !_video->isOpen() || _video->getAssetId() != id || _video->hasEnded())
+		return false;
+	ms = _video->getTime();
+	return true;
+}
+
 void XFilesEngine::restoreSound(uint32 id, bool loop, uint32 startMs) {
 	_sound.restore(id, loop, startMs);
 }
@@ -1052,7 +1059,7 @@ void XFilesEngine::playQueuedVideo(const Input &input) {
 		}
 		if (uint32 end = _script->getVideoEnd())
 			_video->setEnd(end);
-		_video->play(_script->isVideoLooped());
+		_video->play(_script->isVideoLooped(), _script->getVideoStart() ? (int32)_script->getVideoStart() : -1);
 		_videoStarted = gameMillis();
 	}
 	// A piece of the view's loop between conversation clips plays for a

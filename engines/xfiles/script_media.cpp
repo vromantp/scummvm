@@ -250,7 +250,7 @@ void Script::loadPreferences() {
 void Script::queueVideo(uint32 id, uint32 limit, bool loop, bool viewLoop) {
 	// A piece of the view's loop is the view's shown asset, already active: it fires neither Activation nor
 	// Deactivation (0x4ea320, B-162)
-	VideoPlay play = {limit, _nextVideoEnd, loop, _fireSerial, false, _clipsActivated || viewLoop, viewLoop};
+	VideoPlay play = {limit, _nextVideoEnd, loop, _fireSerial, false, _clipsActivated || viewLoop, viewLoop, 0};
 	_videoQueue.push_back(id);
 	_videoPlays.push_back(play);
 	if (_videoQueue.size() == 1) {

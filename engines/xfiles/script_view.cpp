@@ -829,9 +829,36 @@ bool Script::binocularsView(bool on) {
 			_hooks->setViewClipStart(ms);
 		return true;
 	}
-	if (value == 23486 || value == 70706)
-		log("  (binoculars' view change of the video pair 23486 / 70706 not ported)");
+	if (value == 23486 && on)
+		binocularsVideoSwap();
 	return true;
+}
+
+void Script::binocularsVideoSwap() {
+	// 0x4a96b0 (B-188): the sound object of 23486 is replaced by one of 70706, which plays from 23486's time to its
+	// end. Measured order: 70706 starts and activates (71938), then 23486 stops normally, so its Deactivation 33950
+	// fires, then the close-up plays; its end runs 71942. Only a take swaps; a putback changes nothing
+	static const uint32 kFrom = 23486, kTo = 70706;
+	if (_videoQueue.empty() || _videoQueue[0] != kFrom)
+		return;
+	VCAsset from, to;
+	if (!_data.getAsset(kFrom, from) || !_data.getAsset(kTo, to) || from.files.empty() || to.files.empty())
+		return;
+	uint32 start = 0, ms = 0;
+	if (_hooks && _hooks->getVideoTime(kFrom, ms) && ms > from.files[0].start)
+		start = to.files[0].start + (ms - from.files[0].start);
+	log(Common::String::format("  binoculars' video swap: #%u -> #%u", kFrom, kTo));
+	playAsset(kTo, kModePlayOnce, nullptr);
+	for (uint i = 0; i < _videoQueue.size(); i++) {
+		if (_videoQueue[i] == kTo)
+			_videoPlays[i].start = start;
+	}
+	// The exe stops it through the normal path (sound.stop stopped=0), not a Stop action
+	// (the sim has no clock: its next wait step ends 23486 as the exe's log shows)
+	if (_hooks) {
+		_hooks->playAsset(kFrom, kModeStop, false, 0, 0);
+		endVideo("ended");
+	}
 }
 
 int Script::binocularsMode() const {

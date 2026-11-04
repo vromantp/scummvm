@@ -142,6 +142,13 @@ public:
 	 * false resumes them (0x49fae0). The held tool objects call it when they activate and after they deactivate.
 	 */
 	virtual void pauseTimedText(bool pause) {}
+	/**
+	 * The playing time in ms (from the start of the file) of the queued video id, if it is the one playing now.
+	 * The binoculars' swap of the video pair 23486 / 70706 continues the close-up at the same moment.
+	 */
+	virtual bool getVideoTime(uint32 id, uint32 &ms) const {
+		return false;
+	}
 	/** The view's clip time (+0x170) for the next view play: the first non-background clip of it starts at ms. */
 	virtual void setViewClipStart(uint32 ms) {}
 	/** PlayAssetAt: draw the graphic clip once with its top-left at (x, y) over the screen; Script::finishSound ends it. */
@@ -447,6 +454,7 @@ public:
 	uint32 getVideoLimit() const { return _videoPlays.empty() ? 0 : _videoPlays[0].limit; }
 	/** The out point of the first video when a topic merged the next range of its file into it (ms), 0 for its own. */
 	uint32 getVideoEnd() const { return _videoPlays.empty() ? 0 : _videoPlays[0].end; }
+	uint32 getVideoStart() const { return _videoPlays.empty() ? 0 : _videoPlays[0].start; }
 	/** Whether the first video loops: it ends only when a Stop action stops it. */
 	bool isVideoLooped() const { return !_videoPlays.empty() && _videoPlays[0].loop; }
 	bool isEnabled(uint32 id) const;
@@ -695,6 +703,7 @@ private:
 	bool isSpecialView() const;
 	/** Tool_SpecialView 0x51bc70: the binoculars taken (on) or put back swap the view's asset; false in no special view. */
 	bool binocularsView(bool on);
+	void binocularsVideoSwap();
 
 public:
 	/** Tool_SpecialView's mode out (conversation-reactions.md "Mode out"): 2 for the pairs and 1, 1 for 1228, 1236, 84307, else 0. */
@@ -927,6 +936,7 @@ private:
 		bool viewWait;  ///< Queued before a held view was entered but not started: the view waits for it
 		bool activated; ///< Its Object Activation has fired already (at queueing, see queueVideo())
 		bool viewLoop;  ///< A piece of the view's loop: its asset is the view's, so it fires no Activation or Deactivation
+		uint32 start;   ///< In point override in ms from the start of the file (the binoculars' swap), 0 for none
 	};
 	Common::Array<VideoPlay> _videoPlays;      ///< Per queued video
 	bool _videoNextPending;                    ///< The queue's first video has not started yet (a video just ended)
