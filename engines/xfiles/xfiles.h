@@ -262,6 +262,10 @@ private:
 	void clearScreen();
 	/** The camera in hand: the viewfinder over the band at the mouse, with the photos left (Camera, 0x4f2b30). */
 	void drawViewfinder();
+	/** The tool in hand over the band, keyed on Script::heldToolType (B-228, docs/exe/tool-objects.md "Overlay drawing"). */
+	void drawToolOverlay();
+	/** Night vision (0x50f8c0): the band tinted by RGB(0, 150, 100), the frame 34751 over it. */
+	void drawNightVision(Graphics::Surface &band);
 	/** The photo viewer's thumbnails and enlarged picture, over the layout (0x4afb80 pictures). */
 	void drawPhotos();
 	/** The picture of a photo scaled to w x h (a frame of its asset at its time, cropped), cached; null without a frame. */
@@ -343,6 +347,7 @@ private:
 	Movie *_menuLoop;                     ///< 49585, the X loop (MIDloop.mov)
 	Movie *_menuLoopSound;                ///< 94320, the loop's sound
 	Movie *_menuTop;                      ///< 49589, the top strip (a still)
+	PictureAsset *_nightVisionMask;       ///< 34751 nightvisiongogmask.pic, loaded when night vision is first in hand
 	PictureAsset *_viewfinder;            ///< 34749 moveableviewfinder.pic, loaded when the camera first shows
 	const Graphics::Font *_counterFont;   ///< the camera counter: Liberation Sans Bold 13, else the GUI font
 	struct PhotoPicture {

@@ -69,7 +69,7 @@ static const int kMenuCornerLeft = 501, kMenuCornerBottom = 34;
 static const uint32 kXCursor = 25541;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
-	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _viewfinder(nullptr), _counterFont(nullptr), _counterFontOwned(false), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuOpen(false), _menuLayout(false), _menuReopen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _hotMovie(nullptr), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
+	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _nightVisionMask(nullptr), _viewfinder(nullptr), _counterFont(nullptr), _counterFontOwned(false), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuOpen(false), _menuLayout(false), _menuReopen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _hotMovie(nullptr), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _waitTimer(-1), _dialogBoxView(0),
 	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _dragIdea(0), _charHover(0), _dragMoved(false), _timersPaused(false), _barRevealed(false), _barRevealEnd(0), _sound(_discFiles) {
 	g_engine = this;
 	addHooks();
@@ -92,6 +92,7 @@ XFilesEngine::~XFilesEngine() {
 	delete _cursors;
 	delete _video;
 	delete _viewfinder;
+	delete _nightVisionMask;
 	for (uint i = 0; i < _photoPictures.size(); i++) {
 		if (_photoPictures[i].surface) {
 			_photoPictures[i].surface->free();
@@ -1472,6 +1473,7 @@ void XFilesEngine::drawView() {
 	for (uint i = 0; i < _layers.size(); i++)
 		drawCaptions(*_layers[i], getBandPosition(*_layers[i]));
 	drawViewfinder();
+	drawToolOverlay();
 	_interface->draw(_screen);
 	if (_dragIdea && _dragMoved)
 		_interface->drawDragged(_screen, _dragIdea, _mouse);
@@ -1553,6 +1555,42 @@ void XFilesEngine::drawViewfinder() {
 		Common::String left = Common::String::format("%d", 24 - _script->getPhotosOnCamera());
 		_counterFont->drawString(&band, left, x + kCounterX, y + kCounterY, 16, band.format.RGBToColor(255, 0, 0));
 	}
+}
+
+void XFilesEngine::drawToolOverlay() {
+	if (!_script)
+		return;
+	int type = _script->heldToolType();
+	if (type != 4)
+		return;
+	// The overlays work on the band (20, 90)-(620, 330)
+	Graphics::Surface band = _screen.getSubArea(Common::Rect(kBandLeft, kBandTop, kBandLeft + kBandWidth, kBandTop + kBandHeight));
+	drawNightVision(band);
+}
+
+void XFilesEngine::drawNightVision(Graphics::Surface &band) {
+	static const uint32 kNightVisionAsset = 34751;
+	// The band blend colour 0x6c09dc = RGB(0, 150, 100): each pixel (r, g, b) becomes (0, g * 150 / 255, b * 100 / 255)
+	const Graphics::PixelFormat &format = band.format;
+	for (int y = 0; y < band.h; y++) {
+		byte *row = (byte *)band.getBasePtr(0, y);
+		for (int x = 0; x < band.w; x++) {
+			byte *p = row + x * format.bytesPerPixel;
+			uint32 value = format.bytesPerPixel == 2 ? *(uint16 *)p : *(uint32 *)p;
+			byte r, g, b;
+			format.colorToRGB(value, r, g, b);
+			value = format.RGBToColor(0, g * 150 / 255, b * 100 / 255);
+			if (format.bytesPerPixel == 2)
+				*(uint16 *)p = value;
+			else
+				*(uint32 *)p = value;
+		}
+	}
+	// The frame at the band's top-left, the blue key transparent; it does not follow the mouse
+	if (!_nightVisionMask)
+		_nightVisionMask = loadPicture(*_data, _discFiles, kNightVisionAsset, _screen.format);
+	if (_nightVisionMask)
+		_nightVisionMask->draw(band, 0, 0);
 }
 
 static bool inMenuCorner(const Common::Point &pos) {

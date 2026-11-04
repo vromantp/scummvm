@@ -693,6 +693,7 @@ private:
 	bool isSpecialView() const;
 	/** Tool_SpecialView 0x51bc70: the binoculars taken (on) or put back swap the view's asset; false in no special view. */
 	bool binocularsView(bool on);
+public:
 	/** Tool_SpecialView's mode out (conversation-reactions.md "Mode out"): 2 for the pairs and 1, 1 for 1228, 1236, 84307, else 0. */
 	int binocularsMode() const;
 	/**
@@ -700,6 +701,7 @@ private:
 	 * night vision (13) 4, gun (9) 7, any other held item 0, nothing in hand 8 (tool-objects.md "Tool types").
 	 */
 	int heldToolType() const;
+private:
 	/** A tool object (binoculars, camera, flashlight, night vision) pauses the timed text while held; the gun and plain items do not. */
 	static bool isPausingTool(int32 item) { return item == 2 || item == 3 || item == 8 || item == 13; }
 	/** The held variable goes from `from` to `to` (the click hooks): the old tool object deactivates (resume), the new one activates (pause). */
