@@ -1732,11 +1732,9 @@ void XFilesEngine::drawBinoculars(Graphics::Surface &band) {
 		b = t + h;
 	int cx = l + (r - l) / 2, cy = t + (b - t) / 2;
 	// With both opposite edges clipped (the W beam's 275 against 240) the mask is drawn from the clip's own edge, measured
-	// from the exe's shot (B-228)
+	// from the exe's shots (B-228, B-240). Horizontally this cannot happen: no mask is wider than 600
 	if (clip.top == 0 && clip.bottom == band.h)
 		mt = 0;
-	if (clip.left == 0 && clip.right == band.w)
-		ml = 0;
 
 	Graphics::Surface copy;
 	copy.copyFrom(band);
