@@ -1073,6 +1073,7 @@ void XFilesEngine::playQueuedVideo(const Input &input) {
 	clearScreen();
 	Common::Point pos = getBandPosition(*_video);
 	blit(_video->getFrame(), pos.x, pos.y);
+	applyBandTint(false);
 	drawCaptions(*_video, pos);
 
 	if (_video->hasEnded()) {
@@ -1236,6 +1237,7 @@ void XFilesEngine::drawBand(Graphics::Surface &band) {
 		Common::Point pos = getBandPosition(*_layers[i]);
 		blit(_layers[i]->getFrame(), pos.x, pos.y);
 	}
+	applyBandTint(false);
 	band.copyFrom(_screen.getSubArea(Common::Rect(kBandLeft, kBandTop, kBandLeft + kBandWidth, kBandTop + kBandHeight)));
 	_screen.copyFrom(keep);
 	keep.free();
@@ -1476,16 +1478,36 @@ void XFilesEngine::clickInventory(uint32 inventory) {
 	_script->selectInventory(inventory);
 }
 
+static void readPixel(const Graphics::Surface &s, int x, int y, byte &r, byte &g, byte &b);
+static void writePixel(Graphics::Surface &s, int x, int y, byte r, byte g, byte b);
+
 /**
- * Clears the screen to black, then fills the letterbox band with the SetLBoxTint colour (the band's background:
- * it shows only where the picture or clip does not cover it). Not done: the tool modes' own band colours and the
- * caption-on band (0x6c0c40, down to y 350).
+ * Clears the screen to black. The SetLBoxTint colour is not a background: the band's picture is multiplied by it
+ * (applyBandTint). Not done: the caption-on band (0x6c0c40, down to y 350).
  */
 void XFilesEngine::clearScreen() {
 	_screen.fillRect(Common::Rect(_screen.w, _screen.h), 0);
-	byte r, g, b;
-	if (_script->getBandFill(r, g, b))
-		_screen.fillRect(Common::Rect(kBandLeft, kBandTop, kBandLeft + kBandWidth, kBandTop + kBandHeight), _screen.format.RGBToColor(r, g, b));
+}
+
+/**
+ * The letterbox tint (SetLBoxTint): every band pixel channel v becomes v * c / 255 (docs/exe/hooks/groups.md). With
+ * the flashlight's n = 2 look in hand the untinted band is kept for drawFlashlight.
+ */
+void XFilesEngine::applyBandTint(bool keepUntinted) {
+	_bandUntinted.free();
+	byte tr, tg, tb;
+	if (!_script->getBandTint(tr, tg, tb))
+		return;
+	Graphics::Surface band = _screen.getSubArea(Common::Rect(kBandLeft, kBandTop, kBandLeft + kBandWidth, kBandTop + kBandHeight));
+	if (keepUntinted)
+		_bandUntinted.copyFrom(band);
+	for (int y = 0; y < band.h; y++) {
+		for (int x = 0; x < band.w; x++) {
+			byte r, g, b;
+			readPixel(band, x, y, r, g, b);
+			writePixel(band, x, y, r * tr / 255, g * tg / 255, b * tb / 255);
+		}
+	}
 }
 
 void XFilesEngine::drawView() {
@@ -1499,6 +1521,7 @@ void XFilesEngine::drawView() {
 		Common::Point pos = getBandPosition(*_video);
 		blit(_video->getFrame(), pos.x, pos.y);
 	}
+	applyBandTint(_script->heldToolType() == 3 && _script->getFlashlight()[0]);
 	for (uint i = 0; i < _layers.size(); i++)
 		drawCaptions(*_layers[i], getBandPosition(*_layers[i]));
 	drawViewfinder();
@@ -1645,20 +1668,9 @@ void XFilesEngine::drawFlashlight(Graphics::Surface &band) {
 	if (!_flashlightMask)
 		return;
 	const byte *props = _script->getFlashlight();
-	if (props[0]) {
-		static bool logged = false;
-		if (!logged)
-			debugC(1, kDebugScript, "flashlight: n=2 look not ported");
-		logged = true;
-	}
 	bool outer = props[1] != 0;
 	int32 beam = _script->getPreferenceValue(kPrefFlashlightBeam);
 	int32 brightness = _script->getPreferenceValue(kPrefFlashlightBrightness);
-
-	// The grey level from c2 and the brightness preference (0x4eb1e0)
-	static const byte kLevels[3][3] = {{0x50, 0x80, 0xa0}, {0xa0, 0xc8, 0xdc}, {0x80, 0xa0, 0xc8}}; // [B, D, other][c2]
-	int row = brightness == 'B' ? 0 : brightness == 'D' ? 1 : 2;
-	int g = props[2] <= 2 ? kLevels[row][props[2]] : 0xa0;
 
 	// The beam size stretches the mask (0x4d8300)
 	const Graphics::Surface *mask = &_flashlightMask->getSurface();
@@ -1685,21 +1697,35 @@ void XFilesEngine::drawFlashlight(Graphics::Surface &band) {
 		mask = _flashlightScaled;
 	}
 
-	// Centred on the mouse, clipped to the band, not clamped. The mask is darkened to 55 / 255 (0x4d8790 with 200)
+	// Centred on the mouse, clipped to the band, not clamped
 	int ml = _mouse.x - kBandLeft - (mask->w >> 1), mt = _mouse.y - kBandTop - (mask->h >> 1);
 	// With the mouse off the band (in the bar) the mask can lie wholly outside it: clip() leaves an empty rect
 	Common::Rect clip(ml, mt, ml + mask->w, mt + mask->h);
 	clip.clip(band.w, band.h);
+	if (props[0] == 0)
+		return; // the n = 0 grey light is not ported
+	// The n = 2 look (tool-objects.md "Overlay drawing" point 5): the untinted picture P shows through the mask over
+	// the tinted band T, out = T + (P - T) * m' / 255. Without a tint T = P
+	if (_bandUntinted.w != band.w || _bandUntinted.h != band.h)
+		return;
+	// 'B' lifts the mask inside its inscribed oval
 	for (int y = clip.top; y < clip.bottom; y++) {
 		for (int x = clip.left; x < clip.right; x++) {
 			byte m, mg, mb;
 			readPixel(*mask, x - ml, y - mt, m, mg, mb);
-			int weight = m * 55 / 255;
-			if (!weight)
+			int mp = m;
+			double u = (x - ml + 0.5 - mask->w / 2.0) / (mask->w / 2.0), v = (y - mt + 0.5 - mask->h / 2.0) / (mask->h / 2.0);
+			bool inOval = u * u + v * v <= 1.0;
+			if (brightness == 'D')
+				mp = m * 55 / 255;
+			else if (brightness == 'B' && inOval)
+				mp = m + (255 - m) * 200 / 255;
+			if (!mp)
 				continue;
-			byte r, gr, b;
-			readPixel(band, x, y, r, gr, b);
-			writePixel(band, x, y, r + (g - r) * weight / 255, gr + (g - gr) * weight / 255, b + (g - b) * weight / 255);
+			byte pr, pg, pb, tr, tg, tb;
+			readPixel(_bandUntinted, x, y, pr, pg, pb);
+			readPixel(band, x, y, tr, tg, tb);
+			writePixel(band, x, y, tr + ((pr - tr) * mp + 127) / 255, tg + ((pg - tg) * mp + 127) / 255, tb + ((pb - tb) * mp + 127) / 255);
 		}
 	}
 }

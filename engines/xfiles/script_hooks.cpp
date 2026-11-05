@@ -594,7 +594,7 @@ void Script::addStateHooks() {
 			s._tintColor[1] = c.args[1];
 			s._tintColor[2] = c.args[0];
 		}
-		return true; // the band's background, drawn by XFilesEngine::clearScreen
+		return true; // the band multiply, drawn by XFilesEngine::applyBandTint
 	});
 	t.add("ClearLBoxTint", [](Script &s, const HookCall &c) {
 		s._tint = 0;

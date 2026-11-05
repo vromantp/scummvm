@@ -258,11 +258,15 @@ public:
 	int32 getPhotosOnCamera() const { return _photosOnCamera; }
 	const ComputerHooks &getComputerHooks() const { return _computer; }
 	/**
-	 * The letterbox band's background colour after SetLBoxTint (0x45d2f0 gives the band 0x6c0870 the fill map's
-	 * entry 0). False when there is no tint: the band is black.
+	 * The letterbox band's tint after SetLBoxTint: the picture is multiplied by this colour (0x45d2f0 gives the band
+	 * 0x6c0870 the fill map's entry 0, a kind-6 transfer mode; docs/exe/hooks/groups.md "SetLBoxTint"). False when
+	 * there is no tint, and while the held night vision or binoculars swap in their own entries (0x50f8c0/0x50f760).
 	 */
-	bool getBandFill(byte &r, byte &g, byte &b) const {
+	bool getBandTint(byte &r, byte &g, byte &b) const {
 		if (!_tint)
+			return false;
+		int type = heldToolType();
+		if (type == 4 || (type == 1 && binocularsMode() != 2))
 			return false;
 		r = _tintColor[2];
 		g = _tintColor[1];

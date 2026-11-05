@@ -263,6 +263,8 @@ private:
 	void updateInterface();
 	void drawView();
 	void clearScreen();
+	/** The SetLBoxTint multiply over the band (B-209); keepUntinted saves the plain band for drawFlashlight. */
+	void applyBandTint(bool keepUntinted);
 	/** The camera in hand: the viewfinder over the band at the mouse, with the photos left (Camera, 0x4f2b30). */
 	void drawViewfinder();
 	/** The tool in hand over the band, keyed on Script::heldToolType (B-228, docs/exe/tool-objects.md "Overlay drawing"). */
@@ -272,7 +274,7 @@ private:
 	void drawNightVision(Graphics::Surface &band);
 	/** Binoculars in mode 0 (0x51c3c0): the band black, the view zoomed 2x through the soft mask 34753 at the mouse. */
 	void drawBinoculars(Graphics::Surface &band);
-	/** The flashlight (0x4d7e80): a grey disc of the mask 34745 blended over the band at the mouse. */
+	/** The flashlight (0x4d7e80): the n = 2 look, the untinted picture shown through the mask 34745 over the tinted band. */
 	void drawFlashlight(Graphics::Surface &band);
 	/** The photo viewer's thumbnails and enlarged picture, over the layout (0x4afb80 pictures). */
 	void drawPhotos();
@@ -362,6 +364,7 @@ private:
 	PictureAsset *_flashlightMask;        ///< 34745 flashlightmask.pic
 	Graphics::Surface *_flashlightScaled; ///< the mask scaled for the beam size and c1 in _flashlightScaledKey
 	int32 _flashlightScaledKey;
+	Graphics::Surface _bandUntinted;      ///< the band before the tint, kept while the n = 2 flashlight is in hand
 	PictureAsset *_viewfinder;            ///< 34749 moveableviewfinder.pic, loaded when the camera first shows
 	const Graphics::Font *_counterFont;   ///< the camera counter: Liberation Sans Bold 13, else the GUI font
 	struct PhotoPicture {
