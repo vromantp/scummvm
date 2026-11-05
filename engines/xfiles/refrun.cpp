@@ -92,8 +92,18 @@ void XFilesEngine::runSteps() {
 			return;
 		_waitVideo = 0;
 	}
+	if (_delayUntil) {
+		if ((int32)(gameMillis() - _delayUntil) < 0)
+			return;
+		_delayUntil = 0;
+	}
 	while (_nextStep < _steps.size()) {
 		const Common::String &step = _steps[_nextStep++];
+		if (step.hasPrefix("delay:")) {
+			// Engine only: let MS of game time pass (the head credits, timers)
+			_delayUntil = MAX<uint32>(1, gameMillis() + atoi(step.c_str() + 6));
+			return;
+		}
 		if (step == "wait") {
 			// The end of the playing video, in real time
 			if (!queue.empty()) {

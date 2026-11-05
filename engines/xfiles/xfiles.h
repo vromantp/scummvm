@@ -466,6 +466,7 @@ private:
 	Common::StringArray _fastForward;     ///< xfiles_fastforward: steps run headless before the game starts (cleared after)
 	uint _nextStep;
 	uint32 _waitVideo;                    ///< A wait step waits for this video to end
+	uint32 _delayUntil;                   ///< A delay step waits until gameMillis() reaches this; 0: none
 	int _waitTimer;                       ///< A timer step waits for this timer to expire; -1: none
 };
 
