@@ -500,8 +500,10 @@ void XFilesEngine::runGame() {
 				handleRelease(input.releasePos);
 			updateCursor();
 			drawView();
-			// The folders follow Pref_bTranslucency (Prefs_Apply 0x452d70)
-			_dialogBox.draw(_screen, _mouse, !getPreference(kPrefTranslucency));
+			// The folders follow Pref_bTranslucency (Prefs_Apply 0x452d70). The box stays open behind the menu, but
+			// Options and Help cover it (and take no clicks on it)
+			if (!_menuLayout)
+				_dialogBox.draw(_screen, _mouse, !getPreference(kPrefTranslucency));
 			_sound.drawClips(_screen);
 		}
 		// The location card is a timed overlay on the suspended scene: it would sit over Options and Help
