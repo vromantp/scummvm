@@ -1784,6 +1784,9 @@ void XFilesEngine::drawBinoculars(Graphics::Surface &band) {
 
 	Graphics::Surface copy;
 	copy.copyFrom(band);
+	// The band holds the untinted picture while the binoculars are in hand (getBandTint): the zoom shows it tinted
+	byte tr, tg, tb;
+	bool tinted = _script->getSceneTint(tr, tg, tb);
 	band.fillRect(Common::Rect(band.w, band.h), 0);
 	for (int y = clip.top; y < clip.bottom; y++) {
 		for (int x = clip.left; x < clip.right; x++) {
@@ -1794,6 +1797,11 @@ void XFilesEngine::drawBinoculars(Graphics::Surface &band) {
 			int sx = CLIP(cx + (x - cx) / 2, 0, (int)band.w - 1), sy = CLIP(cy + (y - cy) / 2, 0, (int)band.h - 1);
 			byte red, green, blue;
 			readPixel(copy, sx, sy, red, green, blue);
+			if (tinted) {
+				red = red * tr / 255;
+				green = green * tg / 255;
+				blue = blue * tb / 255;
+			}
 			writePixel(band, x, y, red * m / 255, green * m / 255, blue * m / 255);
 		}
 	}

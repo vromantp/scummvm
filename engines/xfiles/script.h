@@ -263,10 +263,14 @@ public:
 	 * there is no tint, and while the held night vision or binoculars swap in their own entries (0x50f8c0/0x50f760).
 	 */
 	bool getBandTint(byte &r, byte &g, byte &b) const {
-		if (!_tint)
-			return false;
 		int type = heldToolType();
 		if (type == 4 || (type == 1 && binocularsMode() != 2))
+			return false;
+		return getSceneTint(r, g, b);
+	}
+	/** The SetLBoxTint colour whatever tool is held; the held binoculars zoom the tinted picture (drawBinoculars). */
+	bool getSceneTint(byte &r, byte &g, byte &b) const {
+		if (!_tint)
 			return false;
 		r = _tintColor[2];
 		g = _tintColor[1];
