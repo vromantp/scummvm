@@ -1182,9 +1182,15 @@ void XFilesEngine::syncView() {
 	int mode = _script->getTransition();
 	_script->clearTransition();
 	bool animate = mode != Script::kTransitionCut && _viewId && _viewId != _script->getView() && canPlayTransition();
+	// The old picture is what is on screen; with a tool overlay on it (night vision) it is redrawn without, since
+	// playTransition draws the overlay over every frame
 	Graphics::Surface oldBand;
-	if (animate)
-		oldBand.copyFrom(_screen.getSubArea(Common::Rect(kBandLeft, kBandTop, kBandLeft + kBandWidth, kBandTop + kBandHeight)));
+	if (animate) {
+		if (hasToolOverlay())
+			drawBand(oldBand);
+		else
+			oldBand.copyFrom(_screen.getSubArea(Common::Rect(kBandLeft, kBandTop, kBandLeft + kBandWidth, kBandTop + kBandHeight)));
+	}
 
 	closeView();
 	_viewId = _script->getView();
@@ -1213,22 +1219,26 @@ void XFilesEngine::syncView() {
 	if (animate) {
 		for (uint i = 0; i < _layers.size(); i++)
 			_layers[i]->update();
-		// The new picture, drawn into the band the way drawView does
-		Graphics::Surface keep;
-		keep.copyFrom(_screen);
-		clearScreen();
-		for (uint i = 0; i < _layers.size(); i++) {
-			Common::Point pos = getBandPosition(*_layers[i]);
-			blit(_layers[i]->getFrame(), pos.x, pos.y);
-		}
 		Graphics::Surface newBand;
-		newBand.copyFrom(_screen.getSubArea(Common::Rect(kBandLeft, kBandTop, kBandLeft + kBandWidth, kBandTop + kBandHeight)));
-		_screen.copyFrom(keep);
-		keep.free();
+		drawBand(newBand);
 		playTransition(mode, oldBand, newBand);
 		newBand.free();
 	}
 	oldBand.free();
+}
+
+void XFilesEngine::drawBand(Graphics::Surface &band) {
+	// The view's layers drawn into the band the way drawView does, without captions and tool overlay
+	Graphics::Surface keep;
+	keep.copyFrom(_screen);
+	clearScreen();
+	for (uint i = 0; i < _layers.size(); i++) {
+		Common::Point pos = getBandPosition(*_layers[i]);
+		blit(_layers[i]->getFrame(), pos.x, pos.y);
+	}
+	band.copyFrom(_screen.getSubArea(Common::Rect(kBandLeft, kBandTop, kBandLeft + kBandWidth, kBandTop + kBandHeight)));
+	_screen.copyFrom(keep);
+	keep.free();
 }
 
 bool XFilesEngine::canPlayTransition() const {
@@ -1324,6 +1334,8 @@ void XFilesEngine::playTransition(int mode, const Graphics::Surface &oldBand, co
 				_screen.setPixel(kBandLeft + x, kBandTop + y, p);
 			}
 		}
+		// A held tool's overlay stays over the moving picture (night vision: else it drops out for the transition)
+		drawToolOverlay();
 		present();
 		if (done)
 			break;
@@ -1588,12 +1600,17 @@ static void writePixel(Graphics::Surface &s, int x, int y, byte r, byte g, byte 
 		*(uint32 *)p = value;
 }
 
-void XFilesEngine::drawToolOverlay() {
+bool XFilesEngine::hasToolOverlay() const {
 	if (!_script)
+		return false;
+	int type = _script->heldToolType();
+	return type == 1 || type == 3 || type == 4;
+}
+
+void XFilesEngine::drawToolOverlay() {
+	if (!hasToolOverlay())
 		return;
 	int type = _script->heldToolType();
-	if (type != 1 && type != 3 && type != 4)
-		return;
 	// The overlays work on the band (20, 90)-(620, 330)
 	Graphics::Surface band = _screen.getSubArea(Common::Rect(kBandLeft, kBandTop, kBandLeft + kBandWidth, kBandTop + kBandHeight));
 	if (type == 4)

@@ -256,6 +256,8 @@ private:
 	void updateTimers();
 	void syncView();
 	bool canPlayTransition() const;
+	/** The view's layers in the band (no captions, no tool overlay), into band (600 x 240). */
+	void drawBand(Graphics::Surface &band);
 	void playTransition(int mode, const Graphics::Surface &oldBand, const Graphics::Surface &newBand);
 	void closeView();
 	void updateInterface();
@@ -265,6 +267,7 @@ private:
 	void drawViewfinder();
 	/** The tool in hand over the band, keyed on Script::heldToolType (B-228, docs/exe/tool-objects.md "Overlay drawing"). */
 	void drawToolOverlay();
+	bool hasToolOverlay() const;
 	/** Night vision (0x50f8c0): the band tinted by RGB(0, 150, 100), the frame 34751 over it. */
 	void drawNightVision(Graphics::Surface &band);
 	/** Binoculars in mode 0 (0x51c3c0): the band black, the view zoomed 2x through the soft mask 34753 at the mouse. */
