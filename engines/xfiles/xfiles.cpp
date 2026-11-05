@@ -1702,8 +1702,26 @@ void XFilesEngine::drawFlashlight(Graphics::Surface &band) {
 	// With the mouse off the band (in the bar) the mask can lie wholly outside it: clip() leaves an empty rect
 	Common::Rect clip(ml, mt, ml + mask->w, mt + mask->h);
 	clip.clip(band.w, band.h);
-	if (props[0] == 0)
-		return; // the n = 0 grey light is not ported
+	if (props[0] == 0) {
+		// The grey light (n = 0/1): a grey level from c2 and the brightness preference (0x4eb1e0) through the mask
+		// darkened to 55 / 255 (0x4d8790 with 200): b + (G - b) * m' / 255
+		static const byte kLevels[3][3] = {{0x50, 0x80, 0xa0}, {0xa0, 0xc8, 0xdc}, {0x80, 0xa0, 0xc8}}; // [B, D, other][c2]
+		int row = brightness == 'B' ? 0 : brightness == 'D' ? 1 : 2;
+		int g = props[2] <= 2 ? kLevels[row][props[2]] : 0xa0;
+		for (int y = clip.top; y < clip.bottom; y++) {
+			for (int x = clip.left; x < clip.right; x++) {
+				byte m, mg, mb;
+				readPixel(*mask, x - ml, y - mt, m, mg, mb);
+				int weight = m * 55 / 255;
+				if (!weight)
+					continue;
+				byte r, gr, b;
+				readPixel(band, x, y, r, gr, b);
+				writePixel(band, x, y, r + (g - r) * weight / 255, gr + (g - gr) * weight / 255, b + (g - b) * weight / 255);
+			}
+		}
+		return;
+	}
 	// The n = 2 look (tool-objects.md "Overlay drawing" point 5): the untinted picture P shows through the mask over
 	// the tinted band T, out = T + (P - T) * m' / 255. Without a tint T = P
 	if (_bandUntinted.w != band.w || _bandUntinted.h != band.h)
