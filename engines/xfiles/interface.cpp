@@ -549,6 +549,7 @@ void Interface::syncItems(const Script &script) {
 				continue;
 			Item item;
 			item.id = data.id;
+			item.layoutIndex = i;
 			item.layer = data.layer & 0xff; // only the low byte is the drawing layer
 			item.rect = Common::Rect(data.rect.left, data.rect.top, data.rect.right, data.rect.bottom);
 			// The picture is the first enabled asset of the list (0x41fe60)
@@ -599,6 +600,34 @@ bool Interface::isModal() const {
 			return true;
 	}
 	return false;
+}
+
+bool Interface::pausesView() const {
+	// The Letter, the drawer, two cabinets and the bulletin board skip the pause (0x42b250)
+	static const uint32 fieldOffice[] = {57082, 84328, 84370, 58553, 72504};
+	for (uint i = 0; i < _layouts.size(); i++) {
+		if (Common::find(fieldOffice, fieldOffice + ARRAYSIZE(fieldOffice), _layouts[i]) == fieldOffice + ARRAYSIZE(fieldOffice))
+			return true;
+	}
+	return false;
+}
+
+void Interface::tintRect(Graphics::Surface &dst, const Common::Rect &rect) {
+	Common::Rect area = rect;
+	area.clip(Common::Rect(dst.w, dst.h));
+	const Graphics::PixelFormat &fmt = dst.format;
+	for (int y = area.top; y < area.bottom; y++) {
+		for (int x = area.left; x < area.right; x++) {
+			uint32 pixel = fmt.bytesPerPixel == 2 ? *(const uint16 *)dst.getBasePtr(x, y) : *(const uint32 *)dst.getBasePtr(x, y);
+			uint8 r, g, b;
+			fmt.colorToRGB(pixel, r, g, b);
+			pixel = fmt.RGBToColor(r * 60 / 255, g * 60 / 255, b * 60 / 255);
+			if (fmt.bytesPerPixel == 2)
+				*(uint16 *)dst.getBasePtr(x, y) = pixel;
+			else
+				*(uint32 *)dst.getBasePtr(x, y) = pixel;
+		}
+	}
 }
 
 void Interface::addModalException(uint32 layout) {
@@ -697,12 +726,42 @@ void Interface::blit(Graphics::Surface &dst, const Graphics::Surface &src, int x
 	dst.copyRectToSurface(src, r.left, r.top, Common::Rect(r.left - x, r.top - y, r.right - x, r.bottom - y));
 }
 
-void Interface::drawIcons(Graphics::Surface &dst, const Common::Array<Icon> &icons) const {
+void Interface::tintChanged(Graphics::Surface &dst, const Graphics::Surface &before, const Common::Rect &area) {
+	if (area.isEmpty() || before.w != area.width())
+		return;
+	const Graphics::PixelFormat &fmt = dst.format;
+	for (int py = area.top; py < area.bottom; py++) {
+		for (int px = area.left; px < area.right; px++) {
+			const void *was = before.getBasePtr(px - area.left, py - area.top);
+			bool same = fmt.bytesPerPixel == 2 ? *(const uint16 *)dst.getBasePtr(px, py) == *(const uint16 *)was
+			                                   : *(const uint32 *)dst.getBasePtr(px, py) == *(const uint32 *)was;
+			if (!same)
+				tintRect(dst, Common::Rect(px, py, px + 1, py + 1));
+		}
+	}
+}
+
+void Interface::drawTinted(Graphics::Surface &dst, const Common::Rect &rect, const Graphic *graphic, int x, int y) {
+	Common::Rect area = rect;
+	area.clip(Common::Rect(dst.w, dst.h));
+	Graphics::Surface before;
+	if (!area.isEmpty())
+		before.copyFrom(dst.getSubArea(area));
+	graphic->draw(dst, x, y);
+	tintChanged(dst, before, area);
+	before.free();
+}
+
+void Interface::drawIcons(Graphics::Surface &dst, const Common::Array<Icon> &icons, bool dim) const {
 	for (uint i = 0; i < icons.size(); i++) {
 		const Graphic *graphic = icons[i].graphic;
 		if (icons[i].rollover && icons[i].rect.contains(_mouse) && !isModal())
 			graphic = icons[i].rollover;
-		if (graphic)
+		if (!graphic)
+			continue;
+		if (dim)
+			drawTinted(dst, icons[i].rect, graphic, icons[i].rect.left, icons[i].rect.top);
+		else
 			graphic->draw(dst, icons[i].rect.left, icons[i].rect.top);
 	}
 }
@@ -719,44 +778,26 @@ void Interface::drawDragged(Graphics::Surface &dst, uint32 ideaId, const Common:
 }
 
 void Interface::draw(Graphics::Surface &dst) const {
-	drawIcons(dst, _actions);
-	drawIcons(dst, _emotions);
-	if (_aiSuspended && !_aiIcon.empty() && _aiIcon[0].graphic) {
+	// A shown modal layout (or FadeBack) suspends the icons, the inventory and the items of the layouts under it:
+	// their pixels are multiplied by the suspend tint (B-007)
+	bool dim = isModal();
+	drawIcons(dst, _actions, dim);
+	drawIcons(dst, _emotions, dim);
+	if ((_aiSuspended || dim) && !_aiIcon.empty() && _aiIcon[0].graphic) {
 		// The suspend tint (colour RGB 60, 60, 60, 0x5086b0) multiplies the icon's pixels: in the reference screenshots a
 		// suspended icon is the lit one times about 60/255. Only the pixels the icon draws change
 		const Icon &icon = _aiIcon[0];
-		Common::Rect area = icon.rect;
-		area.clip(Common::Rect(dst.w, dst.h));
-		Graphics::Surface before;
-		before.copyFrom(dst);
-		icon.graphic->draw(dst, icon.rect.left, icon.rect.top);
-		const Graphics::PixelFormat &fmt = dst.format;
-		for (int y = area.top; y < area.bottom; y++) {
-			for (int x = area.left; x < area.right; x++) {
-				uint32 now = fmt.bytesPerPixel == 2 ? *(const uint16 *)dst.getBasePtr(x, y) : *(const uint32 *)dst.getBasePtr(x, y);
-				uint32 was = fmt.bytesPerPixel == 2 ? *(const uint16 *)before.getBasePtr(x, y) : *(const uint32 *)before.getBasePtr(x, y);
-				if (now == was)
-					continue;
-				uint8 r, g, b;
-				fmt.colorToRGB(now, r, g, b);
-				now = fmt.RGBToColor(r * 60 / 255, g * 60 / 255, b * 60 / 255);
-				if (fmt.bytesPerPixel == 2)
-					*(uint16 *)dst.getBasePtr(x, y) = now;
-				else
-					*(uint32 *)dst.getBasePtr(x, y) = now;
-			}
-		}
-		before.free();
+		drawTinted(dst, icon.rect, icon.graphic, icon.rect.left, icon.rect.top);
 	} else {
-		drawIcons(dst, _aiIcon);
+		drawIcons(dst, _aiIcon, dim);
 	}
-	drawIcons(dst, _ideas);
-	drawIcons(dst, _evidence);
+	drawIcons(dst, _ideas, dim);
+	drawIcons(dst, _evidence, dim);
 	if (_barOpen)
-		drawIcons(dst, _inventory);
+		drawIcons(dst, _inventory, dim);
 	bool kitShown = _kitOpen && !_evidenceRowShown;
 	if (kitShown)
-		drawIcons(dst, _kit);
+		drawIcons(dst, _kit, dim);
 	// Kit icons have no rollover text (0x437600 leaves out group 1)
 	drawRolloverText(dst, _actions);
 	drawRolloverText(dst, _emotions);
@@ -764,7 +805,33 @@ void Interface::draw(Graphics::Surface &dst) const {
 	drawRolloverText(dst, _evidence);
 	if (_barOpen)
 		drawRolloverText(dst, _inventory);
+	// The modal layout is the last shown one that is not excepted; the layouts before it are suspended with their
+	// items, those from it on are not
+	int modalLayout = -1;
+	if (!_suspended) {
+		for (uint i = 0; i < _layouts.size(); i++) {
+			const uint32 *always = kAlwaysNonModalLayouts + ARRAYSIZE(kAlwaysNonModalLayouts);
+			if (Common::find(_modalExceptions.begin(), _modalExceptions.end(), _layouts[i]) == _modalExceptions.end() &&
+					Common::find(kAlwaysNonModalLayouts, always, _layouts[i]) == always)
+				modalLayout = i;
+		}
+	}
 	for (uint i = 0; i < _items.size(); i++) {
+		bool dimItem = _suspended || (int)_items[i].layoutIndex < modalLayout;
+		if (dimItem) {
+			Common::Rect area = _items[i].rect;
+			area.clip(Common::Rect(dst.w, dst.h));
+			Graphics::Surface before;
+			if (!area.isEmpty())
+				before.copyFrom(dst.getSubArea(area));
+			if (_items[i].graphic)
+				_items[i].graphic->draw(dst, _items[i].rect.left, _items[i].rect.top);
+			if (_items[i].hasText)
+				drawItemText(dst, _items[i]);
+			tintChanged(dst, before, area);
+			before.free();
+			continue;
+		}
 		if (_items[i].graphic)
 			_items[i].graphic->draw(dst, _items[i].rect.left, _items[i].rect.top);
 		if (_items[i].hasText)

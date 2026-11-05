@@ -102,8 +102,15 @@ public:
 	/** A shown layout takes the input from the view and the icons (0x42b250). */
 	bool isModal() const;
 	/**
+	 * The view's started movies stop while a layout other than the five Field Office ones is shown
+	 * (Scene_PauseView 0x46cd80, B-007).
+	 */
+	bool pausesView() const;
+	/** Multiply the pixels of an area by the suspend tint (RGB 60, 60, 60, B-007). */
+	static void tintRect(Graphics::Surface &dst, const Common::Rect &area);
+	/**
 	 * FadeBack(b) (Scene_SuspendObjects 0x40be40): a flag, not a count. While set the view, icons and bar take
-	 * no input, as under a modal layout. The grey tint of a suspended object is not drawn.
+	 * no input, as under a modal layout. Its tint dims the view and the items (B-007).
 	 */
 	void setSuspended(bool suspended) { _suspended = suspended; }
 	/** The mouse moved into the inventory bar during the last update(). */
@@ -202,6 +209,7 @@ private:
 
 	struct Item {
 		uint32 id;
+		uint32 layoutIndex; ///< Position of its layout in the shown list
 		uint16 layer;
 		Common::Rect rect;
 		Graphic *graphic;    ///< nullptr if the item shows no picture
@@ -229,7 +237,11 @@ private:
 	void drawItemText(Graphics::Surface &dst, const Item &item) const;
 	/** Courier New 400 or 700 at a character height, from Liberation Mono (kept); nullptr if unavailable. */
 	Graphics::Font *getItemFont(int size, bool bold, bool sans) const;
-	void drawIcons(Graphics::Surface &dst, const Common::Array<Icon> &icons) const;
+	void drawIcons(Graphics::Surface &dst, const Common::Array<Icon> &icons, bool dim = false) const;
+	/** Multiply the pixels of area that differ from before (a copy of the area) by the suspend tint. */
+	static void tintChanged(Graphics::Surface &dst, const Graphics::Surface &before, const Common::Rect &area);
+	/** Draw a graphic, then multiply the pixels it changed inside area by the suspend tint (B-007). */
+	static void drawTinted(Graphics::Surface &dst, const Common::Rect &area, const Graphic *graphic, int x, int y);
 	void drawRolloverText(Graphics::Surface &dst, const Common::Array<Icon> &icons) const;
 	static void blit(Graphics::Surface &dst, const Graphics::Surface &src, int x, int y);
 

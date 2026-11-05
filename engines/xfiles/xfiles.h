@@ -268,6 +268,8 @@ private:
 	void playTransition(int mode, const Graphics::Surface &oldBand, const Graphics::Surface &newBand);
 	void closeView();
 	void updateInterface();
+	/** Stop or resume the view's movies under a shown layout (B-007). */
+	void updateViewPause();
 	void drawView();
 	void clearScreen();
 	/** The SetLBoxTint multiply over the band (B-209); keepUntinted saves the plain band for drawFlashlight. */
@@ -305,6 +307,7 @@ private:
 	void updateCursor();
 	/** The VCCursor to show for what is at a point; 0 for the default cursor. */
 	uint32 getCursorAt(const Common::Point &pos) const;
+	bool _viewPaused = false; ///< A shown layout holds the view's movies stopped (B-007)
 	bool _wasModal = false;   ///< A layout had the input at the last frame (its closing resumes the AI icon, 0x509520)
 	uint32 _firingCursor = 0; ///< The VCCursor a gun hit shows (73520, the red sight), 0 for none
 	uint32 _firingView = 0;   ///< The view that was current at the hit

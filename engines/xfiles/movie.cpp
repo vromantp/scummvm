@@ -183,6 +183,13 @@ void Movie::pause(bool pause) {
 	_decoder->pauseVideo(pause);
 }
 
+void Movie::rewind() {
+	if (!_decoder)
+		return;
+	pause(false);
+	_decoder->seek(Audio::Timestamp(MIN<uint32>(_startMs, _decoder->getDuration().msecs()), 1000));
+}
+
 uint32 Movie::getTime() const {
 	return _decoder ? _decoder->getTime() : 0;
 }

@@ -369,8 +369,10 @@ void XFilesEngine::pauseGame(bool pause) {
 	_paused = pause;
 	if (_video)
 		_video->pause(pause);
-	for (uint i = 0; i < _layers.size(); i++)
-		_layers[i]->pause(pause);
+	for (uint i = 0; i < _layers.size(); i++) {
+		if (!_viewPaused) // a clip the layout holds stays stopped
+			_layers[i]->pause(pause);
+	}
 	_sound.pause(pause);
 }
 
@@ -492,6 +494,7 @@ void XFilesEngine::runGame() {
 				_video->close(); // Stopped by the script
 			syncView();
 			updateInterface();
+			updateViewPause();
 			updateDialogBox();
 			if (input.click)
 				handleClick(input.pos);
@@ -763,7 +766,7 @@ void XFilesEngine::addHooks() {
 	});
 	t.add("FadeBack", [](XFilesEngine &e, const HookCall &c) {
 		// 0x48a9f0 is Scene_SuspendObjects (0x40be40): a suspend flag on the view, icons, interface items and
-		// inventory, which take no input meanwhile. The grey tint of a suspended object is not drawn (B-118)
+		// inventory, which take no input meanwhile and are dimmed (Interface::draw, drawView)
 		if (!c.has(1))
 			return false;
 		e._interface->setSuspended(c.args[0] != 0);
@@ -1378,6 +1381,25 @@ void XFilesEngine::closeView() {
 	_layers.clear();
 	_viewAssets.clear();
 	_viewId = 0;
+	_viewPaused = false; // A new view starts unpaused
+}
+
+void XFilesEngine::updateViewPause() {
+	// Scene_PauseView (0x46cd80, B-007): a shown layout (but the five Field Office ones) stops the view's started
+	// movies, which go on from the same frame when the last such layout closes; with Live Environments off a looping
+	// clip is rewound instead. The engine's own pause (pauseGame) keeps the clips stopped
+	bool want = _interface->pausesView();
+	if (want == _viewPaused)
+		return;
+	_viewPaused = want;
+	if (_paused)
+		return;
+	bool rewind = !want && !getPreference(kPrefLiveEnvironments);
+	for (uint i = 0; i < _layers.size(); i++) {
+		if (rewind && _layers[i]->isLooping() && _layers[i]->isPlaying())
+			_layers[i]->rewind();
+		_layers[i]->pause(want);
+	}
 }
 
 void XFilesEngine::updateInterface() {
@@ -1537,6 +1559,20 @@ void XFilesEngine::drawView() {
 		blit(_video->getFrame(), pos.x, pos.y);
 	}
 	applyBandTint(_script->heldToolType() == 3 && _script->getFlashlight()[0]);
+	if (_interface->isModal()) {
+		// The suspend tint over the view's picture (B-007)
+		Common::Rect dim;
+		for (uint i = 0; i < _layers.size(); i++) {
+			Common::Point pos = getBandPosition(*_layers[i]);
+			const Graphics::Surface &frame = _layers[i]->getFrame();
+			Common::Rect r(pos.x, pos.y, pos.x + frame.w, pos.y + frame.h);
+			if (dim.isEmpty())
+				dim = r;
+			else
+				dim.extend(r);
+		}
+		Interface::tintRect(_screen, dim);
+	}
 	for (uint i = 0; i < _layers.size(); i++)
 		drawCaptions(*_layers[i], getBandPosition(*_layers[i]));
 	drawViewfinder();
