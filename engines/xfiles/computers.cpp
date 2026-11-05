@@ -459,6 +459,7 @@ void ComputerHooks::loginInit(char mode) {
 		_user.clear();
 		if (_script.getTextAsset(kPwbkUserName, name))
 			_user = name.encode();
+		_user.toUppercase(); // 0x45feb0 (_mbsupr)
 		_password.clear();
 		loginFocus(3);
 		setFieldText(kLoginField3Text, _user);
@@ -477,6 +478,7 @@ void ComputerHooks::loginInit(char mode) {
 		Common::U32String name;
 		if (_script.getTextAsset(kLoginUserName, name))
 			_user = name.encode();
+		_user.toUppercase(); // 0x45feb0 (_mbsupr), as typed letters are
 		loginFocus(2);
 	} else {
 		loginFocus(1);
