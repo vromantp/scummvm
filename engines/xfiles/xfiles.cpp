@@ -478,7 +478,12 @@ void XFilesEngine::runGame() {
 		updateTimers();
 		_sound.update(getPreference(kPref3DSound));
 		_captions.update(gameMillis());
-		_headCredits.update(gameMillis(), _script->getVideoQueue().empty() && !_dialogBox.isOpen());
+		{
+			// The credit on screen goes when a video plays, the dialog box is open or a layout activated
+			// (0x42b272); a credit due is held back by any layout but the Letter (0x442b50)
+			bool canKeep = _script->getVideoQueue().empty() && !_dialogBox.isOpen() && !_interface->pausesView();
+			_headCredits.update(gameMillis(), canKeep && !_interface->showsLayoutOtherThan(57082), canKeep);
+		}
 		// The words show over a view, the dialog box or the location card,
 		// not over a video alone
 		_subliminal.update(gameMillis(), *_script, getUberVariable(0), getUberVariable(1), getUberVariable(2),

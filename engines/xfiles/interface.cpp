@@ -602,6 +602,14 @@ bool Interface::isModal() const {
 	return false;
 }
 
+bool Interface::showsLayoutOtherThan(uint32 id) const {
+	for (uint i = 0; i < _layouts.size(); i++) {
+		if (_layouts[i] != id)
+			return true;
+	}
+	return false;
+}
+
 bool Interface::pausesView() const {
 	// The Letter, the drawer, two cabinets and the bulletin board skip the pause (0x42b250)
 	static const uint32 fieldOffice[] = {57082, 84328, 84370, 58553, 72504};

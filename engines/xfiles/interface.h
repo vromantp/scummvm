@@ -106,6 +106,8 @@ public:
 	 * (Scene_PauseView 0x46cd80, B-007).
 	 */
 	bool pausesView() const;
+	/** A shown layout other than id (0x442b50: the head credits are held back by any but the Letter). */
+	bool showsLayoutOtherThan(uint32 id) const;
 	/** Multiply the pixels of an area by the suspend tint (RGB 60, 60, 60, B-007). */
 	static void tintRect(Graphics::Surface &dst, const Common::Rect &area);
 	/**

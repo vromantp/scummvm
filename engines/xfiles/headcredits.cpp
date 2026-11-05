@@ -56,7 +56,7 @@ enum {
 };
 
 HeadCredits::HeadCredits() : _smooth(true), _files(nullptr), _dll(nullptr), _strings(nullptr), _font(nullptr), _enabled(false), _rolling(false), _paused(false),
-	_shownAny(false), _index(-1), _lastShown(-1), _next(0), _hideAt(0) {
+	_shownAny(false), _index(-1), _position(-1), _restored(-1), _next(0), _hideAt(0) {
 }
 
 HeadCredits::~HeadCredits() {
@@ -103,9 +103,12 @@ void HeadCredits::roll(uint32 now, bool skipIntro, int first) {
 	if (!_enabled || _rolling || !_strings)
 		return;
 	_rolling = true;
+	// The first string is the last restore's (+0xa4), which a New Game keeps (0x487670 sets it once)
+	if (first >= 1)
+		_restored = first;
 	bool fromStart = _shownAny || skipIntro;
-	_index = first >= 1 ? first - 1 : (fromStart ? kFirstCredit : kFirstCreditAfterIntro) - 1;
-	_lastShown = first >= 1 ? first : -1;
+	_index = _restored >= 1 ? _restored - 1 : (fromStart ? kFirstCredit : kFirstCreditAfterIntro) - 1;
+	_position = -1;
 	_next = now + kCreditPeriod;
 	_hideAt = 0;
 	_text.clear();
@@ -119,6 +122,8 @@ void HeadCredits::hide() {
 }
 
 void HeadCredits::pause() {
+	if (!_rolling)
+		return;
 	_paused = true;
 	hide();
 }
@@ -131,23 +136,22 @@ void HeadCredits::resume(uint32 now) {
 }
 
 void HeadCredits::reset() {
-	// Game_Start stops the credits; the new game's roll starts as at first
+	// Game_Start stops the credits (0x460b00: position -1). A credit that came (+0x68) and the restored first string
+	// (+0xa4) stay: only the constructor resets them
 	_rolling = false;
 	_paused = false;
-	_shownAny = false;
 	_index = -1;
-	_lastShown = -1;
+	_position = -1;
 	hide();
 }
 
-void HeadCredits::update(uint32 now, bool canShow) {
+void HeadCredits::update(uint32 now, bool canShow, bool canKeep) {
 	// 0x401ee0, every frame
 	if (!_rolling || _paused)
 		return;
 	bool due = (int32)(now - _next) >= 0;
-	// A clip or the dialog box coming up takes the credit away (0x441190,
-	// 0x42b272, 0x4767a0)
-	if (due || !canShow || (_hideAt && (int32)(now - _hideAt) >= 0))
+	// A clip, a layout or the dialog box activating takes the credit away (0x441190, 0x42b272, 0x4767a0)
+	if (due || !canKeep || (_hideAt && (int32)(now - _hideAt) >= 0))
 		hide();
 	if (!due)
 		return;
@@ -162,11 +166,11 @@ void HeadCredits::update(uint32 now, bool canShow) {
 	// A credit that cannot be shown comes again with the next period: the
 	// show handler (0x44f170) asks 0x442b50 and steps the index back
 	_shownAny = true;
+	_position = canShow ? _index + 1 : _index; // +0x14: the string loaded, one less after a refusal
 	debugC(1, kDebugScript, "-- head credit %d at %u%s", _index + 1, now, canShow ? "" : ", not shown");
 	if (!canShow)
 		return;
 	_index++;
-	_lastShown = _index;
 	_text = Common::U32String(text, Common::kWindows1252);
 	_hideAt = now + kCreditShown;
 }

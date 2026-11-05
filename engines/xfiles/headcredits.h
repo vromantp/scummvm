@@ -61,11 +61,11 @@ public:
 	 */
 	void roll(uint32 now, bool skipIntro, int first = -1);
 	/**
-	 * The string number of the last credit shown, which a save keeps (VCGameState +62): -1 when
-	 * the credits are not rolling or none has come yet. After a restore it is the saved one
-	 * until the next credit.
+	 * The exe's +0x14, which a save keeps (VCGameState +62): -1 when the credits are not rolling or
+	 * no period has passed since the start (also after a restore); then the string loaded last,
+	 * one less after a refusal.
 	 */
-	int getLastCredit() const { return _rolling ? _lastShown : -1; }
+	int getLastCredit() const { return _rolling ? _position : -1; }
 	/** Take the credit on screen away now; the next one still comes. */
 	void hide();
 	/**
@@ -74,13 +74,15 @@ public:
 	 */
 	void pause();
 	void resume(uint32 now);
-	/** Stop rolling and forget what came (a new game). */
+	/** Stop rolling (a new game); what came and the restored first string stay, as in the exe. */
 	void reset();
 	/**
-	 * Show and take away the credits; now in ms. canShow is false while a
-	 * play-once clip plays or the dialog box is open.
+	 * Show and take away the credits; now in ms. canKeep is false while a video plays, the
+	 * dialog box is open or a layout (but the Field Office ones) is shown: the credit on screen
+	 * goes. canShow is false when any of that holds or a layout but the Letter is shown
+	 * (0x442b50): the credit due is held back and the same string comes next period.
 	 */
-	void update(uint32 now, bool canShow);
+	void update(uint32 now, bool canShow, bool canKeep);
 	void draw(Graphics::Surface &dst) const;
 
 private:
@@ -96,7 +98,8 @@ private:
 	bool _paused;              ///< TextOn(0) came and TextOn(1) has not
 	bool _shownAny;            ///< A credit came since the start, shown or not (exe: +0x68)
 	int _index;                ///< String of the last credit shown; -1 before the first
-	int _lastShown;            ///< The last credit shown, or the one a restored roll continues from; -1 if none
+	int _position;             ///< The exe's +0x14: the string loaded last, one less after a refusal; -1 before the first period
+	int _restored;             ///< The first string of the last restore (+0xa4); -1 if none
 	uint32 _next;              ///< When the next credit comes
 	uint32 _hideAt;            ///< When the credit on screen goes; 0 if none
 	Common::U32String _text;   ///< The credit on screen

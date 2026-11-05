@@ -303,6 +303,7 @@ void XFilesEngine::menuChoice(MenuEntry entry) {
 		closeMenu();
 		_menuOpen = false;
 		pauseGame(false);
+		pauseTimedText(false);
 		// 0x4978a0: the preferences changed on the Game Preferences screens take effect now
 		applyPreferences(true);
 		break;
@@ -402,6 +403,8 @@ void XFilesEngine::openGameMenu() {
 	// The saves made while the menu is up show the game, not the menu
 	_menuShot.copyFrom(_screen);
 	pauseGame(true);
+	// Scene_SuspendAll (0x46c9b0) stops the head credits and the subliminal object
+	pauseTimedText(true);
 	_menuOpen = true;
 	startMenu();
 	debugC(1, kDebugScript, "-- menu open");
