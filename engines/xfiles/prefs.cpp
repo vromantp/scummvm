@@ -212,7 +212,13 @@ void Preferences::syncFromScummVM() {
 }
 
 bool Preferences::isSet(uint index) const {
-	return _variables[index] && _script->getVariable(_variables[index]);
+	if (!_variables[index])
+		return false;
+	// The script is gone between a start-up menu's Options screen and the game: the registry has the value
+	int32 value;
+	if (!_script)
+		return query(index, value) && value;
+	return _script->getVariable(_variables[index]);
 }
 
 int32 Preferences::gameVolume() const {

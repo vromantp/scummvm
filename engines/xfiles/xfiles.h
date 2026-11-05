@@ -234,6 +234,11 @@ private:
 	void openGameMenu();
 	/** Options and Help: hide the menu, show the layout over the paused game (the pause stays). */
 	void openMenuLayout(uint32 layout);
+	/**
+	 * Options and Help at the start-up menu: a Script for the layout alone, on a black screen, until a back button
+	 * or Escape unshows it; then the menu again (exe-unverified background).
+	 */
+	void runMenuLayout(uint32 layout);
 	/** ReturnMainMenu / ReturnFromHelp, once the layout is unshown: the menu again. */
 	void reopenMenu();
 	/** Escape over Options or Help: Game_KeyDown fires the Mouse Click of item 50464 or 49841. */

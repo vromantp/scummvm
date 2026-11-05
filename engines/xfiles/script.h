@@ -714,6 +714,12 @@ private:
 	void binocularsVideoSwap();
 
 public:
+	/**
+	 * Game_Start's 0x4310f0: before the game begins (new or restored), the
+	 * first RegPreferences among the title's trigger actions runs, unlogged.
+	 * The start-up menu's Options screen runs it too, to show the stored values.
+	 */
+	void loadPreferences();
 	/** Tool_SpecialView's mode out (conversation-reactions.md "Mode out"): 2 for the pairs and 1, 1 for 1228, 1236, 84307, else 0. */
 	int binocularsMode() const;
 	/**
@@ -826,11 +832,6 @@ private:
 	void stopEnvSounds();
 	/** RegPreferences (0x4ccda0): the registry's values go into the variables. */
 	void regPreferences(const VCAction &a);
-	/**
-	 * Game_Start's 0x4310f0: before the game begins (new or restored), the
-	 * first RegPreferences among the title's trigger actions runs, unlogged.
-	 */
-	void loadPreferences();
 	void queueVideo(uint32 id, uint32 limit, bool loop, bool viewLoop = false);
 	void startVideo();
 	/** The video on screen ended or was stopped (how is logged). */

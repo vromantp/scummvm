@@ -99,7 +99,7 @@ bool XFilesEngine::playIntro() {
 }
 
 bool XFilesEngine::runMenu() {
-	// The start-up menu: only New, Load, Previous and Quit work; the others show their help text.
+	// The start-up menu: Options and Help show their layout over a black screen
 	startMenu();
 	while (!shouldQuit()) {
 		Input input = pollInput();
@@ -113,6 +113,10 @@ bool XFilesEngine::runMenu() {
 				// The load is queued; the game starts from it
 				closeMenu();
 				return true;
+			}
+			if (entry == kMenuOptions || entry == kMenuHelp) {
+				runMenuLayout(entry == kMenuOptions ? kOptionsLayout : kHelpLayout);
+				continue;
 			}
 			if (entry == kMenuQuit) {
 				quitGame();
@@ -411,6 +415,57 @@ void XFilesEngine::openMenuLayout(uint32 layout) {
 	_menuOpen = false;
 	_menuLayout = true;
 	_script->displayLayout(layout);
+}
+
+void XFilesEngine::runMenuLayout(uint32 layout) {
+	// There is no game at the start-up menu: a Script that is not started holds the layout and the preferences, and
+	// is dropped when the layout is unshown (the game creates its own). What the exe shows behind the layout here is
+	// not read: nothing is drawn but the layout
+	closeMenu();
+	createScript();
+	_script->loadPreferences(); // Prefs hooks need the registered variables
+	_menuReopen = false;
+	_menuLayout = true;
+	_script->displayLayout(layout);
+	while (!shouldQuit() && !_menuReopen) {
+		Input input = pollInput();
+		if (input.escape)
+			escapeMenuLayout();
+		if (input.click) {
+			Interface::Hit hit = _interface->hitTest(input.pos);
+			if (hit.kind == Interface::kHitItem)
+				_script->press(hit.id);
+		}
+		_sound.update(getPreference(kPref3DSound));
+		updateInterface();
+		Interface::Hit hover = _interface->hitTest(_mouse);
+		VCInterfaceItem item;
+		_cursors->show(hover.kind == Interface::kHitItem && _data->getInterfaceItem(hover.id, item) ? item.cursor : 0);
+		_cursors->update(getPreference(kPrefTranslucency));
+		_screen.fillRect(Common::Rect(_screen.w, _screen.h), 0);
+		_interface->draw(_screen);
+		present();
+	}
+	// Back to the menu: the layout's state goes with the script and the interface
+	_menuReopen = false;
+	_menuLayout = false;
+	_sound.clear();
+	_sound.attach(nullptr, nullptr);
+	delete _script;
+	_script = nullptr;
+	_preferences.setScript(nullptr);
+	delete _interface;
+	_interface = new Interface(*_data, _discFiles);
+	_interface->setFormat(_screen.format);
+	_interface->init(_texts);
+	_pressedItems.clear();
+	_hover.kind = Interface::kHitNone;
+	_hover.id = 0;
+	_wasModal = false;
+	// The volumes the screen changed (ReturnMainMenu stored them in the settings)
+	syncSoundSettings();
+	if (!shouldQuit())
+		startMenu();
 }
 
 void XFilesEngine::reopenMenu() {
