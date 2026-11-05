@@ -2085,7 +2085,12 @@ void XFilesEngine::updateCursor() {
 	// The firing cursor stays until the hit view is gone (the next view, see showCursorAnimation)
 	if (_firingCursor && _script->getView() != _firingView)
 		_firingCursor = 0;
-	_cursors->show(getCursorAt(_mouse));
+	uint32 cursor = getCursorAt(_mouse);
+	// With the gun (inventory value 9) in hand the default cursor is the tool sight, group 132 (screen +0x960/+0x96c,
+	// 0x5105d0, 0x4463b0), wherever the default would show
+	if (!cursor && _script->isGunHeld())
+		cursor = Cursors::kToolCursorId;
+	_cursors->show(cursor);
 	_cursors->update(getPreference(kPrefTranslucency));
 }
 
