@@ -181,7 +181,7 @@ void Interface::Graphic::draw(Graphics::Surface &dst, int x, int y) const {
 // -- Interface ----------------------------------------------------------------
 
 Interface::Interface(const VCData &data, const DiscFiles &files) : _data(data), _files(files), _aiGlow(false), _kitOpen(false),
-	_evidenceRowShown(false), _inventorySeeded(false), _texts(nullptr), _font(nullptr), _rolloverText(false), _barClosed(false), _barOpen(false),
+	_evidenceRowShown(false), _inventorySeeded(false), _texts(nullptr), _smooth(true), _font(nullptr), _rolloverText(false), _barClosed(false), _barOpen(false),
 	_mouseInBar(false), _enteredBar(false), _suspended(false), _held(0) {
 	static const uint32 kClasses[] = { kClassActionIcon, kClassInventory, kClassEmotionIcon };
 	for (uint i = 0; i < ARRAYSIZE(kClasses); i++) {
@@ -211,12 +211,32 @@ Interface::~Interface() {
 
 void Interface::init(Common::WinResources *texts) {
 	_texts = texts;
-#ifdef USE_FREETYPE2
-	// Arial is not available: Liberation Sans has its metrics
-	_font = Graphics::loadTTFFontFromArchive("LiberationSans-Regular.ttf", kTextFontSize, Graphics::kTTFSizeModeCharacter);
-#endif
+	loadFont();
 	if (!_font)
 		warning("Interface: cannot load the rollover text font from fonts.dat");
+}
+
+void Interface::loadFont() {
+#ifdef USE_FREETYPE2
+	// Arial is not available: Liberation Sans has its metrics
+	Graphics::TTFRenderMode mode = _smooth ? Graphics::kTTFRenderModeLight : Graphics::kTTFRenderModeMonochrome;
+	_font = Graphics::loadTTFFontFromArchive("LiberationSans-Regular.ttf", kTextFontSize, Graphics::kTTFSizeModeCharacter, 0, 0, mode);
+#endif
+}
+
+void Interface::setSmooth(bool smooth) {
+	if (smooth == _smooth)
+		return;
+	_smooth = smooth;
+	if (_font) {
+		delete _font;
+		_font = nullptr;
+		loadFont();
+	}
+	// The item fonts are loaded on use
+	for (Common::HashMap<uint, Graphics::Font *>::iterator it = _itemFonts.begin(); it != _itemFonts.end(); ++it)
+		delete it->_value;
+	_itemFonts.clear();
 }
 
 Interface::Graphic *Interface::loadGraphic(uint32 assetList) const {
@@ -760,12 +780,12 @@ Graphics::Font *Interface::getItemFont(int size, bool bold, bool sans) const {
 #ifdef USE_FREETYPE2
 	if (sans) {
 		// Arial: Liberation Sans has its metrics
-		font = Graphics::loadTTFFontFromArchive(bold ? "LiberationSans-Bold.ttf" : "LiberationSans-Regular.ttf", size,
-			Graphics::kTTFSizeModeCharacter);
+		Graphics::TTFRenderMode mode = _smooth ? Graphics::kTTFRenderModeLight : Graphics::kTTFRenderModeMonochrome;
+		font = Graphics::loadTTFFontFromArchive(bold ? "LiberationSans-Bold.ttf" : "LiberationSans-Regular.ttf", size, Graphics::kTTFSizeModeCharacter, 0, 0, mode);
 	} else {
-		// Courier New: Liberation Mono has its metrics; GDI draws it without smoothing
-		font = Graphics::loadTTFFontFromArchive(bold ? "LiberationMono-Bold.ttf" : "LiberationMono-Regular.ttf", size,
-			Graphics::kTTFSizeModeCharacter, 0, 0, Graphics::kTTFRenderModeMonochrome);
+		// Courier New: Liberation Mono has its metrics
+		Graphics::TTFRenderMode mode = _smooth ? Graphics::kTTFRenderModeLight : Graphics::kTTFRenderModeMonochrome;
+		font = Graphics::loadTTFFontFromArchive(bold ? "LiberationMono-Bold.ttf" : "LiberationMono-Regular.ttf", size, Graphics::kTTFSizeModeCharacter, 0, 0, mode);
 	}
 #endif
 	_itemFonts[key] = font;

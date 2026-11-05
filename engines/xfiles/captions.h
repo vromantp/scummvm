@@ -46,6 +46,8 @@ public:
 
 	/** Load the fonts; false if neither is available. */
 	bool loadFonts();
+	/** Smooth Text: anti-aliased glyphs, else monochrome; reloads the font when it changes. */
+	void setSmooth(bool smooth);
 
 	/**
 	 * The text of StartVideoText: the location name, the date of day
@@ -75,6 +77,7 @@ private:
 		kCardHolding  ///< All of it shows
 	};
 
+	bool _smooth;
 	Graphics::Font *_cardFont;
 	Graphics::Font *_captionFont;
 	Common::U32String _cardText;

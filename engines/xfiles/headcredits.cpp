@@ -55,7 +55,7 @@ enum {
 	kBottom = 330 - 5
 };
 
-HeadCredits::HeadCredits() : _dll(nullptr), _strings(nullptr), _font(nullptr), _enabled(false), _rolling(false), _paused(false),
+HeadCredits::HeadCredits() : _smooth(true), _files(nullptr), _dll(nullptr), _strings(nullptr), _font(nullptr), _enabled(false), _rolling(false), _paused(false),
 	_shownAny(false), _index(-1), _lastShown(-1), _next(0), _hideAt(0) {
 }
 
@@ -68,18 +68,34 @@ HeadCredits::~HeadCredits() {
 bool HeadCredits::load(const DiscFiles &files) {
 	// The exe loads XFilesC.dll with LoadLibrary and registers Hcd.ttr with
 	// AddFontResource
+	_files = &files;
 	_dll = files.openFile(0, "XFilesC.dll");
 	if (_dll)
 		_strings = Common::WinResources::createFromEXE(_dll);
-#ifdef USE_FREETYPE2
-	Common::SeekableReadStream *font = files.openFile(0, "Hcd.ttr");
-	if (font)
-		_font = Graphics::loadTTFFont(font, DisposeAfterUse::YES, kFontSize, Graphics::kTTFSizeModeCharacter, 0, 0,
-			Graphics::kTTFRenderModeMonochrome);
-#endif
+	loadFont();
 	if (!_strings || !_font)
 		warning("HeadCredits: cannot load XFilesC.dll or Hcd.ttr");
 	return _strings && _font;
+}
+
+void HeadCredits::loadFont() {
+#ifdef USE_FREETYPE2
+	Common::SeekableReadStream *font = _files ? _files->openFile(0, "Hcd.ttr") : nullptr;
+	Graphics::TTFRenderMode mode = _smooth ? Graphics::kTTFRenderModeLight : Graphics::kTTFRenderModeMonochrome;
+	if (font)
+		_font = Graphics::loadTTFFont(font, DisposeAfterUse::YES, kFontSize, Graphics::kTTFSizeModeCharacter, 0, 0, mode);
+#endif
+}
+
+void HeadCredits::setSmooth(bool smooth) {
+	if (smooth == _smooth)
+		return;
+	_smooth = smooth;
+	if (_font) {
+		delete _font;
+		_font = nullptr;
+		loadFont();
+	}
 }
 
 void HeadCredits::roll(uint32 now, bool skipIntro, int first) {

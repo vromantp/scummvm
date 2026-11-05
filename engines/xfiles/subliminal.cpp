@@ -59,7 +59,7 @@ enum {
 	kGrey = 0x32
 };
 
-Subliminal::Subliminal() : _dll(nullptr), _strings(nullptr), _font(nullptr), _running(false), _paused(false), _next(0) {
+Subliminal::Subliminal() : _smooth(true), _dll(nullptr), _strings(nullptr), _font(nullptr), _running(false), _paused(false), _next(0) {
 }
 
 Subliminal::~Subliminal() {
@@ -73,13 +73,29 @@ bool Subliminal::load(const DiscFiles &files) {
 	_dll = files.openFile(0, "XFilesS.dll");
 	if (_dll)
 		_strings = Common::WinResources::createFromEXE(_dll);
-#ifdef USE_FREETYPE2
-	// Courier New's metrics
-	_font = Graphics::loadTTFFontFromArchive("LiberationMono-Regular.ttf", kFontSize, Graphics::kTTFSizeModeCharacter);
-#endif
+	loadFont();
 	if (!_strings || !_font)
 		warning("Subliminal: cannot load XFilesS.dll or the font");
 	return _strings && _font;
+}
+
+void Subliminal::loadFont() {
+#ifdef USE_FREETYPE2
+	// Courier New's metrics
+	Graphics::TTFRenderMode mode = _smooth ? Graphics::kTTFRenderModeLight : Graphics::kTTFRenderModeMonochrome;
+	_font = Graphics::loadTTFFontFromArchive("LiberationMono-Regular.ttf", kFontSize, Graphics::kTTFSizeModeCharacter, 0, 0, mode);
+#endif
+}
+
+void Subliminal::setSmooth(bool smooth) {
+	if (smooth == _smooth)
+		return;
+	_smooth = smooth;
+	if (_font) {
+		delete _font;
+		_font = nullptr;
+		loadFont();
+	}
 }
 
 void Subliminal::pause() {

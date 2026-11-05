@@ -50,6 +50,8 @@ public:
 
 	/** Load XFilesS.dll and the font; false if either is missing. */
 	bool load(const DiscFiles &files);
+	/** Smooth Text: anti-aliased glyphs, else monochrome; reloads the font when it changes. */
+	void setSmooth(bool smooth);
 
 	/** Start the period (Prefs_Apply 0x452b20 with the preference set); nothing if running. */
 	void start(uint32 now);
@@ -69,6 +71,9 @@ public:
 	void draw(Graphics::Surface &dst);
 
 private:
+	void loadFont();
+
+	bool _smooth;
 	Common::SeekableReadStream *_dll;  ///< XFilesS.dll; the resources read it lazily, so it lives as long as _strings
 	Common::WinResources *_strings;
 	Graphics::Font *_font;

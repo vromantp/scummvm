@@ -846,6 +846,18 @@ void XFilesEngine::applyPreferences(bool resume) {
 	}
 	if (!intuition && resume)
 		_script->removeActionIcons();
+	// Smooth Text (SPI_SETFONTSMOOTHING, and the captions' text mode): the engine's own text is anti-aliased or
+	// monochrome; the fonts reload when it changes
+	bool smooth = getPreference(kPrefSmoothText);
+	_captions.setSmooth(smooth);
+	_dialogBox.setSmooth(smooth);
+	_interface->setSmooth(smooth);
+	_headCredits.setSmooth(smooth);
+	_subliminal.setSmooth(smooth);
+	if (_counterFontOwned)
+		delete _counterFont;
+	_counterFont = nullptr;
+	_counterFontOwned = false;
 	syncSoundSettings();
 	bool subliminals = getPreference(kPrefSubliminalMessages);
 	if (subliminals && !_subliminal.isRunning())
@@ -1600,7 +1612,7 @@ void XFilesEngine::drawViewfinder() {
 	_viewfinder->draw(band, x, y);
 	// The photos left, red, System bold 13 at the picture's corner
 	if (!_counterFont) {
-		_counterFont = Graphics::loadTTFFontFromArchive("LiberationSans-Bold.ttf", kCounterFontSize, Graphics::kTTFSizeModeCharacter);
+		_counterFont = Graphics::loadTTFFontFromArchive("LiberationSans-Bold.ttf", kCounterFontSize, Graphics::kTTFSizeModeCharacter, 0, 0, getPreference(kPrefSmoothText) ? Graphics::kTTFRenderModeLight : Graphics::kTTFRenderModeMonochrome);
 		_counterFontOwned = _counterFont != nullptr;
 		if (!_counterFont)
 			_counterFont = FontMan.getFontByUsage(Graphics::FontManager::kBigGUIFont);

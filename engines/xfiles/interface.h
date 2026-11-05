@@ -84,6 +84,8 @@ public:
 	void setFormat(const Graphics::PixelFormat &format) { _format = format; }
 	/** Load the rollover text font; the texts come from XFilesT.dll (may be nullptr). */
 	void init(Common::WinResources *texts);
+	/** Smooth Text: anti-aliased glyphs, else monochrome; reloads the font when it changes. */
+	void setSmooth(bool smooth);
 
 	/**
 	 * Follow the script: icons of enabled objects, the shown layouts' items.
@@ -247,6 +249,9 @@ private:
 	bool _evidenceRowShown;
 	bool _inventorySeeded;                         ///< The restored inventory order has been used
 	Common::WinResources *_texts;
+	void loadFont();
+
+	bool _smooth;
 	Graphics::Font *_font;
 	mutable Common::HashMap<uint, Graphics::Font *> _itemFonts;  ///< Text of items per (size, bold)
 	bool _rolloverText;

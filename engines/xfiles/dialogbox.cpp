@@ -78,7 +78,7 @@ static void drawBlended(Graphics::Surface &dst, const Graphics::Surface &src, in
 	}
 }
 
-DialogBox::DialogBox() : _font(nullptr), _charView(0), _historyTab(false), _tabAuto(false), _scroll(0) {
+DialogBox::DialogBox() : _smooth(true), _font(nullptr), _charView(0), _historyTab(false), _tabAuto(false), _scroll(0) {
 	for (uint i = 0; i < kPicCount; i++)
 		_pictures[i] = nullptr;
 }
@@ -96,13 +96,29 @@ bool DialogBox::load(const VCData &data, const DiscFiles &files, const Graphics:
 		if (!_pictures[i])
 			return false;
 	}
+	loadFont();
+	return true;
+}
+
+void DialogBox::loadFont() {
 #ifdef USE_FREETYPE2
 	// Courier New's metrics
-	_font = Graphics::loadTTFFontFromArchive("LiberationMono-Regular.ttf", kFontSize, Graphics::kTTFSizeModeCharacter);
+	Graphics::TTFRenderMode mode = _smooth ? Graphics::kTTFRenderModeLight : Graphics::kTTFRenderModeMonochrome;
+	_font = Graphics::loadTTFFontFromArchive("LiberationMono-Regular.ttf", kFontSize, Graphics::kTTFSizeModeCharacter, 0, 0, mode);
 #endif
 	if (!_font)
 		warning("DialogBox: cannot load the font from fonts.dat");
-	return true;
+}
+
+void DialogBox::setSmooth(bool smooth) {
+	if (smooth == _smooth)
+		return;
+	_smooth = smooth;
+	if (_font) {
+		delete _font;
+		_font = nullptr;
+		loadFont();
+	}
 }
 
 void DialogBox::open(uint32 charView, const Common::Rect &charRect) {

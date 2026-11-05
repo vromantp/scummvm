@@ -49,6 +49,8 @@ public:
 
 	/** Load XFilesC.dll and the Typist font (Hcd.ttr); false if either is missing. */
 	bool load(const DiscFiles &files);
+	/** Smooth Text: anti-aliased glyphs, else monochrome; reloads the font when it changes. */
+	void setSmooth(bool smooth);
 
 	/** A new game allows the credits; a restored one only if they were rolling. */
 	void setEnabled(bool enabled) { _enabled = enabled; }
@@ -82,6 +84,10 @@ public:
 	void draw(Graphics::Surface &dst) const;
 
 private:
+	void loadFont();
+
+	bool _smooth;
+	const DiscFiles *_files;
 	Common::SeekableReadStream *_dll;  ///< XFilesC.dll; the resources read it lazily, so it lives as long as _strings
 	Common::WinResources *_strings;
 	Graphics::Font *_font;

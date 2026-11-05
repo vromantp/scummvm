@@ -54,7 +54,7 @@ enum {
 static const int kStoryDays[8] = { 29, 2, 3, 4, 5, 6, 7, 8 };
 static const int kStoryYear = 1996;
 
-Captions::Captions() : _cardFont(nullptr), _captionFont(nullptr), _cardShown(0), _cardState(kCardNone), _cardNext(0) {
+Captions::Captions() : _smooth(true), _cardFont(nullptr), _captionFont(nullptr), _cardShown(0), _cardState(kCardNone), _cardNext(0) {
 }
 
 Captions::~Captions() {
@@ -64,12 +64,25 @@ Captions::~Captions() {
 
 bool Captions::loadFonts() {
 #ifdef USE_FREETYPE2
-	_cardFont = Graphics::loadTTFFontFromArchive("LiberationMono-Regular.ttf", kCardFontSize, Graphics::kTTFSizeModeCharacter);
-	_captionFont = Graphics::loadTTFFontFromArchive("LiberationSans-Regular.ttf", kCaptionFontSize, Graphics::kTTFSizeModeCharacter);
+	Graphics::TTFRenderMode mode = _smooth ? Graphics::kTTFRenderModeLight : Graphics::kTTFRenderModeMonochrome;
+	_cardFont = Graphics::loadTTFFontFromArchive("LiberationMono-Regular.ttf", kCardFontSize, Graphics::kTTFSizeModeCharacter, 0, 0, mode);
+	_captionFont = Graphics::loadTTFFontFromArchive("LiberationSans-Regular.ttf", kCaptionFontSize, Graphics::kTTFSizeModeCharacter, 0, 0, mode);
 #endif
 	if (!_cardFont || !_captionFont)
 		warning("Captions: cannot load the fonts from fonts.dat");
 	return _cardFont || _captionFont;
+}
+
+void Captions::setSmooth(bool smooth) {
+	if (smooth == _smooth)
+		return;
+	_smooth = smooth;
+	if (_cardFont || _captionFont) {
+		delete _cardFont;
+		delete _captionFont;
+		_cardFont = _captionFont = nullptr;
+		loadFonts();
+	}
 }
 
 Common::U32String Captions::formatCard(const Common::U32String &location, int32 dayNight, int32 currentTime, bool withTime) {

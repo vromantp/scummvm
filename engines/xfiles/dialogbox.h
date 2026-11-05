@@ -62,6 +62,8 @@ public:
 
 	/** Load the pictures and the font; false if the pictures are missing. */
 	bool load(const VCData &data, const DiscFiles &files, const Graphics::PixelFormat &format);
+	/** Smooth Text: anti-aliased glyphs, else monochrome; reloads the font when it changes. */
+	void setSmooth(bool smooth);
 
 	/** Open the box for a character view, centred below its rectangle. */
 	void open(uint32 charView, const Common::Rect &charRect);
@@ -102,6 +104,9 @@ private:
 	Common::Rect getThumbRect() const;
 
 	PictureAsset *_pictures[kPicCount];
+	void loadFont();
+
+	bool _smooth;
 	Graphics::Font *_font;
 	Common::Point _pos;
 	uint32 _charView;
