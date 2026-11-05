@@ -75,6 +75,9 @@ public:
 	void update();
 	/** Stop at once, keeping the last frame. */
 	void stop();
+	/** Stop at once and silence the sound, so the next play() or showStillAt() starts from a clean state. */
+	void halt();
+	bool hasAudio() const;
 	/** Pause or resume a playing movie (the game's pause); the time it was paused does not count. */
 	void pause(bool pause);
 	bool hasEnded() const { return _ended; }

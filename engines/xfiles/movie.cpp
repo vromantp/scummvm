@@ -94,13 +94,14 @@ void Movie::play(bool loop, int32 fromMs) {
 	if (!_decoder)
 		return;
 	_loop = loop;
+	bool wasEnded = _ended;
 	_ended = false;
 	// Both times are clamped to the movie (SetSegment 0x4566d0), so a seek never
 	// goes past the last sample; an out-point past the end plays to the end
 	uint32 duration = _decoder->getDuration().msecs();
 	uint32 start = MIN<uint32>(fromMs >= 0 ? (uint32)fromMs : _startMs, duration);
 	uint32 end = MIN<uint32>(_endMs, duration);
-	if (start)
+	if (start || wasEnded)
 		_decoder->seek(Audio::Timestamp(start, 1000));
 	if (end > start)
 		_decoder->setEndTime(Audio::Timestamp(end, 1000));
@@ -122,6 +123,9 @@ bool Movie::showStillAt(uint32 ms) {
 	if (!_decoder)
 		return false;
 	ms = MIN<uint32>(ms, _decoder->getDuration().msecs());
+	// A still is silent: a playing decoder would restart its sound at the seek
+	if (_decoder->isPlaying())
+		_decoder->stop();
 	if (ms)
 		_decoder->seek(Audio::Timestamp(ms, 1000));
 	const Graphics::Surface *frame = _decoder->decodeNextFrame();
@@ -157,6 +161,16 @@ void Movie::stop() {
 	if (_decoder && _decoder->isPlaying())
 		_decoder->pauseVideo(true);
 	_ended = true;
+}
+
+void Movie::halt() {
+	if (_decoder)
+		_decoder->stop();
+	_ended = true;
+}
+
+bool Movie::hasAudio() const {
+	return _decoder && _decoder->getAudioTrackCount() > 0;
 }
 
 void Movie::pause(bool pause) {

@@ -226,6 +226,8 @@ private:
 	MenuEntry hitMenu(const Common::Point &pos) const;
 	/** A click on the menu: the entry hit (it plays its sound), kMenuNone if none. */
 	MenuEntry clickMenu(const Common::Point &pos);
+	/** MainMenu mouse move (0x45eac0): the help text of the entry under the cursor, the top strip. */
+	void hoverMenu(const Common::Point &pos);
 	/** What an entry does while the menu is open over the game. */
 	void menuChoice(MenuEntry entry);
 	/** XCorner_OpenMenu (0x4ab9e0): put the item back, pause, show the menu. */
@@ -376,6 +378,10 @@ private:
 	PictureAsset *_menuReturn;            ///< 72895 return.pic over Previous, only from the game
 	bool _menuIntroDone;                  ///< g_menuIntroDone (0x6b1980): the fade-in has played this run, never cleared
 	bool _menuFading;                     ///< The X is still fading in, alone
+	bool _menuIntroPlay;                  ///< The entries run to frame 75 after the fade-in
+	uint32 _menuHelpEnd;                  ///< End of the help segment shown (0x46ba00's +0x110); 5000 for none
+	bool _menuHelpPlaying;                ///< A help segment runs; at its end the still at _menuHelpEnd shows
+	bool _menuTopHot;                     ///< The cursor was over the top strip
 	bool _menuOpen;                       ///< The menu is up over the running game
 	bool _menuLayout;                     ///< Options or Help (layout 49738, 50460) is up over the paused game
 	bool _menuReopen;                     ///< ReturnMainMenu or ReturnFromHelp ran: the menu reopens next frame

@@ -68,6 +68,12 @@ static const uint32 kMenuClickAsset = 67518;
 static const int kMenuEntriesRight = 638;
 static const int kMenuEntryRows[][2] = {
 	{78, 114}, {126, 162}, {175, 211}, {225, 261}, {275, 311}, {330, 366}, {385, 421}};
+// The entries movie's help-text segment of each entry (start, end in ms; 0x46ba00), in the same order
+static const uint32 kMenuEntryHelpMs[][2] = {
+	{6200, 6700}, {7000, 7500}, {7800, 8300}, {8600, 9100}, {9400, 9900}, {10200, 10700}, {11000, 11500}};
+static const uint32 kMenuHelpHold = 150; ///< The segment plays to its end less this (0x6bac8c), then the still of the end
+// The top strip's rectangle (0x6baca8): over it TOPro plays
+static const int kMenuTopRect[] = {57, 0, 409, 60}; // left, top, right, bottom (exclusive)
 static const char *const kMenuEntryNames[] = {"new", "load", "save", "previous", "options", "help", "quit"};
 
 // The intro, the start-up menu and the in-game menu the X corner opens
@@ -93,7 +99,7 @@ bool XFilesEngine::playIntro() {
 }
 
 bool XFilesEngine::runMenu() {
-	// The start-up menu: only New, Load, Previous and Quit work; the entries' help texts are not shown.
+	// The start-up menu: only New, Load, Previous and Quit work; the others show their help text.
 	startMenu();
 	while (!shouldQuit()) {
 		Input input = pollInput();
@@ -114,6 +120,7 @@ bool XFilesEngine::runMenu() {
 			}
 		}
 		updateMenu();
+		hoverMenu(_mouse);
 		drawMenu();
 		present();
 	}
@@ -132,6 +139,10 @@ void XFilesEngine::startMenu() {
 	_menuLoop = new Movie();
 	_menuLoopSound = new Movie();
 	_menuTop = new Movie();
+	_menuIntroPlay = false;
+	_menuHelpEnd = kMenuEntriesShownMs;
+	_menuHelpPlaying = false;
+	_menuTopHot = false;
 	bool fade = !_menuIntroDone && !getPreference(kPrefSkipIntro);
 	bool xOpen = openMovie(*_menuX, kMenuXAsset);
 	bool entriesOpen = openMovie(*_menuEntries, kMenuEntriesAsset);
@@ -149,8 +160,10 @@ void XFilesEngine::startMenu() {
 	}
 	if (xOpen)
 		_menuX->showStillAtEnd();
-	if (entriesOpen)
+	if (entriesOpen) {
 		_menuEntries->showStillAt(kMenuEntriesShownMs);
+		debugC(1, kDebugScript, "-- menu entries movie audio=%d", _menuEntries->hasAudio());
+	}
 	if (loopOpen)
 		_menuLoop->play(true);
 	if (soundOpen)
@@ -177,6 +190,7 @@ void XFilesEngine::updateMenu() {
 			return;
 		// The X is in: the entries run to 5000 ms while the loop and its sound start
 		_menuFading = false;
+		_menuIntroPlay = true;
 		_menuEntries->play(false);
 		_menuLoop->play(true);
 		_menuLoopSound->play(true);
@@ -184,9 +198,16 @@ void XFilesEngine::updateMenu() {
 	_menuEntries->update();
 	_menuLoop->update();
 	_menuLoopSound->update();
-	if (!_menuEntries->hasEnded() && _menuEntries->getCurFrame() >= kMenuEntriesShown) {
+	_menuTop->update();
+	if (_menuIntroPlay && !_menuEntries->hasEnded() && _menuEntries->getCurFrame() >= kMenuEntriesShown) {
 		_menuEntries->stop();
+		_menuIntroPlay = false;
 		_menuIntroDone = true; // 0x4812d0
+	}
+	if (_menuHelpPlaying && _menuEntries->hasEnded()) {
+		// 0x46c0b0: the segment is over, the still of its end holds the help text
+		_menuHelpPlaying = false;
+		_menuEntries->showStillAt(_menuHelpEnd);
 	}
 	if (_menuClick) {
 		_menuClick->update();
@@ -205,7 +226,8 @@ void XFilesEngine::drawMenu() {
 	blit(_menuLoop->getFrame(), kMenuLoopLeft, kMenuLoopTop);
 	blit(_menuTop->getFrame(), kMenuTopLeft, 0);
 	blit(_menuEntries->getFrame(), kMenuEntriesLeft, 0);
-	if (_menuReturn)
+	// Hovering Previous takes return.pic off, so its help text shows
+	if (_menuReturn && _menuHelpEnd != kMenuEntryHelpMs[kMenuPrevious][1])
 		_menuReturn->draw(_screen, kMenuEntriesLeft, kMenuReturnTop);
 }
 
@@ -217,6 +239,41 @@ XFilesEngine::MenuEntry XFilesEngine::hitMenu(const Common::Point &pos) const {
 			return (MenuEntry)i;
 	}
 	return kMenuNone;
+}
+
+void XFilesEngine::hoverMenu(const Common::Point &pos) {
+	// Nothing reacts while the X fades in and the entries run to frame 75
+	if (_menuFading || _menuIntroPlay || !_menuEntries)
+		return;
+	// Save counts only while a game is loaded, which is the menu opened from the game
+	MenuEntry entry = hitMenu(pos);
+	if (entry == kMenuSave && !_menuOpen)
+		entry = kMenuNone;
+	uint32 end = entry == kMenuNone ? kMenuEntriesShownMs : kMenuEntryHelpMs[entry][1];
+	// 0x46ba00: the segment already shown is not started again
+	if (end != _menuHelpEnd) {
+		_menuHelpEnd = end;
+		_menuEntries->halt();
+		if (entry == kMenuNone) {
+			_menuHelpPlaying = false;
+			_menuEntries->showStillAt(kMenuEntriesShownMs);
+		} else {
+			_menuEntries->setStart(kMenuEntryHelpMs[entry][0]);
+			_menuEntries->setEnd(end - kMenuHelpHold);
+			_menuEntries->play(false);
+			_menuHelpPlaying = true;
+		}
+	}
+	// The top strip plays while the cursor is over it
+	if (pos.x >= kMenuTopRect[0] && pos.x < kMenuTopRect[2] && pos.y >= kMenuTopRect[1] && pos.y < kMenuTopRect[3]) {
+		_menuTopHot = true;
+		if (!_menuTop->isPlaying())
+			_menuTop->play(false);
+	} else if (_menuTopHot) {
+		_menuTopHot = false;
+		_menuTop->halt();
+		_menuTop->showStill();
+	}
 }
 
 XFilesEngine::MenuEntry XFilesEngine::clickMenu(const Common::Point &pos) {
