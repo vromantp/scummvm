@@ -1670,7 +1670,9 @@ void XFilesEngine::drawFlashlight(Graphics::Surface &band) {
 
 	// Centred on the mouse, clipped to the band, not clamped. The mask is darkened to 55 / 255 (0x4d8790 with 200)
 	int ml = _mouse.x - kBandLeft - (mask->w >> 1), mt = _mouse.y - kBandTop - (mask->h >> 1);
-	Common::Rect clip(MAX(ml, 0), MAX(mt, 0), MIN(ml + mask->w, (int)band.w), MIN(mt + mask->h, (int)band.h));
+	// With the mouse off the band (in the bar) the mask can lie wholly outside it: clip() leaves an empty rect
+	Common::Rect clip(ml, mt, ml + mask->w, mt + mask->h);
+	clip.clip(band.w, band.h);
 	for (int y = clip.top; y < clip.bottom; y++) {
 		for (int x = clip.left; x < clip.right; x++) {
 			byte m, mg, mb;
@@ -1716,7 +1718,8 @@ void XFilesEngine::drawBinoculars(Graphics::Surface &band) {
 	// The mask is centred on the mouse and clipped to the band, not clamped. The zoom rect is that rect with each clipped
 	// edge pushed back out by the mask size, and its centre is the zoom centre (0x567ac0)
 	int ml = _mouse.x - kBandLeft - (w >> 1), mt = _mouse.y - kBandTop - (h >> 1);
-	Common::Rect clip(MAX(ml, 0), MAX(mt, 0), MIN(ml + w, (int)band.w), MIN(mt + h, (int)band.h));
+	Common::Rect clip(ml, mt, ml + w, mt + h);
+	clip.clip(band.w, band.h);
 	if (clip.isEmpty()) {
 		band.fillRect(Common::Rect(band.w, band.h), 0);
 		return;
