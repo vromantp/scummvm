@@ -808,16 +808,17 @@ void Interface::draw(Graphics::Surface &dst) const {
 	// The modal layout is the last shown one that is not excepted; the layouts before it are suspended with their
 	// items, those from it on are not
 	int modalLayout = -1;
-	if (!_suspended) {
-		for (uint i = 0; i < _layouts.size(); i++) {
-			const uint32 *always = kAlwaysNonModalLayouts + ARRAYSIZE(kAlwaysNonModalLayouts);
-			if (Common::find(_modalExceptions.begin(), _modalExceptions.end(), _layouts[i]) == _modalExceptions.end() &&
-					Common::find(kAlwaysNonModalLayouts, always, _layouts[i]) == always)
-				modalLayout = i;
-		}
+	for (uint i = 0; i < _layouts.size(); i++) {
+		const uint32 *always = kAlwaysNonModalLayouts + ARRAYSIZE(kAlwaysNonModalLayouts);
+		if (Common::find(_modalExceptions.begin(), _modalExceptions.end(), _layouts[i]) == _modalExceptions.end() &&
+				Common::find(kAlwaysNonModalLayouts, always, _layouts[i]) == always)
+			modalLayout = i;
 	}
 	for (uint i = 0; i < _items.size(); i++) {
-		bool dimItem = _suspended || (int)_items[i].layoutIndex < modalLayout;
+		// FadeBack(1) suspends the items of the layouts already shown; a layout shown with it (the PDA, a photo) is
+		// activated after the suspension and stays lit
+		bool dimItem = (int)_items[i].layoutIndex < modalLayout ||
+		               (_suspended && Common::find(_suspendedLayouts.begin(), _suspendedLayouts.end(), _layouts[_items[i].layoutIndex]) != _suspendedLayouts.end());
 		if (dimItem) {
 			Common::Rect area = _items[i].rect;
 			area.clip(Common::Rect(dst.w, dst.h));

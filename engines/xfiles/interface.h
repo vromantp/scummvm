@@ -112,7 +112,10 @@ public:
 	 * FadeBack(b) (Scene_SuspendObjects 0x40be40): a flag, not a count. While set the view, icons and bar take
 	 * no input, as under a modal layout. Its tint dims the view and the items (B-007).
 	 */
-	void setSuspended(bool suspended) { _suspended = suspended; }
+	void setSuspended(bool suspended) {
+		_suspended = suspended;
+		_suspendedLayouts = suspended ? _layouts : Common::Array<uint32>();
+	}
 	/** The mouse moved into the inventory bar during the last update(). */
 	bool hasEnteredBar() const { return _enteredBar; }
 	/** The bar was shown at the last update() (Obj_IsShown of the bar). */
@@ -277,6 +280,7 @@ private:
 	bool _mouseInBar;
 	bool _enteredBar;
 	bool _suspended;                              ///< FadeBack(1) came and FadeBack(0) has not
+	Common::Array<uint32> _suspendedLayouts;      ///< The layouts shown when FadeBack(1) came (dimmed)
 	uint32 _held;
 };
 
