@@ -1261,7 +1261,8 @@ void XFilesEngine::syncView() {
 	for (uint i = 0; i < ids.size(); i++) {
 		VCAsset asset;
 		Movie *movie = new Movie();
-		if (!_data->getAsset(ids[i], asset) || !movie->open(_discFiles, asset)) {
+		// openMovie also applies a play range PrepBombTime gave the asset
+		if (!_data->getAsset(ids[i], asset) || !openMovie(*movie, ids[i])) {
 			delete movie;
 			continue;
 		}
