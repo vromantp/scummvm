@@ -466,6 +466,7 @@ void XFilesEngine::runGame() {
 			if (input.click)
 				menuChoice(clickMenu(input.pos));
 			if (_menuOpen) {
+				_cursors->setVisible(true);
 				_cursors->show(0);
 				_cursors->update(getPreference(kPrefTranslucency));
 				drawMenu();
@@ -489,7 +490,10 @@ void XFilesEngine::runGame() {
 		_subliminal.update(gameMillis(), *_script, getUberVariable(0), getUberVariable(1), getUberVariable(2),
 			_script->getVideoQueue().empty() || _captions.hasCard());
 		bool still = !_script->getVideoQueue().empty() && isStillVideo(_script->getVideoQueue()[0]);
-		if (!_script->getVideoQueue().empty() && !still) {
+		// A playing movie shows no cursor (B-211)
+		bool movie = !_script->getVideoQueue().empty() && !still;
+		_cursors->setVisible(!movie);
+		if (movie) {
 			playQueuedVideo(input);
 		} else {
 			// A queued still is shown over the view, which stays live (asset-play.md)

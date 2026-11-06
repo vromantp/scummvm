@@ -76,6 +76,10 @@ void Cursors::init(const Graphics::PixelFormat &format) {
 	CursorMan.showMouse(true);
 }
 
+void Cursors::setVisible(bool visible) {
+	CursorMan.showMouse(visible);
+}
+
 void Cursors::show(uint32 cursorId) {
 	if (cursorId == _shown)
 		return;
