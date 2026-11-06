@@ -334,6 +334,7 @@ private:
 	void updateDialogBox();
 	void askTopic(uint32 conversation);
 	void drawCaptions(const Movie &movie, const Common::Point &pos);
+	void releaseVideoHot();
 	void startVideoText(const VCAction &action, const Common::Array<int32> &args);
 	void registerPreferences(const VCAction &action);
 	/** ReturnMainMenu (0x490450) saves the preferences in the registry: here the ScummVM settings. */

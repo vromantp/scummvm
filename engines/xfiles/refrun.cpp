@@ -121,7 +121,7 @@ void XFilesEngine::runSteps() {
 			// Engine only (B-177): wait until a .HOT entry of the view's clip is live (hot) or its window has
 			// passed (hotlate), then click the middle of its rectangle
 			bool late = step == "xclick:hotlate";
-			if (_hotMovie && !_hotMovie->hasEnded() && queue.empty()) {
+			if (_hotMovie && !_hotMovie->hasEnded() && (queue.empty() || _hotMovie == _video)) {
 				uint32 now = _hotMovie->getTime();
 				const Common::Array<HotEntry> &entries = _hot.getEntries();
 				for (uint i = 0; i < entries.size(); i++) {

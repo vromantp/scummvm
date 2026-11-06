@@ -521,13 +521,19 @@ void XFilesEngine::runGame() {
 		bool movie = !_script->getVideoQueue().empty() && !still;
 		_cursors->setVisible(!movie);
 		if (movie) {
-			playQueuedVideo(input);
+			// A queued clip with a live .HOT entry takes the click on it (B-031); the other clicks are dropped
+			if (input.click && _hotMovie == _video && hotKindAt(input.pos))
+				handleClick(input.pos);
+			if (!_script->getVideoQueue().empty())
+				playQueuedVideo(input);
 		} else {
 			// A queued still is shown over the view, which stays live (asset-play.md)
 			if (still)
 				updateQueuedStill();
-			else if (_video->isOpen())
+			else if (_video->isOpen()) {
+				releaseVideoHot();
 				_video->close(); // Stopped by the script
+			}
 			syncView();
 			updateInterface();
 			updateViewPause();
@@ -1136,6 +1142,10 @@ void XFilesEngine::playQueuedVideo(const Input &input) {
 			_video->setEnd(end);
 		_video->play(_script->isVideoLooped(), _script->getVideoStart() ? (int32)_script->getVideoStart() : -1);
 		_videoStarted = gameMillis();
+		// The clip's .HOT file: its entries open and close by the clip's time, as for a view clip (B-031)
+		VCAsset asset;
+		if (_data->getAsset(id, asset) && _hot.load(_discFiles, asset, _script->getPreferenceValue(kPrefActionSceneDifficulty)))
+			_hotMovie = _video;
 	}
 	// A piece of the view's loop between conversation clips plays for a
 	// fixed time (Script::queueViewLoop); a looping clip plays until a Stop
@@ -1152,8 +1162,16 @@ void XFilesEngine::playQueuedVideo(const Input &input) {
 	drawCaptions(*_video, pos);
 
 	if (_video->hasEnded()) {
+		releaseVideoHot();
 		_video->close();
 		_script->finishVideo();
+	}
+}
+
+void XFilesEngine::releaseVideoHot() {
+	if (_hotMovie == _video) {
+		_hot.clear();
+		_hotMovie = nullptr;
 	}
 }
 
