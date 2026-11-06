@@ -116,7 +116,8 @@ static bool syncSave(Common::Serializer &s, Script::SavedValues &values, VCSave 
 	s.syncAsUint32LE(count, 2);
 	if (s.getVersion() >= 2) {
 		if (s.isLoading()) {
-			if (count > limit)
+			// A photo takes 18 bytes of the stream
+			if (count > limit / 18)
 				return false;
 			save.photoList.resize(count);
 		}
@@ -130,6 +131,8 @@ static bool syncSave(Common::Serializer &s, Script::SavedValues &values, VCSave 
 			byte downloaded = photo.downloaded;
 			s.syncAsByte(downloaded);
 			photo.downloaded = downloaded != 0;
+			if (s.isLoading())
+				photo.normaliseCrop();
 		}
 	}
 	// Version 3: the next free object ID
@@ -156,6 +159,11 @@ Common::Error XFilesEngine::loadGameStream(Common::SeekableReadStream *stream) {
 	Common::Serializer s(stream, nullptr);
 	if (!syncSave(s, load.values, load.save, stream->size()) || stream->err() || stream->eos()) {
 		warning("The save is not valid");
+		return Common::kReadingFailed;
+	}
+	VCView view;
+	if (!_data || !_data->getView(load.save.position[3], view)) {
+		warning("The save names a view the game does not have");
 		return Common::kReadingFailed;
 	}
 	load.valid = true;

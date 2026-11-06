@@ -613,6 +613,7 @@ void VCData::getPhotos(Common::Array<VCPhoto> &photos) const {
 			photo.crop[j] = _gam.readSint16(m + 22 + 2 * j);
 		photo.disc = _gam.readByte(m + 30);
 		photo.downloaded = _gam.readByte(m + 31) != 0;
+		photo.normaliseCrop();
 		photos.push_back(photo);
 	}
 }

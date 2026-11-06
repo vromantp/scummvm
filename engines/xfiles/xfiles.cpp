@@ -1667,7 +1667,7 @@ const Graphics::Surface *XFilesEngine::getPhotoPicture(const VCPhoto &photo, int
 	Movie movie;
 	if (openMovie(movie, photo.asset) && movie.showStillAt(photo.clipTime)) {
 		const Graphics::Surface &frame = movie.getFrame();
-		Common::Rect crop(photo.crop[0], photo.crop[1], photo.crop[2], photo.crop[3]);
+		Common::Rect crop = photo.cropRect();
 		crop.clip(Common::Rect(frame.w, frame.h));
 		if (crop.isEmpty())
 			crop = Common::Rect(frame.w, frame.h);

@@ -148,7 +148,7 @@ void Movie::update() {
 	}
 	if (_decoder->endOfVideo()) {
 		if (_loop) {
-			_decoder->seek(Audio::Timestamp(_startMs, 1000));
+			_decoder->seek(Audio::Timestamp(MIN<uint32>(_startMs, _decoder->getDuration().msecs()), 1000));
 			if (!_decoder->isPlaying())
 				_decoder->start();
 		} else {

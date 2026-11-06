@@ -24,6 +24,7 @@
 
 #include "common/array.h"
 #include "common/hashmap.h"
+#include "common/rect.h"
 #include "common/str.h"
 #include "common/ustr.h"
 
@@ -346,6 +347,21 @@ struct VCAsset {
 struct VCPhoto {
 	VCPhoto() : asset(0), clipTime(0), disc(0), downloaded(false) {
 		crop[0] = crop[1] = crop[2] = crop[3] = 0;
+	}
+
+	/** The crop as a rectangle that is always valid: swapped when reversed, negative edges at 0 (a damaged save). */
+	Common::Rect cropRect() const {
+		int left = MAX<int>(0, MIN(crop[0], crop[2])), right = MAX<int>(0, MAX(crop[0], crop[2]));
+		int top = MAX<int>(0, MIN(crop[1], crop[3])), bottom = MAX<int>(0, MAX(crop[1], crop[3]));
+		return Common::Rect(left, top, right, bottom);
+	}
+	/** Stores cropRect() back, so everything that reads the crop gets a valid one. */
+	void normaliseCrop() {
+		Common::Rect r = cropRect();
+		crop[0] = r.left;
+		crop[1] = r.top;
+		crop[2] = r.right;
+		crop[3] = r.bottom;
 	}
 
 	uint32 asset;      ///< VCAssetRef the photo was taken of
