@@ -472,8 +472,10 @@ void XFilesEngine::runGame() {
 		// steps) runs here, between two frames
 		if (_pendingLoad.valid)
 			applyPendingLoad();
+		if (!_script)
+			return;
 		if (_script->isEndGamePending() && handleEndGame()) {
-			if (_gameEnded)
+			if (_gameEnded || !_script)
 				return;
 			continue;
 		}
@@ -643,6 +645,21 @@ bool XFilesEngine::teardownGame() {
 	// Game_Start (0x48cd70) destroys every timer, stops the head credits and
 	// the subliminal words, removes the sounds and videos and opens the state
 	// database again, so the game starts from the unchanged XFiles.gam
+	VCData *savedData = nullptr;
+	if (_loadedSave) {
+		// The save is a modified copy of XFiles.gam: read the original before anything is deleted, so that a
+		// failure leaves the game as it was
+		savedData = _data;
+		_data = nullptr;
+		if (!loadDatabases(false)) {
+			warning("Cannot load XFiles.gam again");
+			delete _data;
+			_data = savedData;
+			quitGame();
+			return false;
+		}
+		_loadedSave = false;
+	}
 	closeMenu();
 	_menuOpen = false;
 	_menuLayout = false;
@@ -684,17 +701,7 @@ bool XFilesEngine::teardownGame() {
 	_interface = nullptr;
 	delete _cursors;
 	_cursors = nullptr;
-	if (_loadedSave) {
-		// The save is a modified copy of XFiles.gam: read the original again
-		delete _data;
-		_data = nullptr;
-		_loadedSave = false;
-		if (!loadDatabases(false)) {
-			warning("Cannot load XFiles.gam again");
-			quitGame();
-			return false;
-		}
-	}
+	delete savedData;
 	_cursors = new Cursors(*_data, _discFiles);
 	_cursors->init(_screen.format);
 	_interface = new Interface(*_data, _discFiles);
