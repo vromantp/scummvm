@@ -689,6 +689,9 @@ bool XFilesEngine::teardownGame() {
 	_shotBox = false;
 	_waitVideo = 0;
 	_waitTimer = -1;
+	// A tool reaction due after the click and a bomb clip's range belong to the game that goes
+	_delayedPlays.clear();
+	_assetRanges.clear();
 	// Whatever asked for the pause (the menu) is gone with the game
 	_pauseDepth = _paused ? 1 : 0;
 	pauseGame(false);
