@@ -54,6 +54,8 @@ public:
 
 	/** A new game allows the credits; a restored one only if they were rolling. */
 	void setEnabled(bool enabled) { _enabled = enabled; }
+	/** A credit is on screen */
+	bool isShown() const { return !_text.empty(); }
 	/**
 	 * RollHdCredits(): start unless disabled or rolling; skipIntro is the preference.
 	 * first >= 1: the string to show first (a restored save's last credit,

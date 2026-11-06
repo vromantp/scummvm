@@ -1245,11 +1245,11 @@ void XFilesEngine::syncView() {
 	int mode = _script->getTransition();
 	_script->clearTransition();
 	bool animate = mode != Script::kTransitionCut && _viewId && _viewId != _script->getView() && canPlayTransition();
-	// The old picture is what is on screen; with a tool overlay on it (night vision) it is redrawn without, since
-	// playTransition draws the overlay over every frame
+	// The old picture is what is on screen; with a tool overlay (night vision) or a head credit on it, it is redrawn
+	// without, since playTransition draws both over every frame
 	Graphics::Surface oldBand;
 	if (animate) {
-		if (hasToolOverlay())
+		if (hasToolOverlay() || _headCredits.isShown())
 			drawBand(oldBand);
 		else
 			oldBand.copyFrom(_screen.getSubArea(Common::Rect(kBandLeft, kBandTop, kBandLeft + kBandWidth, kBandTop + kBandHeight)));
@@ -1405,6 +1405,7 @@ void XFilesEngine::playTransition(int mode, const Graphics::Surface &oldBand, co
 		}
 		// A held tool's overlay stays over the moving picture (night vision: else it drops out for the transition)
 		drawToolOverlay();
+		_headCredits.draw(_screen); // fixed on top, out of the slid picture (B-247)
 		present();
 		if (done)
 			break;
