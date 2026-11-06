@@ -375,7 +375,7 @@ void Script::hotAction(int n) {
 
 	// Actions 1, 2, 4, 5 first rewrite the enable flags of the view's assets (0x4b5680, 0x4b59f0); "success" is
 	// that no asset is left enabled. Action 0 does the same in the exe with a rule the doc does not give: left out
-	// (B-031), as is the view state `a` of 0x4b5680 on success
+	// (B-031)
 	bool success = false;
 	if (n == 1 || n == 2 || n == 4 || n == 5) {
 		VCView v;
@@ -395,6 +395,9 @@ void Script::hotAction(int n) {
 	// view's Object Deactivation tests the state (view 5487: 'r' kills the stairs goon and enables its exits)
 	if (act.state)
 		setViewState(act.state);
+	// 0x4b5680 (actions 0-2) sets `a` after it when no asset is left: the Rauch porch shows no NSA men then
+	if (success && (n == 1 || n == 2))
+		setViewState('a');
 	// The current view's deactivation is queued
 	deactivateView();
 	_viewGone = true;
