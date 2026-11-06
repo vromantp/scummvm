@@ -108,6 +108,30 @@ void Script::stopAllForTravel() {
 	}
 }
 
+void Script::stopShownVideos(bool dropQueued) {
+	// 0x4b4170: sound objects with a picture get a stop request (sounds without one keep playing). The
+	// engine's shown ones are the queued videos and the clips; they end as at a Stop action
+	if (dropQueued)
+		_heldSounds.clear();
+	Common::Array<uint32> clips;
+	for (Common::HashMap<uint32, bool>::const_iterator it = _clips.begin(); it != _clips.end(); ++it)
+		clips.push_back(it->_key);
+	Common::sort(clips.begin(), clips.end());
+	for (uint i = 0; i < clips.size() && _hooks; i++)
+		_hooks->playAsset(clips[i], kModeStop, false, 0, 0);
+	Common::Array<uint32> videos;
+	videos.swap(_videoQueue);
+	Common::Array<VideoPlay> plays;
+	plays.swap(_videoPlays);
+	for (uint i = 0; i < clips.size(); i++)
+		endClip(clips[i], "stopped");
+	for (uint i = 0; i < videos.size(); i++) {
+		log(Common::String::format("  << video #%u stopped", videos[i]));
+		if (!plays[i].viewLoop)
+			deactivateAsset(videos[i]);
+	}
+}
+
 void Script::deactivateView() {
 	// The shown asset's deactivation runs before the view's own triggers (0x458e10, B-112)
 	// The view is being left: an asset enabled by the deactivations (the shown asset's included) is not started
@@ -382,8 +406,8 @@ void Script::hotAction(int n) {
 	if (act.stopSounds)
 		stopAllForTravel(); // 0x44d850(scene, 27): approximated by the travel sweep of the sounds
 	if (n == 27 || n == 28) {
-		// Stop the shown videos (approximated as above), fade to black, Scene_SuspendAll(scene, 1)
-		stopAllForTravel();
+		// Stop the shown videos (0x4b4170(queue, 1)), fade to black, Scene_SuspendAll(scene, 1)
+		stopShownVideos(true);
 		if (_hooks) {
 			_hooks->fadeToBlack();
 			_hooks->suspendScene();

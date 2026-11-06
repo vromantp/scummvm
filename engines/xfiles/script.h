@@ -204,6 +204,8 @@ public:
 	 * asset. Script ends the sounds' objects itself afterwards.
 	 */
 	virtual void stopAllSounds() {}
+	/** SelectInv shows the inventory bar if it is hidden (Queue_Show of the bar, 0x50a390). */
+	virtual void showInventoryBar() {}
 	/** A .HOT click that ends the game (actions 27, 28): the screen fades to black (0x5103b0), as FadeToBlack. */
 	virtual void fadeToBlack() {}
 	/** AlienBlast (0x4b6220): 0x5103b0 with GetColor(0), white, and no hold. */
@@ -851,6 +853,11 @@ private:
 	void releaseHeldSounds();
 	/** A travel ends every sound, clip and queued video as a stop (0x493090), between the old and new activations. */
 	void stopAllForTravel();
+	/**
+	 * Stop the shown videos: the queued videos and the picture clips (sound objects whose asset has a frame
+	 * player, 0x4b4170). With dropQueued the sounds the videos held back (queued, not yet active) are dropped first.
+	 */
+	void stopShownVideos(bool dropQueued);
 	void setNavTransition(const VCNav &nav);
 	void enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, bool deactivateAll = false);
 	void travel();

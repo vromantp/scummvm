@@ -1519,6 +1519,15 @@ bool XFilesEngine::delayPlay(uint32 asset, uint ms) {
 	return true;
 }
 
+void XFilesEngine::showInventoryBar() {
+	// SelectInv 0x50a390: Queue_Show of the bar when hidden. It stays like a new item's reveal, then hides
+	bool hiddenBar = _preferences.variable(kPrefInventory) && _script->getVariable(_preferences.variable(kPrefInventory)) == 'H';
+	if (!hiddenBar || _interface->isBarOpen() || !_fastForward.empty())
+		return;
+	_barRevealed = true;
+	_barRevealEnd = gameMillis() + kRevealHideDelay;
+}
+
 bool XFilesEngine::deferInventoryIcon(uint32 id) {
 	// 0x4a1fb0: with the bar shown (the "visible" preference, the mouse
 	// over it, an earlier item's reveal) the icon is appended at once;

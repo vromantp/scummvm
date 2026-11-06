@@ -351,8 +351,18 @@ void Script::addToolHooks() {
 			return false;
 		// 0x50a390: if the item has an icon, put back what is in hand and
 		// take the item, as a click on its icon would
-		if (s.hasInventoryIcon(c.args[0]))
+		if (s.hasInventoryIcon(c.args[0])) {
+			if (s._hooks)
+				s._hooks->showInventoryBar();
 			s.selectInventory(c.args[0]);
+		}
+		return true;
+	});
+	t.add("StopPlayAssets", [](Script &s, const HookCall &c) {
+		// 0x4ccc40 -> 0x4b4170(queue, b): b = 1 drops the queued events first, then the shown videos stop
+		if (!c.has(1))
+			return false;
+		s.stopShownVideos(c.args[0] != 0);
 		return true;
 	});
 	t.add("DeselectInv", [](Script &s, const HookCall &c) {

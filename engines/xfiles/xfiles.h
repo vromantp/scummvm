@@ -125,6 +125,7 @@ public:
 	bool deferInventoryIcon(uint32 id) override;
 	bool queryPreference(uint index, int32 &value) const override;
 	void stopAllSounds() override;
+	void showInventoryBar() override;
 	void pauseTimers() override;
 	void fadeToBlack() override;
 	void fadeToWhite() override;
