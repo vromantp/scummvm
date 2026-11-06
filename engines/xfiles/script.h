@@ -467,6 +467,8 @@ public:
 	uint32 getView() const { return _view; }
 	/** The current view has been activated (not just entered, or held while a video plays). */
 	bool isViewActive() const { return _viewActive; }
+	/// An event is half-run (inside fire(), a fade loop or a pending travel): a snapshot now would lose its rest
+	bool isBusy() const { return _fireDepth || _inEvent || _travelPending; }
 	/** Queued videos; the first one is on screen. */
 	const Common::Array<uint32> &getVideoQueue() const { return _videoQueue; }
 	/** How long the first video plays, in ms; 0 for all of it. */
