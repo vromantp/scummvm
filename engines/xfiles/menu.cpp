@@ -83,7 +83,8 @@ bool XFilesEngine::playIntro() {
 		if (!openMovie(*_video, kIntroAssets[i]))
 			continue;
 		_video->play(false);
-		while (!shouldQuit() && !_video->hasEnded()) {
+		// A load chosen in the GMM ends the intro at once
+		while (!shouldQuit() && !_video->hasEnded() && !_pendingLoad.valid) {
 			Input input = pollInput();
 			if (input.click || input.skip)
 				_video->stop();
@@ -94,6 +95,8 @@ bool XFilesEngine::playIntro() {
 			present();
 		}
 		_video->close();
+		if (_pendingLoad.valid)
+			break;
 	}
 	return !shouldQuit();
 }
@@ -103,6 +106,11 @@ bool XFilesEngine::runMenu() {
 	startMenu();
 	_cursors->setVisible(true); // A game may have ended during a movie
 	while (!shouldQuit()) {
+		if (_pendingLoad.valid) {
+			// A load chosen in the GMM: the game starts from it, as after the menu's Load
+			closeMenu();
+			return true;
+		}
 		Input input = pollInput();
 		if (input.click) {
 			MenuEntry entry = clickMenu(input.pos);
@@ -355,7 +363,11 @@ bool XFilesEngine::saveOnExit() {
 	if (mode != 'A')
 		return true;
 	GUI::MessageDialog question(_("Do you want to save your game first?"), _("Yes"), _("No"));
-	if (question.runModal() != GUI::kMessageOK)
+	bool yes = question.runModal() == GUI::kMessageOK;
+	// A load chosen in the GMM meanwhile wins: New or Quit is dropped
+	if (_pendingLoad.valid)
+		return false;
+	if (!yes)
 		return true;
 	// A game that cannot be saved just now does not hold up New or Quit
 	return !canSaveGameStateCurrently() || saveGameDialog();
@@ -431,7 +443,7 @@ void XFilesEngine::runMenuLayout(uint32 layout) {
 	_menuReopen = false;
 	_menuLayout = true;
 	_script->displayLayout(layout);
-	while (!shouldQuit() && !_menuReopen) {
+	while (!shouldQuit() && !_menuReopen && !_pendingLoad.valid) {
 		Input input = pollInput();
 		if (input.escape)
 			escapeMenuLayout();

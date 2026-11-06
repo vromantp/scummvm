@@ -618,6 +618,9 @@ bool XFilesEngine::handleEndGame() {
 	if (_dialogBox.isOpen())
 		_dialogBox.close();
 	_script->answerEndGame(ask);
+	// A load chosen in the GMM while the question was up wins: the frame top applies it
+	if (_pendingLoad.valid)
+		return true;
 	const char *what = !ask ? "no question" : (again ? "try again" : "no");
 	debugC(1, kDebugScript, "-- end game: %s", what);
 	if (again) {
