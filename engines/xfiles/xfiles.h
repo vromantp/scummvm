@@ -127,6 +127,11 @@ public:
 	void stopAllSounds() override;
 	void pauseTimers() override;
 	void fadeToBlack() override;
+	void fadeToWhite() override;
+	bool getTimerLeft(uint32 id, uint32 &leftMs) override;
+	void setAssetRange(uint32 asset, uint32 startMs, uint32 endMs) override;
+	/** 0x5103b0: the whole screen fades to a colour (500 ms, then 1000 ms in 8 steps), then holds it. */
+	void fadeToColor(byte r, byte g, byte b, uint32 holdMs);
 	void suspendScene() override { pauseGame(true); }
 	/** ScummVM's volumes, scaled by the game volume preference (the exe's wave-out master volume). */
 	void syncSoundSettings() override;
@@ -417,6 +422,7 @@ private:
 	Interface::Hit _hover;               ///< What the mouse is over, for Roll Into and Roll Out Of
 	uint32 _charHover;                   ///< The character view the mouse is over, for Roll Into and Roll Out Of
 	Common::HashMap<uint, TimerState> _timerStates;
+	Common::HashMap<uint, Common::Pair<uint32, uint32>> _assetRanges; ///< PrepBombTime's play ranges, per asset
 	bool _timersPaused;                  ///< The PDA paused the timers (0x6b1680)
 	struct PressedItem {
 		uint32 id;

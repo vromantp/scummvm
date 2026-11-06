@@ -338,7 +338,32 @@ bool XFilesEngine::openMovie(Movie &movie, uint32 assetId) {
 		warning("#%u is not a media asset", assetId);
 		return false;
 	}
-	return movie.open(_discFiles, asset);
+	if (!movie.open(_discFiles, asset))
+		return false;
+	if (_assetRanges.contains(assetId)) {
+		movie.setStart(_assetRanges[assetId].first);
+		movie.setEnd(_assetRanges[assetId].second);
+	}
+	return true;
+}
+
+bool XFilesEngine::getTimerLeft(uint32 id, uint32 &leftMs) {
+	const Common::HashMap<uint, Script::Timer> &timers = _script->getTimers();
+	if (!timers.contains(id))
+		return false;
+	const Script::Timer &timer = timers[id];
+	if (!_timerStates.contains(id) || _timerStates[id].serial != timer.serial) {
+		leftMs = timer.ms; // started, not yet counted by updateTimers
+		return true;
+	}
+	const TimerState &state = _timerStates[id];
+	uint32 elapsed = state.paused ? 0 : gameMillis() - state.started;
+	leftMs = elapsed < state.ms ? state.ms - elapsed : 0;
+	return true;
+}
+
+void XFilesEngine::setAssetRange(uint32 asset, uint32 startMs, uint32 endMs) {
+	_assetRanges[asset] = Common::Pair<uint32, uint32>(startMs, endMs);
 }
 
 // -- Pause and the game clock -------------------------------------------------
@@ -787,7 +812,18 @@ void XFilesEngine::addHooks() {
 	});
 }
 
+/** FadeToBlack holds the black screen for 2000 ms (0x5521c0). */
+static const uint32 kFadeBlackHold = 2000;
+
+void XFilesEngine::fadeToWhite() {
+	fadeToColor(255, 255, 255, 0);
+}
+
 void XFilesEngine::fadeToBlack() {
+	fadeToColor(0, 0, 0, kFadeBlackHold);
+}
+
+void XFilesEngine::fadeToColor(byte cr, byte cg, byte cb, uint32 holdMs) {
 	// 0x4ccb50: 0x5103b0 fades the whole screen (interface bar too) to colour 0x12 (black; 500 ms, then 1000 ms in
 	// 8 steps: read as start delay and length, unverified), then 2000 ms black, with the script held. The exe also
 	// flags the object from 0x5196b0 meanwhile (0x4a0480, not identified): left out. Nothing undoes the black but
@@ -795,14 +831,13 @@ void XFilesEngine::fadeToBlack() {
 	static const uint32 kStartDelay = 500;
 	static const uint32 kFadeLength = 1000;
 	static const uint32 kFadeSteps = 8;
-	static const uint32 kBlackHold = 2000;
-	debugC(1, kDebugScript, "-- fade to black");
+	debugC(1, kDebugScript, "-- fade to colour %02x%02x%02x", cr, cg, cb);
 	if (!_steps.empty() || !_fastForward.empty())
 		return;
 	Graphics::Surface shot;
 	shot.copyFrom(_screen);
 	uint32 start = g_system->getMillis();
-	uint32 total = kStartDelay + kFadeLength + kBlackHold;
+	uint32 total = kStartDelay + kFadeLength + holdMs;
 	uint32 lastStep = 0;
 	while (!shouldQuit()) {
 		uint32 elapsed = g_system->getMillis() - start;
@@ -824,7 +859,7 @@ void XFilesEngine::fadeToBlack() {
 				for (int x = 0; x < shot.w; x++) {
 					byte r, g, b;
 					fmt.colorToRGB(shot.getPixel(x, y), r, g, b);
-					_screen.setPixel(x, y, fmt.RGBToColor(r * scale / kFadeSteps, g * scale / kFadeSteps, b * scale / kFadeSteps));
+					_screen.setPixel(x, y, fmt.RGBToColor((r * scale + cr * step) / kFadeSteps, (g * scale + cg * step) / kFadeSteps, (b * scale + cb * step) / kFadeSteps));
 				}
 			}
 		}

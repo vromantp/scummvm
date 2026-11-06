@@ -89,6 +89,8 @@ Script::Script(const VCData &data) : _data(data), _hooks(nullptr), _phone(*this,
 	memset(_shootPerm, 0, sizeof(_shootPerm));
 	_shootCur = 0;
 	_fbiShot = true;
+	_playBones = true;
+	_playCancer = true;
 	_jumpCut.first = _jumpCut.later = false;
 	memset(_flashlight, 0, sizeof(_flashlight));
 	memset(_tintColor, 0, sizeof(_tintColor));

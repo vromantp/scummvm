@@ -962,6 +962,30 @@ bool Script::runCameraActions(uint32 id) {
 	return ran;
 }
 
+void Script::addPhoto(uint32 asset, int left, int right, uint32 clipTime) {
+	VCAsset data;
+	if (!asset || !_data.getAsset(asset, data) || data.files.empty())
+		return;
+	VCPhoto photo;
+	photo.asset = asset;
+	photo.clipTime = clipTime;
+	photo.crop[0] = left;
+	photo.crop[1] = 0;
+	photo.crop[2] = right;
+	photo.crop[3] = kBandHeight;
+	photo.disc = _disc;
+	_photos.push_back(photo);
+}
+
+void Script::takePhoto(uint32 asset) {
+	// TakePhoto 0x4e5a60: nothing at 24 photos; else a photo of the asset, crop (0, 0, 300, 240), time 1000
+	if (_photosOnCamera >= kCameraPhotos)
+		return;
+	addPhoto(asset, 0, 300, 1000);
+	_photosOnCamera++;
+	log(Common::String::format("      camera: photos %d", _photosOnCamera));
+}
+
 void Script::cameraClick(const Common::Point &pos) {
 	if (!isCameraEnabled())
 		return;
@@ -985,24 +1009,13 @@ void Script::cameraClick(const Common::Point &pos) {
 			if (!assets.empty())
 				asset = assets[0];
 		}
-		VCAsset data;
-		if (asset && _data.getAsset(asset, data) && !data.files.empty()) {
-			VCPhoto photo;
-			photo.asset = asset;
-			photo.clipTime = _hooks ? _hooks->getPhotoTime() : 0;
-			// The viewfinder, 320 wide, moved back into the 600 wide band; top 0, bottom 240
-			int left = pos.x - kCameraWidth / 2;
-			if (left < 0)
-				left = 0;
-			if (left + kCameraWidth > kBandWidth)
-				left = kBandWidth - kCameraWidth;
-			photo.crop[0] = left;
-			photo.crop[1] = 0;
-			photo.crop[2] = left + kCameraWidth;
-			photo.crop[3] = kBandHeight;
-			photo.disc = _disc;
-			_photos.push_back(photo);
-		}
+		// The viewfinder, 320 wide, moved back into the 600 wide band; top 0, bottom 240
+		int left = pos.x - kCameraWidth / 2;
+		if (left < 0)
+			left = 0;
+		if (left + kCameraWidth > kBandWidth)
+			left = kBandWidth - kCameraWidth;
+		addPhoto(asset, left, left + kCameraWidth, _hooks ? _hooks->getPhotoTime() : 0);
 		_photosOnCamera++;
 		log(Common::String::format("      camera: photos %d", _photosOnCamera));
 	}

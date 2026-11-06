@@ -206,6 +206,12 @@ public:
 	virtual void stopAllSounds() {}
 	/** A .HOT click that ends the game (actions 27, 28): the screen fades to black (0x5103b0), as FadeToBlack. */
 	virtual void fadeToBlack() {}
+	/** AlienBlast (0x4b6220): 0x5103b0 with GetColor(0), white, and no hold. */
+	virtual void fadeToWhite() {}
+	/** PrepBombTime (0x50c2d0): what is left of a running timer (0x52f030); false if no such timer runs. */
+	virtual bool getTimerLeft(uint32 id, uint32 &leftMs) { return false; }
+	/** The asset plays from startMs to endMs from now on (0x5e9a70). */
+	virtual void setAssetRange(uint32 asset, uint32 startMs, uint32 endMs) {}
 	/** Scene_SuspendAll(scene, 1): the timers and the scene's objects stop (as the X menu's). */
 	virtual void suspendScene() {}
 };
@@ -303,6 +309,9 @@ public:
 	 * count, the camera actions of the objects under the viewfinder, the second reaction of a character.
 	 */
 	void cameraClick(const Common::Point &pos);
+	/** TakePhoto(asset): a photo of the asset straight onto the camera (0x4e5a60). */
+	void takePhoto(uint32 asset);
+	void addPhoto(uint32 asset, int left, int right, uint32 clipTime);
 
 	/** Fire the title's Object Activation (the game's start). */
 	void start();
@@ -752,6 +761,8 @@ private:
 	void enableKitIcon(uint32 id);
 	/** RandGen(var, n): a number from 0 to n (0x49f6d0). */
 	void randGen(uint32 variableId, int32 n);
+	/** RandGenRange(var, lo, hi): randGen with a lower bound (0x49f740). */
+	void randGenRange(uint32 variableId, int32 lo, int32 hi);
 	void isIItemHeld(uint32 variableId, int32 item);
 	/** The Smolnikoff shootout hooks (docs/subsystems/smolnikoff-shootout.md). */
 	void shootoutReset();
@@ -976,6 +987,8 @@ private:
 	int _shootCur;                             ///< Goon on screen, 0 for none
 	int _shootPerm[3][3];                      ///< Permutations of 1, 2, 3 the reset fills (no reader known)
 	bool _fbiShot;                             ///< GetPlayFBIShot gives 1 once per process
+	bool _playBones;                           ///< GetPlayBones (0x6b1f14), as _fbiShot
+	bool _playCancer;                          ///< GetPlayCancer (0x6b1f18), as _fbiShot
 	bool _endGamePending;                      ///< EndGame ran and waits for the engine's answer
 	uint32 _endGameVar;                        ///< Its variable (bReplay)
 	int32 _endGameValue;                       ///< and the value it had

@@ -42,6 +42,12 @@ static const uint32 kPDAAlertSound = 75688;
 /** PageTurnSound runs trigger 92463's list (XFiles.exe 0x4b3930): one of six random page sounds. */
 static const uint32 kPageTurnSoundActions = 92468;
 
+/** DrawGunRauch's view (XFiles.exe 0x4f97d0): the Rauch porch shootout. */
+static const uint32 kRauchShootoutView = 39746;
+
+/** PrepBombTime's countdown video length in ms (XFiles.exe 0x50c2d0). */
+static const uint32 kBombTimerLength = 180000;
+
 void Script::addHooks() {
 	addCoreHooks();
 	_phone.addHooks(_hookTable);
@@ -115,6 +121,54 @@ void Script::addGameHooks() {
 			return false;
 		s.setVariable(c.action.args[0].value, s._fbiShot); // 0x4f9ef0
 		s._fbiShot = false;
+		return true;
+	});
+	t.add("GetPlayBones", [](Script &s, const HookCall &c) {
+		if (!c.isVariable(0))
+			return false;
+		s.setVariable(c.action.args[0].value, s._playBones); // 0x4f9f20
+		s._playBones = false;
+		return true;
+	});
+	t.add("GetPlayCancer", [](Script &s, const HookCall &c) {
+		if (!c.isVariable(0))
+			return false;
+		s.setVariable(c.action.args[0].value, s._playCancer); // 0x4f9f70
+		s._playCancer = false;
+		return true;
+	});
+	t.add("RandGenRange", [](Script &s, const HookCall &c) {
+		if (!c.has(3) || !c.isVariable(0))
+			return false;
+		s.randGenRange(c.action.args[0].value, c.args[1], c.args[2]);
+		return true;
+	});
+	t.add("TakePhoto", [](Script &s, const HookCall &c) {
+		if (!c.has(1))
+			return false;
+		s.takePhoto(c.args[0]);
+		return true;
+	});
+	t.add("PrepBombTime", [](Script &s, const HookCall &c) {
+		if (!c.has(2))
+			return false;
+		// 0x50c2d0: a running timer with that id; the asset plays from 180000 minus what is left to 180000
+		uint32 left;
+		if (!s._hooks || !s._hooks->getTimerLeft(c.args[0], left))
+			return true;
+		uint32 start = left < kBombTimerLength ? kBombTimerLength - left : 0;
+		s.log(Common::String::format("      PrepBombTime: timer %d has %u ms left, asset #%d plays from %u ms", c.args[0], left, c.args[1], start));
+		s._hooks->setAssetRange(c.args[1], start, kBombTimerLength);
+		return true;
+	});
+	t.add("DrawGunRauch", [](Script &s, const HookCall &c) {
+		if (!c.isVariable(0) || !c.isVariable(1))
+			return false;
+		// 0x4f97b0: with the NSA outside, the view state becomes 'b' and the exe's own Set View goes to the shootout
+		if (s.getVariable(c.action.args[0].value) == 1) {
+			s.setVariable(c.action.args[1].value, 'b');
+			s.setViewByExe(kRauchShootoutView);
+		}
 		return true;
 	});
 	t.add("EndGame", [](Script &s, const HookCall &c) {
@@ -351,6 +405,8 @@ void Script::addInterfaceHooks() {
 			s._travelDropped = true;
 			s.log("      -- AlienBlast: queued travel dropped");
 		}
+		if (s._hooks)
+			s._hooks->fadeToWhite();
 		return true;
 	});
 	t.add("IsoChamberStat", [](Script &s, const HookCall &c) {
@@ -692,6 +748,16 @@ void Script::randGen(uint32 variableId, int32 n) {
 	Dice dice = newDice(0x49f6f9);
 	int32 value = roll(dice, 0, n);
 	_variables[variableId] = value;
+	Common::U32String name;
+	_data.getVariableName(variableId, name);
+	log(Common::String::format("      %s = %d", name.encode().c_str(), value));
+}
+
+void Script::randGenRange(uint32 variableId, int32 lo, int32 hi) {
+	// 0x49f740: Random_Seed(lo, hi) swaps the bounds when hi < lo
+	Dice dice = newDice(0x49f79b);
+	int32 value = roll(dice, MIN(lo, hi), MAX(lo, hi));
+	setVariable(variableId, value);
 	Common::U32String name;
 	_data.getVariableName(variableId, name);
 	log(Common::String::format("      %s = %d", name.encode().c_str(), value));
