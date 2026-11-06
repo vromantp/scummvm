@@ -286,10 +286,13 @@ bool SoundPlayer::getFacing(uint32 view, const Common::Point &from, Common::Poin
 }
 
 void SoundPlayer::placeSound(Sound &sound, bool sound3D) {
-	// XFiles.exe 0x4a8be0. Without the 3D sound preference the sound plays
-	// at the volume of its type, as any other.
+	// XFiles.exe 0x4a8be0. Without the 3D sound preference the volume and
+	// balance are left alone: the sound plays at the volume of its type (the
+	// mixer's sound type volume, set from the preferences), as any other.
+	if (!sound3D)
+		return;
 	VCViewPoint viewPoint;
-	if (!sound3D || !_data->getViewPoint(_script->getViewPoint(), viewPoint)) {
+	if (!_data->getViewPoint(_script->getViewPoint(), viewPoint)) {
 		sound.movie->setVolume(Audio::Mixer::kMaxChannelVolume);
 		sound.movie->setBalance(0);
 		return;

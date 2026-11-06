@@ -1268,7 +1268,11 @@ void XFilesEngine::syncView() {
 		}
 		if (ids[i] == background)
 			movie->showStill();
-		else {
+		else if ((asset.flags & kAssetLoop) && !getPreference(kPrefLiveEnvironments)) {
+			// Live Environments off (Screen_PlayView): a looping clip is drawn as its first frame
+			movie->showStill();
+			debugC(2, kDebugScript, "-- view clip #%u shown as a still (live environments off)", ids[i]);
+		} else {
 			// The restored clip time applies to the first player started
 			movie->play(asset.flags & kAssetLoop, _pendingClipTime);
 			// The clip's .HOT file: its entries open and close by the clip's time
@@ -1441,8 +1445,11 @@ void XFilesEngine::updateViewPause() {
 		return;
 	bool rewind = !want && !getPreference(kPrefLiveEnvironments);
 	for (uint i = 0; i < _layers.size(); i++) {
-		if (rewind && _layers[i]->isLooping() && _layers[i]->isPlaying())
-			_layers[i]->rewind();
+		if (rewind && _layers[i]->isLooping() && _layers[i]->isPlaying()) {
+			// Live Environments off: the resumed loop shows its first frame instead of playing (0x44f630)
+			_layers[i]->showStill();
+			continue;
+		}
 		_layers[i]->pause(want);
 	}
 }
