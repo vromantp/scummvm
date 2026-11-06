@@ -67,18 +67,25 @@ void Script::restore(const VCSave &save) {
 	_inventory = save.inventory;
 	_evidence = save.evidence;
 	_kit = save.kit;
-	_hintList = save.hintList;
-	_hintTrigger = save.hintTrigger;
-	_hintCursor = 0;
-	_hintGlow = save.hintGlow;
-	_hintGlowOn = _hintGlow != 0; // AI_RestoreGlow (0x508c00)
-	memcpy(_flashlight, save.flashlight, sizeof(_flashlight));
-	_tint = save.tint;
-	memcpy(_tintColor, save.tintColor, sizeof(_tintColor));
+	applyStateValues(save);
 	log("== restore");
 	log(Common::String::format("  disc %d", _disc));
 	start();
 	_restorePending = false;
+}
+
+void Script::applyStateValues(const VCSave &save) {
+	// The hint list (0x469160), the glow level (AI_RestoreGlow 0x508c00: the level is stored, and the rollover is on
+	// when it is above 0), the flashlight properties (FLight_SetProps) and the letterbox tint, which the screen draws
+	_hintList = save.hintList;
+	_hintTrigger = save.hintTrigger;
+	_hintCursor = 0;
+	_hintGlow = save.hintGlow;
+	_hintGlowOn = _hintGlow != 0;
+	memcpy(_flashlight, save.flashlight, sizeof(_flashlight));
+	_tint = save.tint;
+	memcpy(_tintColor, save.tintColor, sizeof(_tintColor));
+	recheckAIIcon();
 }
 
 void Script::restoreView() {
@@ -131,12 +138,14 @@ void Script::restoreView() {
 		}
 	}
 
-	// 8. Not modelled by the engine: kept in the restored save and logged
+	// 8. The hint list and glow, the credits, the flashlight properties and the letterbox tint come after the
+	// objects, so they win over what the activations above set (credits and dialog box are logged only)
+	applyStateValues(save);
 	if (save.hintList || save.hintTrigger || save.hintGlow)
-		log(Common::String::format("  hint list #%u trigger #%u glow %d (not applied)", save.hintList, save.hintTrigger, save.hintGlow));
+		log(Common::String::format("  hint list #%u trigger #%u glow %d", save.hintList, save.hintTrigger, save.hintGlow));
 	if (save.credits != -1)
 		log(Common::String::format("  credits at %d", save.credits));
-	log(Common::String::format("  flashlight %u %u %u, letterbox tint %u (%u %u %u) (not applied)", save.flashlight[0], save.flashlight[1],
+	log(Common::String::format("  flashlight %u %u %u, letterbox tint %u (%u %u %u)", save.flashlight[0], save.flashlight[1],
 		save.flashlight[2], save.tint, save.tintColor[0], save.tintColor[1], save.tintColor[2]));
 	if (save.dialogBox)
 		log(Common::String::format("  dialog box of #%u", save.dialogBox));

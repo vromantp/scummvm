@@ -690,6 +690,8 @@ private:
 	void addStateHooks();
 	/** SetStartView of a restore: enter the saved position and rebuild the objects (Game_BuildObjects). */
 	void restoreView();
+	/** The saved hint list, glow, flashlight properties and letterbox tint (restore, then again after the objects). */
+	void applyStateValues(const VCSave &save);
 	void addEvidence(uint32 id);
 	void removeEvidence(uint32 id);
 	void callFunction(const VCAction &action, int event, const EventFields &fields, const LocalVariables &locals);

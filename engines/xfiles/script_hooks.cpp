@@ -548,8 +548,8 @@ void Script::addInterfaceHooks() {
 
 void Script::addStateHooks() {
 	HookTable<Script> &t = _hookTable;
-	// The hooks whose arguments a save keeps (GameState_Save 0x4d9450): recorded, but the engine draws none of
-	// them yet, so they are not handled
+	// The hooks whose arguments a save keeps (GameState_Save 0x4d9450): the hint list and glow are handled by the AI icon,
+	// the flashlight and tint by the tool overlay and the band
 	t.add("SetAIList", [](Script &s, const HookCall &c) {
 		// SetAIList(trigger, list)
 		if (c.has(2)) {
