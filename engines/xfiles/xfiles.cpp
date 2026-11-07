@@ -70,7 +70,7 @@ static const uint32 kXCursor = 25541;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
 	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _nightVisionMask(nullptr), _binocularMask(nullptr), _binocularScaled(nullptr), _binocularScaledBeam(0), _flashlightMask(nullptr), _flashlightScaled(nullptr), _flashlightScaledKey(0), _bandTintOn(false), _bandTintTool(0), _viewfinder(nullptr), _counterFont(nullptr), _counterFontOwned(false), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuIntroPlay(false), _menuHelpEnd(5000), _menuHelpPlaying(false), _menuTopHot(false), _menuOpen(false), _menuLayout(false), _menuReopen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _hotMovie(nullptr), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _delayUntil(0), _waitTimer(-1), _dialogBoxView(0),
-	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _dragIdea(0), _charHover(0), _dragMoved(false), _timersPaused(false), _barRevealed(false), _barRevealEnd(0), _sound(_discFiles) {
+	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _dragIdea(0), _charHover(0), _dragMoved(false), _timersPaused(false), _whiteHold(false), _barRevealed(false), _barRevealEnd(0), _sound(_discFiles) {
 	g_engine = this;
 	addHooks();
 	_loadedSave = false;
@@ -520,6 +520,8 @@ void XFilesEngine::runGame() {
 		// A playing movie shows no cursor (B-211)
 		bool movie = !_script->getVideoQueue().empty() && !still;
 		_cursors->setVisible(!movie);
+		if (movie)
+			_whiteHold = false;
 		if (movie) {
 			// A queued clip with a live .HOT entry takes the click on it (B-031); the other clicks are dropped
 			if (input.click && _hotMovie == _video && hotKindAt(input.pos))
@@ -546,6 +548,8 @@ void XFilesEngine::runGame() {
 				handleRelease(input.releasePos);
 			updateCursor();
 			drawView();
+			if (_whiteHold)
+				_screen.fillRect(Common::Rect(_screen.w, _screen.h), _screen.format.RGBToColor(255, 255, 255));
 			// The folders follow Pref_bTranslucency (Prefs_Apply 0x452d70). The box stays open behind the menu, but
 			// Options and Help cover it (and take no clicks on it)
 			if (!_menuLayout)
@@ -651,6 +655,7 @@ bool XFilesEngine::teardownGame() {
 	// Game_Start (0x48cd70) destroys every timer, stops the head credits and
 	// the subliminal words, removes the sounds and videos and opens the state
 	// database again, so the game starts from the unchanged XFiles.gam
+	_whiteHold = false;
 	VCData *savedData = nullptr;
 	if (_loadedSave) {
 		// The save is a modified copy of XFiles.gam: read the original before anything is deleted, so that a
@@ -835,7 +840,10 @@ void XFilesEngine::addHooks() {
 static const uint32 kFadeBlackHold = 2000;
 
 void XFilesEngine::fadeToWhite() {
+	// Nothing redraws the screen after the fade in the exe until the next video frame (59824 is sound only, the
+	// death clip 23412 follows its end): the white stays (B-287)
 	fadeToColor(255, 255, 255, 0);
+	_whiteHold = true;
 }
 
 void XFilesEngine::fadeToBlack() {
@@ -851,6 +859,7 @@ void XFilesEngine::fadeToColor(byte cr, byte cg, byte cb, uint32 holdMs) {
 	static const uint32 kFadeLength = 1000;
 	static const uint32 kFadeSteps = 8;
 	debugC(1, kDebugScript, "-- fade to colour %02x%02x%02x", cr, cg, cb);
+	_whiteHold = false;
 	if (!_steps.empty() || !_fastForward.empty())
 		return;
 	Graphics::Surface shot;

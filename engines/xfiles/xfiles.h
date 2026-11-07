@@ -445,6 +445,7 @@ private:
 	static const uint32 kIconJoinDelay = 500;
 	static const uint32 kRevealHideDelay = 1000;
 	Common::Array<DelayedPlay> _pendingIcons;     ///< Items whose icon joins the bar at `due` (asset: the VCInventory)
+	bool _whiteHold;                              ///< AlienBlast's white stays on screen until a video or another fade (B-287)
 	bool _barRevealed;                            ///< The reveal shows the hidden bar until _barRevealEnd
 	uint32 _barRevealEnd;                         ///< gameMillis()
 	/** The pending icons join the bar now (before a save), or are dropped (clear: a new game, a load). */
