@@ -280,6 +280,7 @@ private:
 	void clearScreen();
 	/** The SetLBoxTint multiply over the band (B-209); keepUntinted saves the plain band for drawFlashlight. */
 	void applyBandTint(bool keepUntinted);
+	void latchBandTint();
 	/** The camera in hand: the viewfinder over the band at the mouse, with the photos left (Camera, 0x4f2b30). */
 	void drawViewfinder();
 	/** The tool in hand over the band, keyed on Script::heldToolType (B-228, docs/exe/tool-objects.md "Overlay drawing"). */
@@ -382,6 +383,9 @@ private:
 	Graphics::Surface *_flashlightScaled; ///< the mask scaled for the beam size and c1 in _flashlightScaledKey
 	int32 _flashlightScaledKey;
 	Graphics::Surface _bandUntinted;      ///< the band before the tint, kept while the n = 2 flashlight is in hand
+	bool _bandTintOn;                     ///< the letterbox tint in force: latched at a view play and at a tool show/hide (B-286)
+	byte _bandTintRGB[3];
+	int _bandTintTool;                    ///< the held tool and binoculars mode the latch was taken with
 	PictureAsset *_viewfinder;            ///< 34749 moveableviewfinder.pic, loaded when the camera first shows
 	const Graphics::Font *_counterFont;   ///< the camera counter: Liberation Sans Bold 13, else the GUI font
 	struct PhotoPicture {

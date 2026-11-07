@@ -69,7 +69,7 @@ static const int kMenuCornerLeft = 501, kMenuCornerBottom = 34;
 static const uint32 kXCursor = 25541;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
-	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _nightVisionMask(nullptr), _binocularMask(nullptr), _binocularScaled(nullptr), _binocularScaledBeam(0), _flashlightMask(nullptr), _flashlightScaled(nullptr), _flashlightScaledKey(0), _viewfinder(nullptr), _counterFont(nullptr), _counterFontOwned(false), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuIntroPlay(false), _menuHelpEnd(5000), _menuHelpPlaying(false), _menuTopHot(false), _menuOpen(false), _menuLayout(false), _menuReopen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _hotMovie(nullptr), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _delayUntil(0), _waitTimer(-1), _dialogBoxView(0),
+	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _nightVisionMask(nullptr), _binocularMask(nullptr), _binocularScaled(nullptr), _binocularScaledBeam(0), _flashlightMask(nullptr), _flashlightScaled(nullptr), _flashlightScaledKey(0), _bandTintOn(false), _bandTintTool(0), _viewfinder(nullptr), _counterFont(nullptr), _counterFontOwned(false), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuIntroPlay(false), _menuHelpEnd(5000), _menuHelpPlaying(false), _menuTopHot(false), _menuOpen(false), _menuLayout(false), _menuReopen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _hotMovie(nullptr), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _delayUntil(0), _waitTimer(-1), _dialogBoxView(0),
 	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _dragIdea(0), _charHover(0), _dragMoved(false), _timersPaused(false), _barRevealed(false), _barRevealEnd(0), _sound(_discFiles) {
 	g_engine = this;
 	addHooks();
@@ -1287,6 +1287,7 @@ void XFilesEngine::syncView() {
 	}
 
 	closeView();
+	latchBandTint(); // the view play takes the tint the nav's SetLBoxTint/ClearLBoxTint set (0x45d2f0)
 	_viewId = _script->getView();
 	_viewAssets = ids;
 	for (uint i = 0; i < ids.size(); i++) {
@@ -1625,9 +1626,12 @@ void XFilesEngine::clearScreen() {
  */
 void XFilesEngine::applyBandTint(bool keepUntinted) {
 	_bandUntinted.free();
-	byte tr, tg, tb;
-	if (!_script->getBandTint(tr, tg, tb))
+	// A tool show/hide latches the tint again
+	if (_bandTintTool != _script->heldToolType() * 4 + _script->binocularsMode())
+		latchBandTint();
+	if (!_bandTintOn)
 		return;
+	byte tr = _bandTintRGB[0], tg = _bandTintRGB[1], tb = _bandTintRGB[2];
 	Graphics::Surface band = _screen.getSubArea(Common::Rect(kBandLeft, kBandTop, kBandLeft + kBandWidth, kBandTop + kBandHeight));
 	if (keepUntinted)
 		_bandUntinted.copyFrom(band);
@@ -1638,6 +1642,16 @@ void XFilesEngine::applyBandTint(bool keepUntinted) {
 			writePixel(band, x, y, r * tr / 255, g * tg / 255, b * tb / 255);
 		}
 	}
+}
+
+/**
+ * The exe latches the letterbox tint: a SetLBoxTint or ClearLBoxTint takes effect at the next view play or tool
+ * show/hide (0x45d2f0 copies the entry into the band, docs/exe/hooks/groups.md), so a turn out of a tinted view
+ * slides from the tinted picture although the nav cleared the tint first (B-286).
+ */
+void XFilesEngine::latchBandTint() {
+	_bandTintTool = _script->heldToolType() * 4 + _script->binocularsMode();
+	_bandTintOn = _script->getBandTint(_bandTintRGB[0], _bandTintRGB[1], _bandTintRGB[2]);
 }
 
 void XFilesEngine::drawView() {
