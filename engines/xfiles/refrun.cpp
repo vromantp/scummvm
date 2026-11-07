@@ -165,7 +165,7 @@ void XFilesEngine::runSteps() {
 				_mouse = pos;
 				if (_menuOpen)
 					menuChoice(clickMenu(pos));
-				else if (queue.empty())
+				else if (queue.empty() && !_whiteHold) // the white takes no clicks (B-288)
 					handleClick(pos);
 			}
 			return;

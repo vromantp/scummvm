@@ -540,6 +540,13 @@ void XFilesEngine::runGame() {
 			updateInterface();
 			updateViewPause();
 			updateDialogBox();
+			if (_whiteHold) {
+				// 59824 plays with the script and the input held in the exe (movie.start wait=1): nothing answers
+				// a click until its end starts the death clip (B-288)
+				input.click = false;
+				input.rightClick = false;
+				input.release = false;
+			}
 			if (input.click)
 				handleClick(input.pos);
 			if (input.rightClick)
