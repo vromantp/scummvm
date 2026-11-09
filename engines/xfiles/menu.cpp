@@ -104,7 +104,6 @@ bool XFilesEngine::playIntro() {
 bool XFilesEngine::runMenu() {
 	// The start-up menu: Options and Help show their layout over a black screen
 	startMenu();
-	_cursors->setVisible(true); // A game may have ended during a movie
 	while (!shouldQuit()) {
 		if (_pendingLoad.valid) {
 			// A load chosen in the GMM: the game starts from it, as after the menu's Load
@@ -456,7 +455,6 @@ void XFilesEngine::runMenuLayout(uint32 layout) {
 		updateInterface();
 		Interface::Hit hover = _interface->hitTest(_mouse);
 		VCInterfaceItem item;
-		_cursors->setVisible(true);
 		_cursors->show(hover.kind == Interface::kHitItem && _data->getInterfaceItem(hover.id, item) ? item.cursor : 0);
 		_cursors->update(getPreference(kPrefTranslucency));
 		_screen.fillRect(Common::Rect(_screen.w, _screen.h), 0);

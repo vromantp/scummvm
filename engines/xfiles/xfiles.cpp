@@ -70,7 +70,7 @@ static const uint32 kXCursor = 25541;
 
 XFilesEngine::XFilesEngine(OSystem *syst, const ADGameDescription *gameDesc) : Engine(syst),
 	_gameDescription(gameDesc), _randomSource("xfiles"), _data(nullptr), _script(nullptr), _menuX(nullptr), _menuEntries(nullptr), _menuClick(nullptr), _menuLoop(nullptr), _menuLoopSound(nullptr), _menuTop(nullptr), _nightVisionMask(nullptr), _binocularMask(nullptr), _binocularScaled(nullptr), _binocularScaledBeam(0), _flashlightMask(nullptr), _flashlightScaled(nullptr), _flashlightScaledKey(0), _bandTintOn(false), _bandTintTool(0), _viewfinder(nullptr), _counterFont(nullptr), _counterFontOwned(false), _menuReturn(nullptr), _menuIntroDone(false), _menuFading(false), _menuIntroPlay(false), _menuHelpEnd(5000), _menuHelpPlaying(false), _menuTopHot(false), _menuOpen(false), _menuLayout(false), _menuReopen(false), _paused(false), _pauseDepth(0), _pauseStart(0), _pausedTotal(0), _video(nullptr), _videoStarted(0), _viewId(0), _hotMovie(nullptr), _shots(0), _shotDue(0), _shotId(0), _shotView(0), _shotBox(false), _nextStep(0), _waitVideo(0), _delayUntil(0), _waitTimer(-1), _dialogBoxView(0),
-	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _dragIdea(0), _charHover(0), _dragMoved(false), _timersPaused(false), _whiteHold(false), _barRevealed(false), _barRevealEnd(0), _sound(_discFiles) {
+	_textsDll(nullptr), _texts(nullptr), _interface(nullptr), _cursors(nullptr), _lastClickTime(0), _dragIdea(0), _charHover(0), _dragMoved(false), _timersPaused(false), _movieCursor(false), _whiteHold(false), _barRevealed(false), _barRevealEnd(0), _sound(_discFiles) {
 	g_engine = this;
 	addHooks();
 	_loadedSave = false;
@@ -493,7 +493,6 @@ void XFilesEngine::runGame() {
 			if (input.click)
 				menuChoice(clickMenu(input.pos));
 			if (_menuOpen) {
-				_cursors->setVisible(true);
 				_cursors->show(0);
 				_cursors->update(getPreference(kPrefTranslucency));
 				drawMenu();
@@ -517,9 +516,8 @@ void XFilesEngine::runGame() {
 		_subliminal.update(gameMillis(), *_script, getUberVariable(0), getUberVariable(1), getUberVariable(2),
 			_script->getVideoQueue().empty() || _captions.hasCard());
 		bool still = !_script->getVideoQueue().empty() && isStillVideo(_script->getVideoQueue()[0]);
-		// A playing movie shows no cursor (B-211)
 		bool movie = !_script->getVideoQueue().empty() && !still;
-		_cursors->setVisible(!movie);
+		_movieCursor = movie;
 		if (movie)
 			_whiteHold = false;
 		if (movie) {
@@ -528,6 +526,8 @@ void XFilesEngine::runGame() {
 				handleClick(input.pos);
 			if (!_script->getVideoQueue().empty())
 				playQueuedVideo(input);
+			// The exe never hides the cursor for a movie: the refresh finds the playing video (B-285)
+			updateCursor();
 		} else {
 			// A queued still is shown over the view, which stays live (asset-play.md)
 			if (still)
@@ -2217,8 +2217,8 @@ void XFilesEngine::updateCursor() {
 	// The firing cursor stays until the hit view is gone (the next view, see showCursorAnimation)
 	if (_firingCursor && _script->getView() != _firingView)
 		_firingCursor = 0;
-	// Over AlienBlast's white the cursor is the default one: the sound object of 59824 refreshes it at its start and
-	// the exe's refresh finds no nav (observed in the original, B-284)
+	// Over AlienBlast's white no view or nav is live (AlienBlast 0x4b6220 cancels the queued activations), so the
+	// refresh (kind 16, 0x4468d0) finds nothing and shows the default cursor (observed in the original, B-284)
 	uint32 cursor = _whiteHold ? 0 : getCursorAt(_mouse);
 	// With the gun (inventory value 9) in hand the default cursor is the tool sight, group 132 (screen +0x960/+0x96c,
 	// 0x5105d0, 0x4463b0), wherever the default would show
@@ -2251,7 +2251,9 @@ uint32 XFilesEngine::getCursorAt(const Common::Point &pos) const {
 	if (_dragIdea && _dragMoved)
 		return 0;
 	uint32 held = isHolding() ? _interface->getHeldCursor() : 0;
-	Interface::Hit hit = _interface->hitTest(pos);
+	// A playing picture video: the bar is not live under it (the original shows the crosshair over the bar too,
+	// seen in a window), so only the X corner, the dialog box and the .HOT entries below beat the video
+	Interface::Hit hit = _movieCursor ? Interface::Hit() : _interface->hitTest(pos);
 	if (hit.kind == Interface::kHitItem) {
 		// IfaceItem_ShowCursor (0x4469e0): the item's own, also with an item in hand
 		VCInterfaceItem item;
@@ -2299,6 +2301,10 @@ uint32 XFilesEngine::getCursorAt(const Common::Point &pos) const {
 		if (_script->isGunHeld())
 			return Cursors::kToolCursorId;
 	}
+	// A playing picture video hits before layouts with +0x178, navs, explorables and character views (the
+	// HitTestObject order 0x519e40, sound-object step 0x45a0a0) and shows the default crosshair
+	if (_movieCursor)
+		return 0;
 	ViewHit viewHit = hitView(pos);
 	switch (viewHit.kind) {
 	case ViewHit::kExplorable:

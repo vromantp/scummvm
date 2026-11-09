@@ -60,8 +60,6 @@ public:
 	 * alpha plane; off, keyed on pure blue (Prefs_Apply 0x452d70). A change shows the cursor again.
 	 */
 	void update(bool translucent);
-	/** Hide the cursor (a movie plays: the original shows none) or show it again. */
-	void setVisible(bool visible);
 
 private:
 	struct Cursor {
