@@ -613,13 +613,13 @@ bool XFilesEngine::buildSave(PendingLoad &out) {
 		return false;
 	out.valid = false;
 	fillSnapshot(out.save);
-	_script->getSaved(out.values);
 	// An icon still waiting for the reveal's timer is saved in the bar; the running game keeps waiting
 	for (uint i = 0; i < _pendingIcons.size(); i++) {
 		if (Common::find(out.save.inventory.begin(), out.save.inventory.end(), _pendingIcons[i].asset) == out.save.inventory.end())
 			out.save.inventory.push_back(_pendingIcons[i].asset);
 	}
 	out.valid = true;
+	_script->getSaved(out.values);
 	return true;
 }
 
@@ -1221,13 +1221,14 @@ void XFilesEngine::updateTimers() {
 		_timersPaused = false;
 	}
 	const Common::HashMap<uint, Script::Timer> &timers = _script->getTimers();
-	Common::Array<uint> expired, stopped;
+	Common::Array<Common::Pair<uint, uint32>> expired; // number, serial
+	Common::Array<uint> stopped;
 	for (Common::HashMap<uint, Script::Timer>::const_iterator it = timers.begin(); it != timers.end(); ++it) {
 		if (!_timerStates.contains(it->_key) || _timerStates[it->_key].serial != it->_value.serial) {
 			TimerState state = { it->_value.serial, now, it->_value.ms, false };
 			_timerStates[it->_key] = state;
 		} else if (!_timerStates[it->_key].paused && now - _timerStates[it->_key].started >= _timerStates[it->_key].ms) {
-			expired.push_back(it->_key);
+			expired.push_back(Common::Pair<uint, uint32>(it->_key, it->_value.serial));
 		}
 	}
 	for (Common::HashMap<uint, TimerState>::const_iterator it = _timerStates.begin(); it != _timerStates.end(); ++it) {
@@ -1284,12 +1285,16 @@ void XFilesEngine::updateTimers() {
 		_barRevealed = false;
 
 	for (uint i = 0; i < expired.size(); i++) {
-		debugC(1, kDebugScript, "-- timer %u expired", expired[i]);
-		_timerStates.erase(expired[i]);
-		if ((int)expired[i] == _waitTimer)
+		uint n = expired[i].first;
+		// An earlier expiry may have stopped or restarted this timer (a new serial): the restarted one is not due
+		if (!timers.contains(n) || timers.getVal(n).serial != expired[i].second)
+			continue;
+		debugC(1, kDebugScript, "-- timer %u expired", n);
+		_timerStates.erase(n);
+		if ((int)n == _waitTimer)
 			_waitTimer = -1;
 		// Icons are left alone: the data disables them when a choice times out
-		_script->expireTimer(expired[i]);
+		_script->expireTimer(n);
 	}
 }
 

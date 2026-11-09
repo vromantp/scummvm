@@ -147,15 +147,18 @@ void SoundPlayer::clearClips() {
 }
 
 void SoundPlayer::updateClips() {
-	Common::Array<uint32> ended;
+	Common::Array<Common::Pair<uint32, Movie *>> ended;
 	for (Common::HashMap<uint32, Clip>::iterator it = _clips.begin(); it != _clips.end(); ++it) {
 		it->_value.movie->update();
 		if (it->_value.movie->hasEnded())
-			ended.push_back(it->_key);
+			ended.push_back(Common::Pair<uint32, Movie *>(it->_key, it->_value.movie));
 	}
 	for (uint i = 0; i < ended.size(); i++) {
-		stopClip(ended[i]);
-		_script->finishSound(ended[i]);
+		// An earlier end callback may have restarted this clip: a new movie (which has not ended) took its place
+		if (!_clips.contains(ended[i].first) || _clips[ended[i].first].movie != ended[i].second || !ended[i].second->hasEnded())
+			continue;
+		stopClip(ended[i].first);
+		_script->finishSound(ended[i].first);
 	}
 }
 
@@ -210,17 +213,20 @@ void SoundPlayer::updateSounds(bool sound3D) {
 	// 3D sounds are placed again when the player moves
 	bool moved = _script->getView() != _soundView;
 	_soundView = _script->getView();
-	Common::Array<uint32> ended;
+	Common::Array<Common::Pair<uint32, Movie *>> ended;
 	for (Common::HashMap<uint32, Sound>::iterator it = _sounds.begin(); it != _sounds.end(); ++it) {
 		if (moved && it->_value.positional)
 			placeSound(it->_value, sound3D);
 		it->_value.movie->update();
 		if (it->_value.movie->hasEnded())
-			ended.push_back(it->_key);
+			ended.push_back(Common::Pair<uint32, Movie *>(it->_key, it->_value.movie));
 	}
 	for (uint i = 0; i < ended.size(); i++) {
-		stopSound(ended[i]);
-		_script->finishSound(ended[i]);
+		// An earlier end callback may have restarted this sound: a new movie (which has not ended) took its place
+		if (!_sounds.contains(ended[i].first) || _sounds[ended[i].first].movie != ended[i].second || !ended[i].second->hasEnded())
+			continue;
+		stopSound(ended[i].first);
+		_script->finishSound(ended[i].first);
 	}
 }
 
