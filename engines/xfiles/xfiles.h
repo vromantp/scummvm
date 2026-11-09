@@ -273,7 +273,11 @@ private:
 	void drawBand(Graphics::Surface &band);
 	void playTransition(int mode, const Graphics::Surface &oldBand, const Graphics::Surface &newBand);
 	void closeView();
-	void updateInterface();
+	/** underMovie (B-290): the rolls are frozen while the mouse is inside the playing video's rect. */
+	void updateInterface(bool underMovie = false);
+	/** The on-screen rect of the playing picture video; empty for a still or no video (B-290). */
+	Common::Rect movieRect() const;
+	bool isBarHidden() const;
 	/** Stop or resume the view's movies under a shown layout (B-007). */
 	void updateViewPause();
 	void drawView();

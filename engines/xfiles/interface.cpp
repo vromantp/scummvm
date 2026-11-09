@@ -283,7 +283,10 @@ void Interface::update(const Script &script, const Common::Point &mouse, bool ca
 	// input (kit icons are suspended)
 	if (_kitOpen && (!isMouseInKit() || isModal()))
 		closeKit();
+	updateBar(mouse, hiddenBar);
+}
 
+void Interface::updateBar(const Common::Point &mouse, bool hiddenBar) {
 	// The bar opens while the mouse is over it, or always if the inventory
 	// preference is "visible" (InvBar_OnRoll 0x468330); the open kit holds
 	// it open; a modal layout closes it

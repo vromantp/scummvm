@@ -95,6 +95,8 @@ public:
 	 * an icon's text below it while the mouse is over it.
 	 */
 	void update(const Script &script, const Common::Point &mouse, bool captions, bool hiddenBar, bool rolloverText);
+	/** Open or close the bar by the mouse (the last step of update; also runs under a movie). */
+	void updateBar(const Common::Point &mouse, bool hiddenBar);
 	/** The icons and their rollover texts (under the dialog box). */
 	void drawBar(Graphics::Surface &dst) const;
 	/** The items of the shown layouts, the lowest key last (over the dialog box and the captions). */

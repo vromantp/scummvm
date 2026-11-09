@@ -521,11 +521,22 @@ void XFilesEngine::runGame() {
 		if (movie)
 			_whiteHold = false;
 		if (movie) {
-			// A queued clip with a live .HOT entry takes the click on it (B-031); the other clicks are dropped
-			if (input.click && _hotMovie == _video && hotKindAt(input.pos))
-				handleClick(input.pos);
+			// B-290: a movie does not block the main loop. Inside the video's rect a click goes only to a live .HOT
+			// entry (B-031), else it is dropped; outside it the bar's icons and items take it. The X corner stays
+			// off during a video (user decision 2026-10-14; the exe opens the menu there)
+			if (input.click) {
+				Common::Rect rect = movieRect();
+				if (rect.isEmpty() || rect.contains(input.pos)) {
+					if (_hotMovie == _video && hotKindAt(input.pos))
+						handleClick(input.pos);
+				} else if (_interface->hitTest(input.pos).kind != Interface::kHitNone) {
+					handleClick(input.pos);
+				}
+			}
 			if (!_script->getVideoQueue().empty())
 				playQueuedVideo(input);
+			// The bar, icon rolls and rollover text run under a movie; the rolls freeze inside the video's rect
+			updateInterface(true);
 			// The exe never hides the cursor for a movie: the refresh finds the playing video (B-285)
 			updateCursor();
 		} else {
@@ -559,7 +570,9 @@ void XFilesEngine::runGame() {
 				_screen.fillRect(Common::Rect(_screen.w, _screen.h), _screen.format.RGBToColor(255, 255, 255));
 		}
 		if (movie) {
-			// A playing movie: drawView does not run, the text layers still go over it
+			// A playing movie: drawView does not run; the bar (open by the mouse, seen in the original 2026-11-09)
+			// and the text layers still go over it
+			_interface->drawBar(_screen);
 			_captions.drawCard(_screen);
 			_headCredits.draw(_screen);
 			_subliminal.draw(_screen);
@@ -1502,9 +1515,21 @@ void XFilesEngine::updateViewPause() {
 	}
 }
 
-void XFilesEngine::updateInterface() {
+Common::Rect XFilesEngine::movieRect() const {
+	// The on-screen rect of the playing picture video (B-290); empty for a still or no video
+	if (!_video || !_video->isOpen() || _script->getVideoQueue().empty() || isStillVideo(_script->getVideoQueue()[0]))
+		return Common::Rect();
+	Common::Point pos = getBandPosition(*_video);
+	return Common::Rect(pos.x, pos.y, pos.x + _video->getWidth(), pos.y + _video->getHeight());
+}
+
+bool XFilesEngine::isBarHidden() const {
 	// A new item's reveal shows the hidden bar (deferInventoryIcon)
-	bool hiddenBar = _preferences.variable(kPrefInventory) && _script->getVariable(_preferences.variable(kPrefInventory)) == 'H' && !_barRevealed;
+	return _preferences.variable(kPrefInventory) && _script->getVariable(_preferences.variable(kPrefInventory)) == 'H' && !_barRevealed;
+}
+
+void XFilesEngine::updateInterface(bool underMovie) {
+	bool hiddenBar = isBarHidden();
 	_interface->setAIGlow(_script->isHintGlowing());
 	// A modal layout closing resumes the AI icon when a hint is available (0x509520); it never suspends it
 	bool modal = _interface->isModal();
@@ -1517,6 +1542,13 @@ void XFilesEngine::updateInterface() {
 	// Roll Into and Roll Out Of for the icons and layout items under the
 	// mouse (the evidence kit icon opens the kit from these)
 	Interface::Hit hover = _interface->hitTest(_mouse);
+	// B-290: under a movie the mouse inside the video's rect changes no roll state (the exe's sound object takes
+	// the hit): the rolls and the character view stay as they were
+	if (underMovie) {
+		Common::Rect rect = movieRect();
+		if (rect.isEmpty() || rect.contains(_mouse))
+			return;
+	}
 	if (hover.kind != _hover.kind || hover.id != _hover.id) {
 		Interface::Hit old = _hover;
 		_hover = hover;
@@ -2251,9 +2283,8 @@ uint32 XFilesEngine::getCursorAt(const Common::Point &pos) const {
 	if (_dragIdea && _dragMoved)
 		return 0;
 	uint32 held = isHolding() ? _interface->getHeldCursor() : 0;
-	// A playing picture video: the bar is not live under it (the original shows the crosshair over the bar too,
-	// seen in a window), so only the X corner, the dialog box and the .HOT entries below beat the video
-	Interface::Hit hit = _movieCursor ? Interface::Hit() : _interface->hitTest(pos);
+	// B-290: the bar is live under a playing video (its icons show the crosshair as their own cursor)
+	Interface::Hit hit = _interface->hitTest(pos);
 	if (hit.kind == Interface::kHitItem) {
 		// IfaceItem_ShowCursor (0x4469e0): the item's own, also with an item in hand
 		VCInterfaceItem item;
@@ -2303,7 +2334,8 @@ uint32 XFilesEngine::getCursorAt(const Common::Point &pos) const {
 	}
 	// A playing picture video hits before layouts with +0x178, navs, explorables and character views (the
 	// HitTestObject order 0x519e40, sound-object step 0x45a0a0) and shows the default crosshair
-	if (_movieCursor)
+	// B-290: the exe keeps the last refresh's cursor inside the rect instead of re-choosing it (not ported)
+	if (_movieCursor && movieRect().contains(pos))
 		return 0;
 	ViewHit viewHit = hitView(pos);
 	switch (viewHit.kind) {
