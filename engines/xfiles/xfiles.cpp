@@ -877,6 +877,9 @@ void XFilesEngine::fadeToColor(byte cr, byte cg, byte cb, uint32 holdMs) {
 		Common::Event event;
 		while (g_system->getEventManager()->pollEvent(event)) {
 		}
+		// The sounds go on under the fade (AlienBlast: 59824 plays while the screen fades, exe.log sound.start
+		// before the hook's cpp line); they only feed their audio from here (B-284)
+		_sound.update(getPreference(kPref3DSound));
 		uint32 step = 0; // 0: the picture as it was, kFadeSteps: black
 		if (elapsed >= kStartDelay + kFadeLength)
 			step = kFadeSteps;
@@ -2214,10 +2217,12 @@ void XFilesEngine::updateCursor() {
 	// The firing cursor stays until the hit view is gone (the next view, see showCursorAnimation)
 	if (_firingCursor && _script->getView() != _firingView)
 		_firingCursor = 0;
-	uint32 cursor = getCursorAt(_mouse);
+	// Over AlienBlast's white the cursor is the default one: the sound object of 59824 refreshes it at its start and
+	// the exe's refresh finds no nav (observed in the original, B-284)
+	uint32 cursor = _whiteHold ? 0 : getCursorAt(_mouse);
 	// With the gun (inventory value 9) in hand the default cursor is the tool sight, group 132 (screen +0x960/+0x96c,
 	// 0x5105d0, 0x4463b0), wherever the default would show
-	if (!cursor && _script->isGunHeld())
+	if (!cursor && !_whiteHold && _script->isGunHeld())
 		cursor = Cursors::kToolCursorId;
 	_cursors->show(cursor);
 	_cursors->update(getPreference(kPrefTranslucency));
