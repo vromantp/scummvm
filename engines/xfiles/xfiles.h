@@ -453,8 +453,8 @@ private:
 	bool _whiteHold;                              ///< AlienBlast's white stays on screen until a video or another fade (B-287)
 	bool _barRevealed;                            ///< The reveal shows the hidden bar until _barRevealEnd
 	uint32 _barRevealEnd;                         ///< gameMillis()
-	/** The pending icons join the bar now (before a save), or are dropped (clear: a new game, a load). */
-	void flushPendingIcons(bool clear);
+	/** The pending icons are dropped (a new game, a load); a save copies them into its snapshot instead. */
+	void flushPendingIcons();
 	Common::Array<PressedItem> _pressedItems;     ///< Phone buttons shown pressed (Script::takePressedItems)
 	SoundPlayer _sound;                           ///< The sounds and placed clips (sound.cpp)
 

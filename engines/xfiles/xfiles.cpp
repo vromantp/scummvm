@@ -424,7 +424,7 @@ void XFilesEngine::startNewGame() {
 	// A new game starts from XFiles.gam, which allows the head credits
 	// (XFiles.exe Game_Start 0x48cd70)
 	_headCredits.setEnabled(true);
-	flushPendingIcons(true);
+	flushPendingIcons();
 	// No commit yet: Try again restarts from XFiles.gam
 	_checkpointNew = true;
 	_checkpoint = PendingLoad();
@@ -432,7 +432,7 @@ void XFilesEngine::startNewGame() {
 }
 
 void XFilesEngine::restoreGame(const VCSave &save) {
-	flushPendingIcons(true);
+	flushPendingIcons();
 	_script->restore(save);
 	// The view's clip plays from the saved time (0x51d200), the head
 	// credits roll again if they were rolling, from the last credit
@@ -611,11 +611,14 @@ void XFilesEngine::applyPendingLoad() {
 bool XFilesEngine::buildSave(PendingLoad &out) {
 	if (!_script)
 		return false;
-	// An icon still waiting for the reveal's timer is saved in the bar
-	flushPendingIcons(false);
 	out.valid = false;
 	fillSnapshot(out.save);
 	_script->getSaved(out.values);
+	// An icon still waiting for the reveal's timer is saved in the bar; the running game keeps waiting
+	for (uint i = 0; i < _pendingIcons.size(); i++) {
+		if (Common::find(out.save.inventory.begin(), out.save.inventory.end(), _pendingIcons[i].asset) == out.save.inventory.end())
+			out.save.inventory.push_back(_pendingIcons[i].asset);
+	}
 	out.valid = true;
 	return true;
 }
@@ -1637,15 +1640,9 @@ bool XFilesEngine::deferInventoryIcon(uint32 id) {
 	return true;
 }
 
-void XFilesEngine::flushPendingIcons(bool clear) {
-	const Common::Array<uint32> &bar = _script->getInventory();
-	for (uint i = 0; i < _pendingIcons.size() && !clear; i++) {
-		if (Common::find(bar.begin(), bar.end(), _pendingIcons[i].asset) == bar.end())
-			_script->addInventoryIcon(_pendingIcons[i].asset);
-	}
+void XFilesEngine::flushPendingIcons() {
 	_pendingIcons.clear();
-	if (clear)
-		_barRevealed = false;
+	_barRevealed = false;
 }
 
 void XFilesEngine::clickInventory(uint32 inventory) {
