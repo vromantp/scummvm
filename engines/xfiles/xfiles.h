@@ -448,6 +448,7 @@ private:
 	// after 500 ms, the bar hides again 1000 ms after that
 	static const uint32 kIconJoinDelay = 500;
 	static const uint32 kRevealHideDelay = 1000;
+	Script::OncePerProcess _onceFlags;            ///< Set pieces that play once per process: kept across a load, New and Try again
 	Common::Array<DelayedPlay> _pendingIcons;     ///< Items whose icon joins the bar at `due` (asset: the VCInventory)
 	bool _movieCursor;                            ///< A picture video heads the queue: it takes the cursor hit test (B-285)
 	bool _whiteHold;                              ///< AlienBlast's white stays on screen until a video or another fade (B-287)

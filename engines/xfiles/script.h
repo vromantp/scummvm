@@ -254,6 +254,16 @@ public:
 
 	/** Where C++ functions and non-blocking media go; nullptr (the default) only logs them. */
 	/** The engine ends sounds at their clip end (SoundPlayer), so a play of an asset that still has a sound object is dropped. */
+	/** GetPlayFBIShot, GetPlayBones and GetPlayCancer give 1 once per process (0x4f9ef0, 0x4f9f20, 0x4f9f70). */
+	struct OncePerProcess {
+		bool fbiShot, playBones, playCancer;
+		OncePerProcess() : fbiShot(true), playBones(true), playCancer(true) {}
+	};
+	/** The owner's flags, which outlive this Script (a load or Try again makes a new one). */
+	void setOncePerProcess(OncePerProcess *once) {
+		_once = once;
+	}
+
 	void setHooks(ScriptHooks *hooks) {
 		_hooks = hooks;
 		_soundEnds = hooks != nullptr;
@@ -997,9 +1007,8 @@ private:
 	bool _shootDead[3];                        ///< Goon shot
 	int _shootCur;                             ///< Goon on screen, 0 for none
 	int _shootPerm[3][3];                      ///< Permutations of 1, 2, 3 the reset fills (no reader known)
-	bool _fbiShot;                             ///< GetPlayFBIShot gives 1 once per process
-	bool _playBones;                           ///< GetPlayBones (0x6b1f14), as _fbiShot
-	bool _playCancer;                          ///< GetPlayCancer (0x6b1f18), as _fbiShot
+	OncePerProcess _ownOnce;                   ///< Used when the engine hands no flags (vcdump: one game per process)
+	OncePerProcess *_once;
 	bool _endGamePending;                      ///< EndGame ran and waits for the engine's answer
 	uint32 _endGameVar;                        ///< Its variable (bReplay)
 	int32 _endGameValue;                       ///< and the value it had

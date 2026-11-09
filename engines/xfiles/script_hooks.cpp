@@ -119,22 +119,22 @@ void Script::addGameHooks() {
 	t.add("GetPlayFBIShot", [](Script &s, const HookCall &c) {
 		if (!c.isVariable(0))
 			return false;
-		s.setVariable(c.action.args[0].value, s._fbiShot); // 0x4f9ef0
-		s._fbiShot = false;
+		s.setVariable(c.action.args[0].value, s._once->fbiShot); // 0x4f9ef0
+		s._once->fbiShot = false;
 		return true;
 	});
 	t.add("GetPlayBones", [](Script &s, const HookCall &c) {
 		if (!c.isVariable(0))
 			return false;
-		s.setVariable(c.action.args[0].value, s._playBones); // 0x4f9f20
-		s._playBones = false;
+		s.setVariable(c.action.args[0].value, s._once->playBones); // 0x4f9f20
+		s._once->playBones = false;
 		return true;
 	});
 	t.add("GetPlayCancer", [](Script &s, const HookCall &c) {
 		if (!c.isVariable(0))
 			return false;
-		s.setVariable(c.action.args[0].value, s._playCancer); // 0x4f9f70
-		s._playCancer = false;
+		s.setVariable(c.action.args[0].value, s._once->playCancer); // 0x4f9f70
+		s._once->playCancer = false;
 		return true;
 	});
 	t.add("RandGenRange", [](Script &s, const HookCall &c) {

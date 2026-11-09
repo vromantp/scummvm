@@ -415,6 +415,7 @@ void XFilesEngine::createScript() {
 	_script = new Script(*_data);
 	_preferences.setScript(_script);
 	_script->setHooks(this);
+	_script->setOncePerProcess(&_onceFlags);
 	_sound.attach(_data, _script);
 	_script->setTexts(_texts);
 	_script->setRandomSeed(_randomSource.getRandomNumber(0xFFFFFFFF));
@@ -618,8 +619,8 @@ bool XFilesEngine::buildSave(PendingLoad &out) {
 		if (Common::find(out.save.inventory.begin(), out.save.inventory.end(), _pendingIcons[i].asset) == out.save.inventory.end())
 			out.save.inventory.push_back(_pendingIcons[i].asset);
 	}
-	out.valid = true;
 	_script->getSaved(out.values);
+	out.valid = true;
 	return true;
 }
 
