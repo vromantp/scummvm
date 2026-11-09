@@ -557,17 +557,13 @@ void XFilesEngine::runGame() {
 			drawView();
 			if (_whiteHold)
 				_screen.fillRect(Common::Rect(_screen.w, _screen.h), _screen.format.RGBToColor(255, 255, 255));
-			// The folders follow Pref_bTranslucency (Prefs_Apply 0x452d70). The box stays open behind the menu, but
-			// Options and Help cover it (and take no clicks on it)
-			if (!_menuLayout)
-				_dialogBox.draw(_screen, _mouse, !getPreference(kPrefTranslucency));
-			_sound.drawClips(_screen);
 		}
-		// The location card is a timed overlay on the suspended scene: it would sit over Options and Help
-		if (!_menuLayout)
+		if (movie) {
+			// A playing movie: drawView does not run, the text layers still go over it
 			_captions.drawCard(_screen);
-		_headCredits.draw(_screen);
-		_subliminal.draw(_screen);
+			_headCredits.draw(_screen);
+			_subliminal.draw(_screen);
+		}
 		present();
 		updateShots();
 		runSteps();
@@ -1681,6 +1677,8 @@ void XFilesEngine::drawView() {
 		Common::Point pos = getBandPosition(*_video);
 		blit(_video->getFrame(), pos.x, pos.y);
 	}
+	// Band clips are part of the view group (0x80800)
+	_sound.drawClips(_screen);
 	applyBandTint(_script->heldToolType() == 3 && _script->getFlashlight()[0]);
 	if (_interface->isModal()) {
 		// The suspend tint over the view's picture (B-007)
@@ -1696,11 +1694,19 @@ void XFilesEngine::drawView() {
 		}
 		Interface::tintRect(_screen, dim);
 	}
-	for (uint i = 0; i < _layers.size(); i++)
-		drawCaptions(*_layers[i], getBandPosition(*_layers[i]));
 	drawViewfinder();
 	drawToolOverlay();
-	_interface->draw(_screen);
+	// The rest follows the exe's draw list, bottom to top (screen-composition.md): icons, the dialog box (translucent
+	// by Pref_bTranslucency, Prefs_Apply 0x452d70; Options and Help cover it and it takes no clicks then), the location
+	// card and head credits, captions, the subliminal word, then the layout items over all of it
+	_interface->drawBar(_screen);
+	_dialogBox.draw(_screen, _mouse, !getPreference(kPrefTranslucency));
+	_captions.drawCard(_screen);
+	_headCredits.draw(_screen);
+	for (uint i = 0; i < _layers.size(); i++)
+		drawCaptions(*_layers[i], getBandPosition(*_layers[i]));
+	_subliminal.draw(_screen);
+	_interface->drawItems(_screen);
 	if (_dragIdea && _dragMoved)
 		_interface->drawDragged(_screen, _dragIdea, _mouse);
 	drawPhotos();

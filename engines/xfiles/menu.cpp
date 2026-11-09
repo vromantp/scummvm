@@ -460,7 +460,8 @@ void XFilesEngine::runMenuLayout(uint32 layout) {
 		_cursors->show(hover.kind == Interface::kHitItem && _data->getInterfaceItem(hover.id, item) ? item.cursor : 0);
 		_cursors->update(getPreference(kPrefTranslucency));
 		_screen.fillRect(Common::Rect(_screen.w, _screen.h), 0);
-		_interface->draw(_screen);
+		_interface->drawBar(_screen);
+		_interface->drawItems(_screen);
 		present();
 	}
 	// Back to the menu: the layout's state goes with the script and the interface

@@ -95,7 +95,10 @@ public:
 	 * an icon's text below it while the mouse is over it.
 	 */
 	void update(const Script &script, const Common::Point &mouse, bool captions, bool hiddenBar, bool rolloverText);
-	void draw(Graphics::Surface &dst) const;
+	/** The icons and their rollover texts (under the dialog box). */
+	void drawBar(Graphics::Surface &dst) const;
+	/** The items of the shown layouts, the lowest key last (over the dialog box and the captions). */
+	void drawItems(Graphics::Surface &dst) const;
 
 	/** What is under the mouse: layout items first, then icons. */
 	Hit hitTest(const Common::Point &pos) const;
@@ -216,6 +219,7 @@ private:
 		uint32 id;
 		uint32 layoutIndex; ///< Position of its layout in the shown list
 		uint16 layer;
+		uint32 key; ///< The exe's draw list key: the lower is on top
 		Common::Rect rect;
 		Graphic *graphic;    ///< nullptr if the item shows no picture
 		bool hasText;

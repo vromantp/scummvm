@@ -551,17 +551,18 @@ void Interface::syncItems(const Script &script) {
 			item.id = data.id;
 			item.layoutIndex = i;
 			item.layer = data.layer & 0xff; // only the low byte is the drawing layer
+			// The screen's layer key (docs/subsystems/screen-composition.md): a layout shown later has its keys below
+			// every earlier one (0x42b250: lowest shown key minus 0x100), the low byte of the layer adds to it
+			item.key = 0x80010 - 0x100 * (i + 1) + item.layer;
 			item.rect = Common::Rect(data.rect.left, data.rect.top, data.rect.right, data.rect.bottom);
 			// The picture is the first enabled asset of the list (0x41fe60)
 			item.graphic = loadAsset(script.firstEnabled(data.assets));
 			item.hasText = false;
-			// Lower layers are on top: higher ones are drawn first. The phone
-			// shows it: its body is layer 200, the pressed buttons 198-199,
-			// the display and the buttons' hot areas 100, and the full-screen
-			// item that closes it on a click outside 201. A later layout's
-			// items go over an earlier one's.
+			// The lower key is on top, so higher keys are drawn first. In one layout the phone shows it: its body is
+			// layer 200, the pressed buttons 198-199, the display and the buttons' hot areas 100, and the full-screen
+			// item that closes it on a click outside 201. Equal keys keep the activation order.
 			uint pos = _items.size();
-			while (pos > 0 && _items[pos - 1].layer < item.layer)
+			while (pos > 0 && _items[pos - 1].key < item.key)
 				pos--;
 			_items.insert_at(pos, item);
 		}
@@ -785,7 +786,7 @@ void Interface::drawDragged(Graphics::Surface &dst, uint32 ideaId, const Common:
 	}
 }
 
-void Interface::draw(Graphics::Surface &dst) const {
+void Interface::drawBar(Graphics::Surface &dst) const {
 	// A shown modal layout (or FadeBack) suspends the icons, the inventory and the items of the layouts under it:
 	// their pixels are multiplied by the suspend tint (B-007)
 	bool dim = isModal();
@@ -813,6 +814,9 @@ void Interface::draw(Graphics::Surface &dst) const {
 	drawRolloverText(dst, _evidence);
 	if (_barOpen)
 		drawRolloverText(dst, _inventory);
+}
+
+void Interface::drawItems(Graphics::Surface &dst) const {
 	// The modal layout is the last shown one that is not excepted; the layouts before it are suspended with their
 	// items, those from it on are not
 	int modalLayout = -1;
