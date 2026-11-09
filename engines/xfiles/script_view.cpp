@@ -495,8 +495,15 @@ void Script::enter(uint32 node, uint32 location, uint32 viewPoint, uint32 view, 
 	if (deactivateAll)
 		stopAllForTravel();
 	if (_travelDropped) {
-		// AlienBlast ran in the deactivations: the queued activations are dropped (0x41a770), the old picture stays
+		// AlienBlast ran in the deactivations: the queued activations are dropped (0x41a770), the old picture stays.
+		// The path goes back to the old one, else syncView plays the dropped view (with its nav transition) under
+		// the white fade (B-289)
 		_travelDropped = false;
+		_node = oldPath[0];
+		_location = oldPath[1];
+		_viewPoint = oldPath[2];
+		_view = oldPath[3];
+		_transition = kTransitionCut;
 		return;
 	}
 	for (int i = first; i < 3; i++)
