@@ -287,6 +287,7 @@ void Script::fireTriggers(uint32 id, int event, const EventFields &fields) {
 		VCTrigger t;
 		if (_data.getTrigger(triggers[i], t) && t.event == event) {
 			cover('T', t.id);
+			debugC(2, kDebugScript, "trigger T:%u", t.id);
 			runActions(t.actions, event, fields);
 		}
 	}
