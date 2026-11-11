@@ -301,6 +301,10 @@ private:
 	/** The picture of a photo scaled to w x h (a frame of its asset at its time, cropped), cached; null without a frame. */
 	const Graphics::Surface *getPhotoPicture(const VCPhoto &photo, int w, int h);
 	void handleClick(const Common::Point &pos);
+	/** The step a click at pos gives, as handleClick resolves it ("click:ID", "nav:ID", "ask:ID", "aiclick"), or empty. */
+	Common::String stepAt(const Common::Point &pos) const;
+	/** Debug: log the screen point that gives step (`-- point STEP X,Y`, or `off-screen`), found on a 4-pixel grid. */
+	void logStepPoint(const Common::String &step);
 
 	/** A view object under the mouse, found in the order clicks take them. */
 	struct ViewHit {

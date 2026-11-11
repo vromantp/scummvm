@@ -76,6 +76,8 @@ public:
 
 	/** A click at pos; topic is set for kHitTopic. */
 	Hit click(const Common::Point &pos, uint32 &topic);
+	/** The topic a click at pos would ask (0 for none), without the click's side effects (the debug point search). */
+	uint32 topicAt(const Common::Point &pos) const;
 	/** Whether a point is on the open box. */
 	bool contains(const Common::Point &pos) const;
 	/** The folder is keyed on pure blue instead of drawn through its alpha plane with blueFolder (Pref_bTranslucency off). */

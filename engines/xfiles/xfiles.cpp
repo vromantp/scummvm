@@ -2199,6 +2199,91 @@ void XFilesEngine::handleClick(const Common::Point &pos) {
 	}
 }
 
+Common::String XFilesEngine::stepAt(const Common::Point &pos) const {
+	// The order of handleClick, without its effects; what a click does with no video playing
+	Interface::Hit hit = _interface->hitTest(pos);
+	if (hit.kind == Interface::kHitItem)
+		return Common::String::format("click:%u", hit.id);
+	if (_menuLayout || _menuOpen)
+		return Common::String();
+	if (hit.kind == Interface::kHitNone && !_dialogBox.contains(pos) && inMenuCorner(pos))
+		return Common::String();
+	if (_dialogBox.isOpen()) {
+		if (uint32 topic = _dialogBox.topicAt(pos))
+			return Common::String::format("ask:%u", topic);
+		if (_dialogBox.contains(pos) || hit.kind == Interface::kHitNone)
+			return Common::String();
+	}
+	switch (hit.kind) {
+	case Interface::kHitInventory:
+	case Interface::kHitEmotion:
+	case Interface::kHitAction:
+	case Interface::kHitEvidence:
+	case Interface::kHitEvidenceRow:
+		return Common::String::format("click:%u", hit.id);
+	case Interface::kHitAIIcon:
+		return "aiclick";
+	case Interface::kHitIdea:
+		return Common::String(); // a drag, not a click
+	default:
+		break;
+	}
+	if (_interface->isModal() || hotKindAt(pos))
+		return Common::String();
+	ViewHit viewHit = hitView(pos);
+	switch (viewHit.kind) {
+	case ViewHit::kExplorable:
+	case ViewHit::kCharView:
+		return Common::String::format("click:%u", viewHit.id);
+	case ViewHit::kNav:
+		return Common::String::format("nav:%u", viewHit.id);
+	default:
+		return Common::String();
+	}
+}
+
+void XFilesEngine::logStepPoint(const Common::String &step) {
+	// click, dclick, rollin and rollout of an object share the point of its click
+	Common::String want = step;
+	uint colon = step.findFirstOf(':');
+	if (step.hasPrefix("dclick:") || step.hasPrefix("rollin:") || step.hasPrefix("rollout:"))
+		want = "click:" + step.substr(colon + 1);
+	// A hidden inventory bar opens while the mouse is over it: open it for the scan, the point is sent with a move there
+	bool hiddenBar = isBarHidden();
+	_interface->updateBar(Common::Point(kScreenWidth / 2, kScreenHeight - 10), hiddenBar);
+	// Every grid point (cell centres of 4 pixels) that gives the step; the one nearest the matches' centre is the point
+	Common::Array<Common::Point> found;
+	int64 sumX = 0, sumY = 0;
+	for (int y = 2; y < kScreenHeight; y += 4) {
+		for (int x = 2; x < kScreenWidth; x += 4) {
+			Common::Point pos(x, y);
+			Common::String got = stepAt(pos);
+			// A character view or explorable object both give click:ID
+			if (got == want) {
+				found.push_back(pos);
+				sumX += x;
+				sumY += y;
+			}
+		}
+	}
+	_interface->updateBar(_mouse, hiddenBar);
+	if (found.empty()) {
+		debugC(1, kDebugScript, "-- point %s off-screen", step.c_str());
+		return;
+	}
+	int cx = (int)(sumX / (int64)found.size()), cy = (int)(sumY / (int64)found.size());
+	Common::Point best = found[0];
+	int bestDist = 0x7fffffff;
+	for (uint i = 0; i < found.size(); i++) {
+		int dx = found[i].x - cx, dy = found[i].y - cy;
+		if (dx * dx + dy * dy < bestDist) {
+			bestDist = dx * dx + dy * dy;
+			best = found[i];
+		}
+	}
+	debugC(1, kDebugScript, "-- point %s %d,%d", step.c_str(), best.x, best.y);
+}
+
 XFilesEngine::ViewHit XFilesEngine::hitView(const Common::Point &pos, bool skipCharViews) const {
 	ViewHit hit;
 	hit.kind = ViewHit::kNone;

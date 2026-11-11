@@ -219,6 +219,14 @@ bool DialogBox::contains(const Common::Point &pos) const {
 	return isOpen() && getRect(0, 0, folder->getWidth(), folder->getHeight()).contains(pos);
 }
 
+uint32 DialogBox::topicAt(const Common::Point &pos) const {
+	if (!contains(pos) || !getRect(kListX, kListY, kListW, kListH).contains(pos))
+		return 0;
+	// The earlier areas of click() (close, tabs, scroll bar) lie outside the list
+	int row = getTopicAt(pos.y - _pos.y - kListY);
+	return row >= 0 ? getTopics()[row].id : 0;
+}
+
 DialogBox::Hit DialogBox::click(const Common::Point &pos, uint32 &topic) {
 	if (!contains(pos))
 		return kHitOutside;

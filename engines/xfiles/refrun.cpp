@@ -99,6 +99,11 @@ void XFilesEngine::runSteps() {
 	}
 	while (_nextStep < _steps.size()) {
 		const Common::String &step = _steps[_nextStep++];
+		if (step.hasPrefix("point:")) {
+			// Engine only (B-292): log the screen point of a step (the route before it comes from xfiles_fastforward)
+			logStepPoint(step.substr(6));
+			continue;
+		}
 		if (step.hasPrefix("delay:")) {
 			// Engine only: let MS of game time pass (the head credits, timers)
 			_delayUntil = MAX<uint32>(1, gameMillis() + atoi(step.c_str() + 6));
