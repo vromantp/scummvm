@@ -66,6 +66,32 @@ const ADGameDescription gameDescriptions[] = {
 		GUIO1(GUIO_NOMIDI)
 	},
 
+	// Spanish, Windows, 7 CDs.
+	{
+		"xfiles",
+		nullptr,
+		AD_ENTRY3s("XFiles.hdb", "de4e775a71d05ba0b5c5c7b0d71d6b3a", 6074064,
+				   "XFiles.gam", "9fc99da2d65bee17e6bd9cf1f7b3fd59", 155544,
+				   "XFilesT.dll", "3c8976dfadffb74e4a8cf429de5f5b24", 82432),
+		Common::ES_ESP,
+		Common::kPlatformWindows,
+		ADGF_UNSTABLE,
+		GUIO1(GUIO_NOMIDI)
+	},
+
+	// Italian, Windows, 7 CDs.
+	{
+		"xfiles",
+		nullptr,
+		AD_ENTRY3s("XFiles.hdb", "de4e775a71d05ba0b5c5c7b0d71d6b3a", 6074064,
+				   "XFiles.gam", "9fc99da2d65bee17e6bd9cf1f7b3fd59", 155544,
+				   "XFilesT.dll", "6cbb0cc3e8b032a942e629269d26f9d4", 81408),
+		Common::IT_ITA,
+		Common::kPlatformWindows,
+		ADGF_UNSTABLE,
+		GUIO1(GUIO_NOMIDI)
+	},
+
 	AD_TABLE_END_MARKER
 };
 
