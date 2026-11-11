@@ -114,6 +114,8 @@ static void listRemove(Common::Array<uint32> &list, uint32 id) {
 PdaHooks::PdaHooks(Script &script, const VCData &data)
 	: _script(script), _data(data), _inboxTop(0), _pdaFontSize(kPDAFontSize), _pdaLayout(false), _scrollItem(0),
 	  _scrollSize(kPDAFontSize), _scrollColor(0), _scrollBold(false), _scrollSans(false), _addressIndex(0), _noteDay(0), _noteDays(0) {
+	for (uint i = 0; i < kNoteDayCount; i++)
+		_noteOrder[i] = i;
 }
 
 void PdaHooks::addHooks(HookTable<Script> &t) {
@@ -495,13 +497,14 @@ void PdaHooks::addNote(uint32 id) {
 void PdaHooks::enablePDANote(uint32 id) {
 	// 0x4e6660: a note of the next day opens that day
 	addNote(id);
-	if (_noteDays < kNoteDayCount && dayHasNote(_noteDays, id))
+	if (_noteDays < kNoteDayCount && dayHasNote(noteDay(_noteDays), id))
 		_noteDays++;
 }
 
 void PdaHooks::enableAllNotes() {
 	// 0x4e6810: every note of every day, in order
-	for (uint day = 0; day < kNoteDayCount; day++) {
+	for (uint pos = 0; pos < kNoteDayCount; pos++) {
+		uint day = noteDay(pos);
 		VCInterfaceItem item;
 		Common::Array<uint32> members;
 		if (_data.getInterfaceItem(kNoteDayItems[day], item))
@@ -516,7 +519,7 @@ void PdaHooks::showNoteDayText() {
 	// 0x4e71a0: the scroll text starts with a blank, then each note of the day in list order
 	VCInterfaceItem item;
 	Common::Array<uint32> members;
-	if (_noteDay < kNoteDayCount && _data.getInterfaceItem(kNoteDayItems[_noteDay], item))
+	if (_noteDay < kNoteDayCount && _data.getInterfaceItem(kNoteDayItems[noteDay(_noteDay)], item))
 		_data.getMembers(item.assets, members);
 	Common::U32String text(" ");
 	for (uint i = 0; i < _notes.size(); i++) {
@@ -531,19 +534,57 @@ void PdaHooks::showNoteDayText() {
 void PdaHooks::showNoteMarker() {
 	// The day label, and the marker: the day's key note is in the list (day 2 needs two more)
 	_script.setPDAText(kNoteLabelItem, Common::U32String(Common::String::format("%u", _noteDay + 1)), kNoteFontSize, true);
-	bool shown = _noteDay < kNoteDayCount && hasNote(kNoteKeys[_noteDay]);
+	bool shown = _noteDay < kNoteDayCount && hasNote(kNoteKeys[noteDay(_noteDay)]);
 	if (shown && _noteDay == kNoteMarkerDay)
 		shown = hasNote(kNoteMarkerExtra[0]) && hasNote(kNoteMarkerExtra[1]);
 	_script.setItemEnabled(kNoteMarkerItem, shown);
 }
 
+uint PdaHooks::noteDay(uint pos) const {
+	return pos < kNoteDayCount ? _noteOrder[pos] : pos;
+}
+
+void PdaHooks::applyNoteOrder() {
+	// The newer exe (0x4e80b0, database build 9) reorders the days from four variables, by name as IDs are per
+	// database; the English exe has none. The table is only ever set, never put back (the exe's is process-wide)
+	static const uint32 kVarWong = 5328, kVarTarakan = 5329, kVarCoroners = 5330, kVarHaulingYard = 5325;
+	Common::U32String name;
+	if (!_data.getVariableName(kVarCoroners, name) || name.encode() != "PDANOTES_bWentToCoronersBeforeFO")
+		return;
+	// 5..8 = 6,7,8,5 / 6,7,5 / 6,5 by the first variable that is 1
+	static const uint kFirst[] = {6, 7, 8, 5};
+	uint count = 0;
+	if (_script.getVariable(kVarCoroners) == 1)
+		count = 4;
+	else if (_script.getVariable(kVarTarakan) == 1)
+		count = 3;
+	else if (_script.getVariable(kVarWong) == 1)
+		count = 2;
+	// 5 is the last entry of each list
+	for (uint i = 0; i < count; i++)
+		_noteOrder[5 + i] = i + 1 == count ? 5 : kFirst[i];
+	if (_script.getVariable(kVarHaulingYard) == 1) {
+		_noteOrder[13] = 14;
+		_noteOrder[14] = 13;
+	}
+	bool identity = true;
+	Common::String order;
+	for (uint i = 0; i < kNoteDayCount; i++) {
+		identity = identity && _noteOrder[i] == i;
+		order += Common::String::format(" %u", _noteOrder[i]);
+	}
+	if (!identity)
+		_script.log("      notepad: order" + order);
+}
+
 void PdaHooks::notePadInit() {
 	// 0x4e6220: the days are those from the first on that each have a note, at least one
+	applyNoteOrder();
 	uint days = 0;
 	while (days < kNoteDayCount) {
 		bool any = false;
 		for (uint i = 0; i < _notes.size() && !any; i++)
-			any = dayHasNote(days, _notes[i]);
+			any = dayHasNote(noteDay(days), _notes[i]);
 		if (!any)
 			break;
 		days++;

@@ -91,6 +91,9 @@ static const uint32 kLoginField3Item = 50749;
 static const uint32 kLoginField4Item = 50750;
 static const uint32 kMessageLockedPwbk = 89627;
 static const int kPwbkTriesMax = 3;
+/** The newer exe's counters (database build 9): iScullyPasswordCount and iFBIPasswordCount. */
+static const uint32 kPwbkCounterVariable = 5326;
+static const uint32 kFbiCounterVariable = 5327;
 static const uint kLoginPasswordPwbkMax = 17;
 /** The hidden command line (LoginKeyPress 5): its item with the commands' texts, and its size. */
 static const uint32 kCommandItem = 71949;
@@ -244,7 +247,7 @@ static const uint32 kSbaseItems[31] = {
 };
 // clang-format on
 
-ComputerHooks::ComputerHooks(Script &script) : _script(script), _loginState(0), _connectedBefore(false), _wrongTries(0), _pwbkTries(0), _record(0), _cookShown(false), _recordShown(false), _sbaseCount(0), _photosDownloaded(0), _photoOffset(0), _photoEnlarged(-1), _photoOpen(false) {
+ComputerHooks::ComputerHooks(Script &script) : _script(script), _loginState(0), _connectedBefore(false), _wrongTries(0), _pwbkTries(0), _countersInVariables(-1), _record(0), _cookShown(false), _recordShown(false), _sbaseCount(0), _photosDownloaded(0), _photoOffset(0), _photoEnlarged(-1), _photoOpen(false) {
 }
 
 void ComputerHooks::addHooks(HookTable<Script> &t) {
@@ -465,7 +468,8 @@ void ComputerHooks::loginInit(char mode) {
 		setFieldText(kLoginField3Text, _user);
 		setFieldText(kLoginMaskText, Common::String());
 		// Past the tries, the fields are hidden
-		if (_pwbkTries > kPwbkTriesMax) {
+		// The newer exe (0x4b2520) still tests the old static, which nothing writes, so they never hide there
+		if (!countersInVariables() && _pwbkTries > kPwbkTriesMax) {
 			_script.setItemEnabled(kLoginField3Item, false);
 			_script.setItemEnabled(kLoginField4Item, false);
 		}
@@ -559,11 +563,27 @@ void ComputerHooks::commandKeyPress(uint key, int event, const Common::Array<int
 	editText(key, _command, kCommandMax);
 }
 
+bool ComputerHooks::countersInVariables() {
+	// Only database build 9 (the newer FR/DE/ES/IT exe) has the variables; IDs are per database, so the names count
+	if (_countersInVariables < 0) {
+		Common::U32String pwbk, fbi;
+		_countersInVariables = _script._data.getVariableName(kPwbkCounterVariable, pwbk) && pwbk.encode() == "iScullyPasswordCount" &&
+		                       _script._data.getVariableName(kFbiCounterVariable, fbi) && fbi.encode() == "iFBIPasswordCount";
+	}
+	return _countersInVariables > 0;
+}
+
 void ComputerHooks::pwbkOK(uint32 variableId) {
 	// 0x4b2db0: right user and password; the tries go up either way, and the popup shows
 	if (sameText(_user, kPwbkUserName) && sameText(_password, kPwbkPassword))
 		_script.setVariable(variableId, 1);
-	_pwbkTries++;
+	// The newer exe (0x4b2960, database build 9) counts in variable 5326 (saved), with the same limit
+	if (countersInVariables()) {
+		_script.setVariable(kPwbkCounterVariable, _script.getVariable(kPwbkCounterVariable) + 1);
+		_pwbkTries = _script.getVariable(kPwbkCounterVariable);
+	} else {
+		_pwbkTries++;
+	}
 	uint32 message = _pwbkTries <= kPwbkTriesMax ? kMessageWrongUser : kMessageLockedPwbk;
 	_script.showLayout(kPopupLayout);
 	_script.setItemEnabled(message, true);
@@ -700,6 +720,8 @@ void ComputerHooks::pswdConnect(uint32 variableId) {
 	if (userOk && sameText(_password, kLoginPassword)) {
 		_script.setVariable(variableId, 1);
 		_wrongTries = 0;
+		if (countersInVariables())
+			_script.setVariable(kFbiCounterVariable, 0);
 		if (!_connectedBefore) {
 			_connectedBefore = true;
 			_script.setVariable(kConnectedBefore, 1);
@@ -708,8 +730,15 @@ void ComputerHooks::pswdConnect(uint32 variableId) {
 		return;
 	}
 	_script.setVariable(variableId, 0);
-	if (userOk)
-		_wrongTries++;
+	// The newer exe (0x4599f0, database build 9) counts in variable 5327 (saved), with the same limit
+	if (userOk) {
+		if (countersInVariables()) {
+			_script.setVariable(kFbiCounterVariable, _script.getVariable(kFbiCounterVariable) + 1);
+			_wrongTries = _script.getVariable(kFbiCounterVariable);
+		} else {
+			_wrongTries++;
+		}
+	}
 	uint32 message = _wrongTries < kWrongTriesMax ? kMessageWrongUser : kMessageLocked;
 	if (sameText(_user, 92074) && sameText(_password, 92076)) {
 		message = 92089;

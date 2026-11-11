@@ -107,6 +107,11 @@ private:
 	void addNote(uint32 id);
 	Common::Array<uint32> _notes;              ///< VCPDANotes
 	uint _noteDay, _noteDays;                  ///< 0x6b1a4c, 0x6b1a54
+	uint _noteOrder[23];                       ///< Newer exe 0x6b4a30: the day shown at each position (identity); never reset
+	/** The day at a position (the newer exe maps each through _noteOrder). */
+	uint noteDay(uint pos) const;
+	/** NotePadInit of the newer exe: reorder the days by variables 5325 and 5328 to 5330, when the database has them. */
+	void applyNoteOrder();
 };
 
 } // End of namespace XFiles

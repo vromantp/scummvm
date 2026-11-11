@@ -116,7 +116,10 @@ private:
 	int _loginState;            ///< 0x6b9120: the focused log-in field, 0 to 3. Fields 3 and 4 share _user and _password
 	bool _connectedBefore;      ///< 0x6b16bc: copy of variable 4946, set by the first connection
 	int _wrongTries;            ///< 0x6b16c4: failed connections with the right user name; not in a save
-	int _pwbkTries;             ///< 0x6b16c0: Powerbook log-in tries; not in a save
+	int _pwbkTries;             ///< 0x6b16c0: Powerbook log-in tries; not in a save (build 9: variable 5326, saved)
+	int _countersInVariables;   ///< -1 not checked, 0 English path, 1 the database has variables 5326 and 5327 by name
+	/** Newer exe (database build 9): the password counters are the variables iScullyPasswordCount and iFBIPasswordCount. */
+	bool countersInVariables();
 	uint32 _record;             ///< 0x6b9b94: the asset of the record shown, 0 if none (MediaInit clears it)
 	bool _cookShown;            ///< 0x6b1f20: INGDisplayCook has run its action list (never reset)
 	bool _recordShown;          ///< 0x6b1f1c: an ING record is shown
