@@ -20,6 +20,8 @@
  */
 
 #include "common/array.h"
+#include "common/config-manager.h"
+#include "common/language.h"
 #include "common/str.h"
 #include "common/textconsole.h"
 #include "graphics/font.h"
@@ -53,6 +55,28 @@ enum {
 // the others in April, all in 1996.
 static const int kStoryDays[8] = { 29, 2, 3, 4, 5, 6, 7, 8 };
 static const int kStoryYear = 1996;
+
+/**
+ * The month name: the exe asks GetDateFormatA for "MMMM" in the user's locale
+ * (the format "%s %lu, %lu" stays the same), so a French Windows prints
+ * "avril". The engine follows the language of the release, assuming the
+ * original's player ran the matching Windows. UTF-8; English for the rest.
+ */
+static const char *monthName(bool april) {
+	Common::Language lang = Common::parseLanguage(ConfMan.get("language"));
+	switch (lang) {
+	case Common::FR_FRA:
+		return april ? "avril" : "mars";
+	case Common::DE_DEU:
+		return april ? "April" : "M\xc3\xa4rz";
+	case Common::ES_ESP:
+		return april ? "abril" : "marzo";
+	case Common::IT_ITA:
+		return april ? "aprile" : "marzo";
+	default:
+		return april ? "April" : "March";
+	}
+}
 
 Captions::Captions() : _smooth(true), _cardFont(nullptr), _captionFont(nullptr), _cardShown(0), _cardState(kCardNone), _cardNext(0) {
 }
@@ -91,7 +115,7 @@ Common::U32String Captions::formatCard(const Common::U32String &location, int32 
 	if (day < 0 || day > 7)
 		day = 7;
 	Common::U32String text = location;
-	text += Common::U32String(Common::String::format("\n%s %d, %d", day ? "April" : "March", kStoryDays[day], kStoryYear));
+	text += Common::U32String(Common::String::format("\n%s %d, %d", monthName(day != 0), kStoryDays[day], kStoryYear), Common::kUtf8);
 	if (withTime) {
 		// The time is read as a four-digit HHMM number
 		int hours = (currentTime / 100) % 24;
