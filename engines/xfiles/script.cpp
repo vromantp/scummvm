@@ -257,7 +257,15 @@ void Script::fire(uint32 id, int event, const EventFields &fields) {
 	if (_fireDepth == 0 && !_inEvent)
 		_fireSerial++;
 	_fireDepth++;
-	fireTriggers(id, event, fields);
+	if (fields.empty() && (event == kEventObjectActivation || event == kEventObjectDeactivation)) {
+		// An object event's fields are the object's class and ID (Event::ObjClass, Event::ObjID, 0x5d0a90)
+		EventFields objectFields;
+		objectFields.push_back((int32)_data.getClassOf(id));
+		objectFields.push_back((int32)id);
+		fireTriggers(id, event, objectFields);
+	} else {
+		fireTriggers(id, event, fields);
+	}
 	_fireDepth--;
 	// XFiles.exe carries out a pending travel (0x493090) once the event queue
 	// is empty: after the action list and the triggers it set off
