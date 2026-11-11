@@ -190,6 +190,8 @@ bool XFilesEngine::canLoadGameStateCurrently(Common::U32String *msg) {
 	return _data != nullptr;
 }
 
+static const uint32 kVarReplayPadTimers = 5059;
+
 void XFilesEngine::fillSnapshot(VCSave &save) {
 	// GameState_Save (0x4d9450); Script knows its part
 	_script->snapshot(save);
@@ -197,7 +199,7 @@ void XFilesEngine::fillSnapshot(VCSave &save) {
 		save.dialogBox = _dialogBox.getCharView();
 
 	// Timers in the order they were started: a one-shot one keeps its
-	// remaining time, a periodic one its period
+	// remaining time (padded), a periodic one its period
 	uint32 now = gameMillis();
 	const Common::HashMap<uint, Script::Timer> &timers = _script->getTimers();
 	Common::Array<uint> numbers;
@@ -211,11 +213,24 @@ void XFilesEngine::fillSnapshot(VCSave &save) {
 	for (uint i = 0; i < numbers.size(); i++) {
 		const Script::Timer &timer = timers.getVal(numbers[i]);
 		uint32 time = timer.ms;
-		if (!timer.periodic && _timerStates.contains(numbers[i]) && _timerStates[numbers[i]].serial == timer.serial) {
-			// A timer the PDA paused keeps what it had left
-			const TimerState &state = _timerStates[numbers[i]];
-			uint32 elapsed = state.paused ? 0 : now - state.started;
-			time = elapsed < state.ms ? state.ms - elapsed : 0;
+		if (!timer.periodic) {
+			uint32 delay = timer.ms;
+			if (_timerStates.contains(numbers[i]) && _timerStates[numbers[i]].serial == timer.serial) {
+				// A timer the PDA paused keeps what it had left
+				const TimerState &state = _timerStates[numbers[i]];
+				uint32 elapsed = state.paused ? 0 : now - state.started;
+				time = elapsed < state.ms ? state.ms - elapsed : 0;
+				delay = state.ms;
+			}
+			// bReplay_PadTimers: at least 3/4 of the delay (0x4d9e56..0x4d9ff5)
+			if (_script->getVariable(kVarReplayPadTimers) != 0) {
+				uint32 pad = (uint32)(((uint64)delay * 3) / 4);
+				if (pad > time)
+					time = pad;
+			}
+			// The original's timer resolution
+			if (time == 0)
+				time = 100;
 		}
 		save.timers.push_back(numbers[i]);
 		save.timers.push_back(time);
