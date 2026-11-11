@@ -477,6 +477,8 @@ void XFilesEngine::runGame() {
 	for (uint i = 0; i < _fastForward.size(); i++)
 		_script->step(_fastForward[i]);
 	_fastForward.clear();
+	// A location card started by a skipped step is gone: no time passed
+	_captions.reset();
 	while (!shouldQuit()) {
 		// A load queued by loadGameStream (from the global main menu, from the
 		// steps) runs here, between two frames
