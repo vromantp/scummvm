@@ -119,9 +119,11 @@ XFilesEngine::~XFilesEngine() {
 }
 
 bool XFilesEngine::loadDatabases(bool fromSave) {
-	Common::File hdb, gam;
-	if (!hdb.open("XFiles.hdb"))
+	// The databases are on disc 0: in the game directory or in cd1/MININST
+	Common::SeekableReadStream *hdb = _discFiles.openFile(0, "XFiles.hdb");
+	if (!hdb)
 		return false;
+	Common::SeekableReadStream *gam = nullptr;
 	// xfiles_save names an original .X save: it takes the place of XFiles.gam
 	// (it is a copy of it) and the game continues from it
 	Common::Path savePath = fromSave ? ConfMan.getPath("xfiles_save") : Common::Path();
@@ -130,14 +132,21 @@ bool XFilesEngine::loadDatabases(bool fromSave) {
 		saveStream = Common::FSNode(savePath).createReadStream();
 		if (!saveStream) {
 			warning("Cannot open the save %s", savePath.toString().c_str());
+			delete hdb;
 			return false;
 		}
-	} else if (!gam.open("XFiles.gam")) {
-		return false;
+	} else {
+		gam = _discFiles.openFile(0, "XFiles.gam");
+		if (!gam) {
+			delete hdb;
+			return false;
+		}
 	}
 	_data = new VCData();
-	bool loaded = _data->load(hdb, saveStream ? *saveStream : (Common::SeekableReadStream &)gam);
+	bool loaded = _data->load(*hdb, saveStream ? *saveStream : *gam);
 	delete saveStream;
+	delete gam;
+	delete hdb;
 	if (!loaded)
 		return false;
 	_loadedSave = !savePath.empty() && _data->getSave(_save);

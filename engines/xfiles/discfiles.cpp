@@ -31,13 +31,15 @@ namespace XFiles {
 // Media files sit at most one directory deep on each disc (XV/19812.XMV)
 static const int kDiscDepth = 2;
 
-DiscFiles::DiscFiles() : _root(nullptr) {
+DiscFiles::DiscFiles() : _root(nullptr), _miniInst(nullptr), _medInst(nullptr) {
 	for (uint i = 0; i < kDiscCount; i++)
 		_discs[i] = nullptr;
 }
 
 DiscFiles::~DiscFiles() {
 	delete _root;
+	delete _miniInst;
+	delete _medInst;
 	for (uint i = 0; i < kDiscCount; i++)
 		delete _discs[i];
 }
@@ -51,6 +53,9 @@ void DiscFiles::init(const Common::FSNode &gameDir) {
 		delete _discs[i];
 		_discs[i] = nullptr;
 	}
+	delete _miniInst;
+	delete _medInst;
+	_miniInst = _medInst = nullptr;
 	Common::FSList children;
 	if (!gameDir.getChildren(children, Common::FSNode::kListDirectoriesOnly))
 		return;
@@ -63,6 +68,27 @@ void DiscFiles::init(const Common::FSNode &gameDir) {
 			debugC(1, kDebugFiles, "Disc %u: %s", disc, children[i].getPath().toString().c_str());
 		}
 	}
+
+	// CD 1 holds the hard disk files in MININST and the larger install's in MEDINST
+	Common::FSList inner;
+	if (_discs[1] && _discs[1]->getFSNode().getChildren(inner, Common::FSNode::kListDirectoriesOnly)) {
+		for (uint i = 0; i < inner.size(); i++) {
+			Common::String name = inner[i].getName();
+			if (name.equalsIgnoreCase("MININST") && !_miniInst)
+				_miniInst = new Common::FSDirectory(inner[i], kDiscDepth);
+			else if (name.equalsIgnoreCase("MEDINST") && !_medInst)
+				_medInst = new Common::FSDirectory(inner[i], kDiscDepth);
+		}
+	}
+	debugC(1, kDebugFiles, "cd1/MININST: %s, cd1/MEDINST: %s", _miniInst ? "present" : "missing", _medInst ? "present" : "missing");
+}
+
+const Common::FSDirectory *DiscFiles::installDirectory(uint disc) const {
+	return disc == 0 ? _miniInst : (disc == 8 ? _medInst : nullptr);
+}
+
+bool DiscFiles::hasInstallDirectory(uint disc) const {
+	return installDirectory(disc) != nullptr;
 }
 
 bool DiscFiles::hasDiscDirectory(uint disc) const {
@@ -76,6 +102,9 @@ const Common::FSDirectory *DiscFiles::findDirectory(uint disc, const Common::Pat
 		return _discs[disc];
 	if (_root->hasFile(path))
 		return _root;
+	const Common::FSDirectory *install = installDirectory(disc);
+	if (install && install->hasFile(path))
+		return install;
 	return nullptr;
 }
 
@@ -85,7 +114,13 @@ Common::Path DiscFiles::findFile(uint disc, const Common::String &name) const {
 	if (!dir)
 		return Common::Path();
 	Common::Path found = dir->getMember(path)->getPathInArchive();
-	return dir == _root ? found : Common::Path(dir->getFSNode().getName()).join(found);
+	if (dir == _root)
+		return found;
+	// Relative to the game directory: cdN/, or cd1/MININST/ and cd1/MEDINST/
+	Common::Path prefix(dir->getFSNode().getName());
+	if (dir != _discs[disc])
+		prefix = Common::Path(_discs[1]->getFSNode().getName()).join(prefix);
+	return prefix.join(found);
 }
 
 Common::SeekableReadStream *DiscFiles::openFile(uint disc, const Common::String &name) const {

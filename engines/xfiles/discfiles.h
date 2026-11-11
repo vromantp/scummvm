@@ -33,15 +33,18 @@ namespace XFiles {
  *
  * The original game swaps between seven CDs, and 219 file names exist on
  * more than one of them, so the discs cannot share one directory. The
- * expected layout is the installed game (XFiles.hdb, XFiles.gam, and the
- * hard disk media) with each CD copied to a subdirectory cd1 ... cd7:
+ * simplest layout is each CD copied whole to a subdirectory cd1 ... cd7 of
+ * the game directory and nothing else. On CD 1 the hard disk files
+ * (XFiles.hdb, XFiles.gam, XG, XV ...) are in MININST and the extra media of
+ * the larger install in MEDINST:
  *
- *   game/XFiles.hdb, game/XV/..., game/cd2/XN/..., ..., game/cd7/XG/...
+ *   game/cd1/MININST/XFiles.hdb, game/cd1/MININST/XV/..., game/cd2/XN/...
  *
- * Disc 0 ("always on the hard disk") and 8 (copied by the larger install
- * options) are looked up in the game directory. Disc 1-7 are looked up in
- * cdN first and then in the game directory, so a copy of CD 1 can be merged
- * into it. Names are matched without regard to case.
+ * Disc 0 ("always on the hard disk") is looked up in the game directory, then
+ * in cd1/MININST; disc 8 (copied by the larger install options) in the game
+ * directory, then in cd1/MEDINST. Disc 1-7 are looked up in cdN first and
+ * then in the game directory, so an installed game works with the CDs beside
+ * it. Names are matched without regard to case.
  */
 class DiscFiles {
 public:
@@ -57,6 +60,9 @@ public:
 	/** True if the directory of a CD (cd1 ... cd7) exists. */
 	bool hasDiscDirectory(uint disc) const;
 
+	/** True if cd1 holds a MININST (disc 0) or MEDINST (disc 8) directory. */
+	bool hasInstallDirectory(uint disc) const;
+
 	/**
 	 * Locate a file of a disc, named as in the asset data with ':' as the
 	 * separator ("XV:19812.xmv", "nav2.nmv"). Returns an empty path if the
@@ -69,10 +75,13 @@ public:
 
 private:
 	const Common::FSDirectory *findDirectory(uint disc, const Common::Path &path) const;
+	const Common::FSDirectory *installDirectory(uint disc) const;
 
 	Common::FSNode _gameDir;
 	Common::FSDirectory *_root;
 	Common::FSDirectory *_discs[kDiscCount];
+	Common::FSDirectory *_miniInst; ///< cd1/MININST, disc 0 after the game directory
+	Common::FSDirectory *_medInst;  ///< cd1/MEDINST, disc 8 after the game directory
 };
 
 } // End of namespace XFiles

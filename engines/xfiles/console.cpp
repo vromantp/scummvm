@@ -143,6 +143,8 @@ bool Console::Cmd_asset(int argc, const char **argv) {
 bool Console::Cmd_discs(int argc, const char **argv) {
 	for (uint i = 1; i <= 7; i++)
 		debugPrintf("cd%u: %s\n", i, g_engine->getDiscFiles().hasDiscDirectory(i) ? "present" : "missing");
+	debugPrintf("cd1/MININST: %s\ncd1/MEDINST: %s\n", g_engine->getDiscFiles().hasInstallDirectory(0) ? "present" : "missing",
+		g_engine->getDiscFiles().hasInstallDirectory(8) ? "present" : "missing");
 	return true;
 }
 

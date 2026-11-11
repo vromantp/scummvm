@@ -31,8 +31,17 @@ const DebugChannelDef XFilesMetaEngineDetection::debugFlagList[] = {
 	DEBUG_CHANNEL_END
 };
 
+// The game files can sit in the game directory, or on the copy of CD 1 in cd1/MININST
+static const char *const directoryGlobs[] = {
+	"cd1",
+	"MININST",
+	nullptr
+};
+
 XFilesMetaEngineDetection::XFilesMetaEngineDetection() : AdvancedMetaEngineDetection(
 	XFiles::gameDescriptions, XFiles::xfilesGames) {
+	_maxScanDepth = 3;
+	_directoryGlobs = directoryGlobs;
 }
 
 REGISTER_PLUGIN_STATIC(XFILES_DETECTION, PLUGIN_TYPE_ENGINE_DETECTION, XFilesMetaEngineDetection);
