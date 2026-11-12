@@ -835,7 +835,7 @@ void Script::release() {
 
 void Script::spendIcons(uint32 classId) {
 	// Removing an icon deactivates it, and the deactivation of an emotion or action icon sets its enable
-	// flag to 0 (0x485020, 0x4c0610 -> 0x40f050); the saves of newgame-to-comityinn have them at 0
+	// flag to 0 (0x485020, 0x4c0610 -> 0x40f050); the saves of save-comityinn have them at 0
 	Common::Array<NeoEntry> entries;
 	_data.getHdb().getObjects(classId, entries);
 	for (uint i = 0; i < entries.size(); i++) {

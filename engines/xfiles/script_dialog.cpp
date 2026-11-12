@@ -147,7 +147,7 @@ void Script::showLayout(uint32 layoutId) {
 	// layer (low byte of the layer word): an item goes to the end if its layer
 	// is not below the last one's, else before the first item of an equal or
 	// higher layer. That reproduces all 15 layout shows of the runs
-	// pda-usage-run1 and manual1 (layer 0 ties, layout 34010, the save screen).
+	// pda-usage-run1 and newgame-to-manual1 (layer 0 ties, layout 34010, the save screen).
 	// The list also gives the order of the unshow's Object Deactivation.
 	for (uint i = 0; i < layout.items.size(); i++) {
 		if (isEnabled(layout.items[i]))
