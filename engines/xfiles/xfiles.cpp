@@ -1727,7 +1727,7 @@ void XFilesEngine::drawView() {
 		blit(_video->getFrame(), pos.x, pos.y);
 	}
 	// Band clips are part of the view group (0x80800)
-	_sound.drawClips(_screen);
+	_sound.drawClips(_screen, false);
 	applyBandTint(_script->heldToolType() == 3 && _script->getFlashlight()[0]);
 	if (_interface->isModal()) {
 		// The suspend tint over the view's picture (B-007)
@@ -1759,6 +1759,8 @@ void XFilesEngine::drawView() {
 	if (_dragIdea && _dragMoved)
 		_interface->drawDragged(_screen, _dragIdea, _mouse);
 	drawPhotos();
+	// PlayAssetAt clips: group +0x220 key 0x16, over every layout item, the dialog box, captions and the flashlight light
+	_sound.drawClips(_screen, true);
 }
 
 const Graphics::Surface *XFilesEngine::getPhotoPicture(const VCPhoto &photo, int w, int h) {

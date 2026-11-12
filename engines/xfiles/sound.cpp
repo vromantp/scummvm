@@ -116,6 +116,7 @@ void SoundPlayer::playClip(uint32 id, int16 x, int16 y) {
 	clip.movie = new Movie();
 	clip.x = x;
 	clip.y = y;
+	clip.placed = true;
 	VCAsset asset;
 	if (!_data->getAsset(id, asset)) {
 		warning("#%u is not a media asset", id);
@@ -162,8 +163,10 @@ void SoundPlayer::updateClips() {
 	}
 }
 
-void SoundPlayer::drawClips(Graphics::Surface &dst) const {
+void SoundPlayer::drawClips(Graphics::Surface &dst, bool placed) const {
 	for (Common::HashMap<uint32, Clip>::const_iterator it = _clips.begin(); it != _clips.end(); ++it) {
+		if (it->_value.placed != placed)
+			continue;
 		const Graphics::Surface &src = it->_value.movie->getFrame();
 		if (!src.getPixels())
 			continue;

@@ -62,7 +62,8 @@ public:
 	void clear();
 	/** Once a frame: places the 3D sounds again after a move, ends the finished sounds and clips (Script::finishSound). */
 	void update(bool sound3D);
-	void drawClips(Graphics::Surface &dst) const;
+	/** Draws the clips of one kind: the placed ones (PlayAssetAt, group +0x220 key 0x16, over the layout items) or the rest (view group). */
+	void drawClips(Graphics::Surface &dst, bool placed) const;
 	/** Freeze or resume every sound and clip. */
 	void pause(bool pause);
 	/** Appends the save's triples (sound, 1, position in ms) for the playing sounds in start order. */
@@ -81,6 +82,7 @@ private:
 	struct Clip {
 		Movie *movie;
 		int16 x, y;
+		bool placed; ///< Made by PlayAssetAt: drawn over the layout items
 	};
 
 	void stopTone();
