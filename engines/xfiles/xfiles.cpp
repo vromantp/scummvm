@@ -1201,7 +1201,8 @@ void XFilesEngine::playQueuedVideo(const Input &input) {
 	clearScreen();
 	Common::Point pos = getBandPosition(*_video);
 	blit(_video->getFrame(), pos.x, pos.y);
-	applyBandTint(false);
+	// A playing movie is drawn untinted under SetLBoxTint (B-309); a tool change still latches the tint
+	relatchBandTint();
 	drawCaptions(*_video, pos);
 
 	if (_video->hasEnded()) {
@@ -1683,13 +1684,14 @@ void XFilesEngine::clearScreen() {
 
 /**
  * The letterbox tint (SetLBoxTint): every band pixel channel v becomes v * c / 255 (docs/exe/hooks/groups.md). With
- * the flashlight's n = 2 look in hand the untinted band is kept for drawFlashlight.
+ * the flashlight's n = 2 look in hand the untinted band is kept for drawFlashlight. Still views, view pictures and
+ * band clips take the multiply; a playing movie does not (B-309: reference run crowbar-band-movie4, movie 20395 drawn
+ * at full brightness under tint 65026 while the stills before and after were dark), so the movie path only calls
+ * relatchBandTint. Band clips (0x80800) are not measured and stay tinted.
  */
 void XFilesEngine::applyBandTint(bool keepUntinted) {
 	_bandUntinted.free();
-	// A tool show/hide latches the tint again
-	if (_bandTintTool != _script->heldToolType() * 4 + _script->binocularsMode())
-		latchBandTint();
+	relatchBandTint();
 	if (!_bandTintOn)
 		return;
 	byte tr = _bandTintRGB[0], tg = _bandTintRGB[1], tb = _bandTintRGB[2];
@@ -1703,6 +1705,12 @@ void XFilesEngine::applyBandTint(bool keepUntinted) {
 			writePixel(band, x, y, r * tr / 255, g * tg / 255, b * tb / 255);
 		}
 	}
+}
+
+/** A tool show/hide latches the tint again (B-286). */
+void XFilesEngine::relatchBandTint() {
+	if (_bandTintTool != _script->heldToolType() * 4 + _script->binocularsMode())
+		latchBandTint();
 }
 
 /**

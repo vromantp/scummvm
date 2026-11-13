@@ -285,6 +285,8 @@ private:
 	/** The SetLBoxTint multiply over the band (B-209); keepUntinted saves the plain band for drawFlashlight. */
 	void applyBandTint(bool keepUntinted);
 	void latchBandTint();
+	/** Latch the tint if the held tool changed; the movie path calls this alone (B-309). */
+	void relatchBandTint();
 	/** The camera in hand: the viewfinder over the band at the mouse, with the photos left (Camera, 0x4f2b30). */
 	void drawViewfinder();
 	/** The tool in hand over the band, keyed on Script::heldToolType (B-228, docs/exe/tool-objects.md "Overlay drawing"). */
